@@ -47,6 +47,9 @@
     tabInspector: document.getElementById("tab-inspector"),
     scanBtn: document.getElementById("scan-btn"),
     refreshBtn: document.getElementById("refresh-btn"),
+    backupBtn: document.getElementById("backup-btn"),
+    restoreBtn: document.getElementById("restore-btn"),
+    toastContainer: document.getElementById("toast-container"),
     orgTree: document.getElementById("org-tree"),
     overviewMetrics: document.getElementById("overview-metrics"),
     departmentMetrics: document.getElementById("department-metrics"),
@@ -90,6 +93,7 @@
   };
 
   let refreshTimer = null;
+  let toastTimer = null;
 
   function fmtDate(value) {
     if (!value) return "시각 정보 없음";
@@ -151,6 +155,43 @@
   function runStatusBadge(status) {
     const safe = status || "queued";
     return `<span class="badge ${escapeHtml(safe)}">${escapeHtml(safe)}</span>`;
+  }
+
+  function formatBytes(value) {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
+    if (bytes < 1024) return `${bytes} B`;
+    const units = ["KB", "MB", "GB", "TB"];
+    let unitIndex = -1;
+    let size = bytes;
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+    return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[unitIndex]}`;
+  }
+
+  function showToast(message, variant) {
+    if (!el.toastContainer) return;
+    const toast = document.createElement("div");
+    toast.className = `toast-item ${variant || "info"}`;
+    toast.textContent = String(message || "");
+    el.toastContainer.appendChild(toast);
+    window.requestAnimationFrame(function () {
+      toast.classList.add("visible");
+    });
+
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    toastTimer = setTimeout(function () {
+      toast.classList.remove("visible");
+      window.setTimeout(function () {
+        toast.remove();
+      }, 240);
+      toastTimer = null;
+    }, 3800);
   }
 
   function renderMetrics(container, metrics) {
@@ -881,6 +922,68 @@
     }
   }
 
+  async function backupSkillAgentFiles() {
+    if (el.backupBtn) {
+      el.backupBtn.disabled = true;
+    }
+    if (el.restoreBtn) {
+      el.restoreBtn.disabled = true;
+    }
+    try {
+      const result = await postJsonWithAuth("/api/backups/skills-agents");
+      const backupPath = result && result.backup_path ? String(result.backup_path) : "";
+      const backupSize = formatBytes(result && result.size_bytes ? result.size_bytes : 0);
+      const deletedCount = Number((result && result.deleted_entry_count) || 0);
+      showToast(`백업 완료 + 원본 삭제 ${deletedCount}건: ${backupPath} (${backupSize})`, "success");
+      state.liveText = `백업/삭제 완료: ${backupPath} (삭제 ${deletedCount}건)`;
+      await refreshAll();
+    } catch (err) {
+      const message = `백업 실패: ${String((err && err.message) || err || "")}`;
+      showToast(message, "error");
+      state.hasError = true;
+      state.liveText = message;
+      render();
+    } finally {
+      if (el.backupBtn) {
+        el.backupBtn.disabled = false;
+      }
+      if (el.restoreBtn) {
+        el.restoreBtn.disabled = false;
+      }
+    }
+  }
+
+  async function restoreSkillAgentFiles() {
+    if (el.backupBtn) {
+      el.backupBtn.disabled = true;
+    }
+    if (el.restoreBtn) {
+      el.restoreBtn.disabled = true;
+    }
+    try {
+      const result = await postJsonWithAuth("/api/backups/skills-agents/restore");
+      const restoredFromPath = result && result.restored_from_path ? String(result.restored_from_path) : "";
+      const restoredCount = Number((result && result.restored_member_count) || 0);
+      const deletedCount = Number((result && result.deleted_entry_count_before_restore) || 0);
+      showToast(`리스토어 완료: ${restoredFromPath} (복원 ${restoredCount}개, 기존삭제 ${deletedCount}건)`, "success");
+      state.liveText = `리스토어 완료: ${restoredFromPath}`;
+      await refreshAll();
+    } catch (err) {
+      const message = `리스토어 실패: ${String((err && err.message) || err || "")}`;
+      showToast(message, "error");
+      state.hasError = true;
+      state.liveText = message;
+      render();
+    } finally {
+      if (el.backupBtn) {
+        el.backupBtn.disabled = false;
+      }
+      if (el.restoreBtn) {
+        el.restoreBtn.disabled = false;
+      }
+    }
+  }
+
   async function createRun() {
     if (!state.selectedAgentName) {
       state.liveText = "실행 가능한 에이전트를 선택하세요.";
@@ -1106,6 +1209,16 @@
     if (el.refreshBtn) {
       el.refreshBtn.addEventListener("click", function () {
         postAction("/api/activity/refresh");
+      });
+    }
+    if (el.backupBtn) {
+      el.backupBtn.addEventListener("click", function () {
+        backupSkillAgentFiles();
+      });
+    }
+    if (el.restoreBtn) {
+      el.restoreBtn.addEventListener("click", function () {
+        restoreSkillAgentFiles();
       });
     }
     if (el.runAgentSelect) {

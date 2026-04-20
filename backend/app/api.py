@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+import shutil
+import tarfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException, Query, status
@@ -26,6 +28,8 @@ from app.models import (
     RunEventModel,
     RunsResponse,
     RunSummaryModel,
+    SkillAgentBackupResponse,
+    SkillAgentRestoreResponse,
 )
 from app.config import AppSettings
 from app.services.dashboard_service import DashboardService
@@ -128,6 +132,78 @@ def build_api_router(
             truncated=truncated,
         )
 
+    def _create_skill_agent_backup_archive() -> tuple[Path, list[str]]:
+        skills_root = settings.skills_root
+        agents_root = settings.agents_root
+        included_roots: list[str] = []
+        if skills_root.exists() and skills_root.is_dir():
+            included_roots.append("skills")
+        if agents_root.exists() and agents_root.is_dir():
+            included_roots.append("agents")
+        if not included_roots:
+            raise FileNotFoundError("skills/agents roots not found")
+
+        app_root = Path(__file__).resolve().parents[2]
+        backups_root = app_root / "backups"
+        backups_root.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
+        archive_name = f"skills-agents-backup-{timestamp}.tar.gz"
+        archive_path = backups_root / archive_name
+
+        with tarfile.open(archive_path, mode="w:gz") as archive:
+            if "skills" in included_roots:
+                archive.add(skills_root, arcname="skills")
+            if "agents" in included_roots:
+                archive.add(agents_root, arcname="agents")
+
+        return archive_path, included_roots
+
+    def _purge_backed_up_entries(included_roots: list[str]) -> int:
+        deleted_count = 0
+        root_map = {
+            "skills": settings.skills_root,
+            "agents": settings.agents_root,
+        }
+        for root_name in included_roots:
+            root_path = root_map.get(root_name)
+            if root_path is None or not root_path.exists() or not root_path.is_dir():
+                continue
+            for entry in root_path.iterdir():
+                if entry.is_dir():
+                    shutil.rmtree(entry)
+                    deleted_count += 1
+                    continue
+                entry.unlink(missing_ok=True)
+                deleted_count += 1
+        return deleted_count
+
+    @staticmethod
+    def _validate_restore_members(members: list[tarfile.TarInfo]) -> list[str]:
+        restored_roots: set[str] = set()
+        for member in members:
+            member_path = Path(member.name)
+            if member_path.is_absolute() or ".." in member_path.parts:
+                raise ValueError(f"invalid backup member path: {member.name}")
+            if len(member_path.parts) == 0:
+                continue
+            top = member_path.parts[0]
+            if top not in {"skills", "agents"}:
+                raise ValueError(f"invalid backup member root: {member.name}")
+            restored_roots.add(top)
+        if not restored_roots:
+            raise ValueError("backup archive has no restorable entries")
+        return sorted(restored_roots)
+
+    def _find_latest_backup_archive() -> Path:
+        app_root = Path(__file__).resolve().parents[2]
+        backups_root = app_root / "backups"
+        if not backups_root.exists() or not backups_root.is_dir():
+            raise FileNotFoundError("backup directory not found")
+        archives = sorted(backups_root.glob("skills-agents-backup-*.tar.gz"), key=lambda item: item.stat().st_mtime, reverse=True)
+        if not archives:
+            raise FileNotFoundError("no backup archive found")
+        return archives[0]
+
     @router.get("/agents/{agent_name}/inspector", response_model=AgentInspectorResponse)
     def get_agent_inspector(agent_name: str) -> AgentInspectorResponse:
         inventory = service.build_inventory()
@@ -225,6 +301,57 @@ def build_api_router(
         await broker.publish("activity:updated", {"source": "manual"})
         await broker.publish("dashboard:updated", {"source": "manual"})
         return {"status": "ok"}
+
+    @router.post("/backups/skills-agents", response_model=SkillAgentBackupResponse)
+    async def backup_skills_agents(
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> SkillAgentBackupResponse:
+        verify_write_token(x_api_token)
+        try:
+            archive_path, included_roots = _create_skill_agent_backup_archive()
+            deleted_entry_count = _purge_backed_up_entries(included_roots)
+            stat = archive_path.stat()
+        except FileNotFoundError as err:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
+        except OSError as err:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"backup failed: {err}") from err
+
+        return SkillAgentBackupResponse(
+            backup_path=str(archive_path),
+            backup_file_name=archive_path.name,
+            included_roots=included_roots,
+            deleted_entry_count=deleted_entry_count,
+            created_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
+            size_bytes=stat.st_size,
+        )
+
+    @router.post("/backups/skills-agents/restore", response_model=SkillAgentRestoreResponse)
+    async def restore_skills_agents(
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> SkillAgentRestoreResponse:
+        verify_write_token(x_api_token)
+        try:
+            archive_path = _find_latest_backup_archive()
+            with tarfile.open(archive_path, mode="r:gz") as archive:
+                members = archive.getmembers()
+                restored_roots = _validate_restore_members(members)
+                deleted_entry_count = _purge_backed_up_entries(restored_roots)
+                settings.skills_root.mkdir(parents=True, exist_ok=True)
+                settings.agents_root.mkdir(parents=True, exist_ok=True)
+                archive.extractall(path=settings.codex_home)
+            restored_member_count = sum(1 for item in members if item.isfile())
+        except (FileNotFoundError, ValueError) as err:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
+        except OSError as err:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"restore failed: {err}") from err
+
+        return SkillAgentRestoreResponse(
+            restored_from_path=str(archive_path),
+            restored_roots=restored_roots,
+            restored_member_count=restored_member_count,
+            deleted_entry_count_before_restore=deleted_entry_count,
+            restored_at=datetime.now(tz=timezone.utc),
+        )
 
     @router.get("/runs", response_model=RunsResponse)
     def list_runs(limit: int = Query(default=30, ge=1, le=200)) -> RunsResponse:

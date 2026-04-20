@@ -86,6 +86,11 @@ h3 {
   border-color: var(--accent);
 }
 
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .field-label {
   color: var(--muted);
   font-size: 13px;
@@ -560,6 +565,47 @@ h3 {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+}
+
+.toast-container {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  gap: 8px;
+  z-index: 1200;
+  pointer-events: none;
+}
+
+.toast-item {
+  min-width: 260px;
+  max-width: min(92vw, 740px);
+  border: 1px solid #2f4466;
+  background: #0f1a2c;
+  color: #dce9ff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+  transform: translateY(-6px);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-item.visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toast-item.success {
+  border-color: color-mix(in srgb, var(--ok) 58%, #2f4466);
+  background: #10281f;
+  color: #bbf4df;
+}
+
+.toast-item.error {
+  border-color: color-mix(in srgb, var(--bad) 58%, #2f4466);
+  background: #2a1414;
+  color: #ffd0d0;
 }
 
 @media (max-width: 1080px) {

@@ -214,6 +214,8 @@ class RunOrchestrator:
             "You are running from Custom Codex Agent Execution Console.\n"
             f"Selected agent: {agent_name}\n"
             "Follow the selected agent's role and constraints while completing the request.\n\n"
+            "If the task requires reading or analyzing a file but the user did not provide an explicit file path and file name, "
+            "do not proceed with file operations. First ask the user to provide the exact file path and file name.\n\n"
             f"{prompt}"
         )
 

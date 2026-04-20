@@ -68,6 +68,12 @@ CUSTOM_CODEX_AGENT_FOUNDER_NAME=홍길동
 ./run_all.sh dev
 ```
 
+중지:
+
+```bash
+./stop_all.sh
+```
+
 또는 백엔드만 reload로:
 
 ```bash

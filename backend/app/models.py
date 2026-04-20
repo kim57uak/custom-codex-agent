@@ -210,3 +210,20 @@ class AgentInspectorResponse(BaseModel):
     agent_json: AgentInspectorFileModel | None = None
     references: list[AgentInspectorFileModel]
     scripts: list[AgentInspectorFileModel]
+
+
+class SkillAgentBackupResponse(BaseModel):
+    backup_path: str
+    backup_file_name: str
+    included_roots: list[str]
+    deleted_entry_count: int
+    created_at: datetime
+    size_bytes: int
+
+
+class SkillAgentRestoreResponse(BaseModel):
+    restored_from_path: str
+    restored_roots: list[str]
+    restored_member_count: int
+    deleted_entry_count_before_restore: int
+    restored_at: datetime
