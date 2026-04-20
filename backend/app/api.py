@@ -135,13 +135,23 @@ def build_api_router(
     def _create_skill_agent_backup_archive() -> tuple[Path, list[str]]:
         skills_root = settings.skills_root
         agents_root = settings.agents_root
+
+        def _root_has_entries(root: Path) -> bool:
+            if not root.exists() or not root.is_dir():
+                return False
+            try:
+                next(root.iterdir())
+                return True
+            except StopIteration:
+                return False
+
         included_roots: list[str] = []
-        if skills_root.exists() and skills_root.is_dir():
+        if _root_has_entries(skills_root):
             included_roots.append("skills")
-        if agents_root.exists() and agents_root.is_dir():
+        if _root_has_entries(agents_root):
             included_roots.append("agents")
         if not included_roots:
-            raise FileNotFoundError("skills/agents roots not found")
+            raise FileNotFoundError("skills/agents have no entries to backup")
 
         app_root = Path(__file__).resolve().parents[2]
         backups_root = app_root / "backups"
@@ -177,9 +187,8 @@ def build_api_router(
                 deleted_count += 1
         return deleted_count
 
-    @staticmethod
     def _validate_restore_members(members: list[tarfile.TarInfo]) -> list[str]:
-        restored_roots: set[str] = set()
+        restored_file_counts: dict[str, int] = {"skills": 0, "agents": 0}
         for member in members:
             member_path = Path(member.name)
             if member_path.is_absolute() or ".." in member_path.parts:
@@ -189,10 +198,26 @@ def build_api_router(
             top = member_path.parts[0]
             if top not in {"skills", "agents"}:
                 raise ValueError(f"invalid backup member root: {member.name}")
-            restored_roots.add(top)
+            if member.isfile() and len(member_path.parts) >= 2:
+                restored_file_counts[top] += 1
+        restored_roots = sorted(root for root, count in restored_file_counts.items() if count > 0)
         if not restored_roots:
-            raise ValueError("backup archive has no restorable entries")
-        return sorted(restored_roots)
+            raise ValueError("backup archive has no restorable files")
+        return restored_roots
+
+    def _archive_payload_counts(archive_path: Path) -> dict[str, int]:
+        counts: dict[str, int] = {"skills": 0, "agents": 0}
+        with tarfile.open(archive_path, mode="r:gz") as archive:
+            for member in archive.getmembers():
+                member_path = Path(member.name)
+                if member_path.is_absolute() or ".." in member_path.parts or len(member_path.parts) == 0:
+                    raise ValueError(f"invalid backup member path: {member.name}")
+                top = member_path.parts[0]
+                if top not in {"skills", "agents"}:
+                    raise ValueError(f"invalid backup member root: {member.name}")
+                if member.isfile() and len(member_path.parts) >= 2:
+                    counts[top] += 1
+        return counts
 
     def _find_latest_backup_archive() -> Path:
         app_root = Path(__file__).resolve().parents[2]
@@ -202,7 +227,14 @@ def build_api_router(
         archives = sorted(backups_root.glob("skills-agents-backup-*.tar.gz"), key=lambda item: item.stat().st_mtime, reverse=True)
         if not archives:
             raise FileNotFoundError("no backup archive found")
-        return archives[0]
+        for archive_path in archives:
+            try:
+                payload = _archive_payload_counts(archive_path)
+            except (OSError, ValueError, tarfile.TarError):
+                continue
+            if sum(payload.values()) > 0:
+                return archive_path
+        raise FileNotFoundError("no usable backup archive found")
 
     @router.get("/agents/{agent_name}/inspector", response_model=AgentInspectorResponse)
     def get_agent_inspector(agent_name: str) -> AgentInspectorResponse:
@@ -304,12 +336,13 @@ def build_api_router(
 
     @router.post("/backups/skills-agents", response_model=SkillAgentBackupResponse)
     async def backup_skills_agents(
+        purge_after_backup: bool = Query(default=False),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> SkillAgentBackupResponse:
         verify_write_token(x_api_token)
         try:
             archive_path, included_roots = _create_skill_agent_backup_archive()
-            deleted_entry_count = _purge_backed_up_entries(included_roots)
+            deleted_entry_count = _purge_backed_up_entries(included_roots) if purge_after_backup else 0
             stat = archive_path.stat()
         except FileNotFoundError as err:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
