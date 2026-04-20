@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Custom Codex Agent</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="hero panel">
+        <div>
+          <p class="eyebrow">Custom Codex Agent</p>
+          <h1>조직도 / 운영 대시보드</h1>
+          <p id="live-state" class="muted">데이터 로딩 중...</p>
+        </div>
+        <div class="actions">
+          <button id="scan-btn" class="btn">스캔</button>
+          <button id="refresh-btn" class="btn">활동 새로고침</button>
+        </div>
+      </header>
+
+      <nav class="tab-bar">
+        <button id="tab-org" class="tab active">기업 조직도</button>
+        <button id="tab-dashboard" class="tab">운영 대시보드</button>
+        <button id="tab-console" class="tab">실행 콘솔</button>
+        <button id="tab-inspector" class="tab">스킬 인스펙터</button>
+      </nav>
+
+      <section id="error-banner" class="error-banner hidden"></section>
+
+      <main id="org-view" class="grid-view">
+        <section class="panel main-panel">
+          <h2>조직 계층</h2>
+          <div id="org-tree" class="org-tree"></div>
+        </section>
+        <aside class="panel side-panel">
+          <h3>요약</h3>
+          <div id="overview-metrics" class="metric-list"></div>
+          <h3>부서별 인원</h3>
+          <div id="department-metrics" class="metric-list"></div>
+          <h3>상태 분포</h3>
+          <div id="status-metrics" class="metric-list"></div>
+        </aside>
+      </main>
+
+      <main id="dashboard-view" class="grid-view hidden">
+        <section class="panel main-panel">
+          <h2>대시보드 메트릭</h2>
+          <div id="dashboard-metrics" class="metric-grid"></div>
+          <h2>최근 타임라인</h2>
+          <ul id="timeline-list" class="activity-list"></ul>
+        </section>
+        <aside class="panel side-panel">
+          <h3>활성 에이전트</h3>
+          <ul id="active-agents" class="activity-list"></ul>
+          <h3>최근 스킬</h3>
+          <ul id="recent-skills" class="activity-list"></ul>
+          <h3>최근 스레드</h3>
+          <ul id="recent-threads" class="activity-list"></ul>
+        </aside>
+      </main>
+
+      <main id="console-view" class="grid-view hidden">
+        <section class="panel main-panel">
+          <h2>에이전트 실행</h2>
+          <label class="field-label" for="run-agent-select">실행 대상 에이전트</label>
+          <select id="run-agent-select" class="input"></select>
+          <label class="field-label" for="run-workspace-input">프로젝트 폴더(절대 경로)</label>
+          <div class="workspace-row">
+            <input
+              id="run-workspace-input"
+              class="input"
+              type="text"
+              placeholder="/Users/.../project/path"
+            />
+            <button id="run-workspace-picker-btn" class="btn" type="button">폴더 선택</button>
+          </div>
+          <label class="field-label" for="run-sandbox-select">샌드박스 정책</label>
+          <select id="run-sandbox-select" class="input">
+            <option value="workspace-write">workspace-write</option>
+            <option value="read-only">read-only</option>
+            <option value="danger-full-access">danger-full-access</option>
+          </select>
+          <label class="field-label" for="run-approval-select">승인 정책</label>
+          <select id="run-approval-select" class="input">
+            <option value="on-request">on-request</option>
+            <option value="untrusted">untrusted</option>
+            <option value="never">never</option>
+          </select>
+          <label class="field-label" for="run-prompt-input">프롬프트</label>
+          <textarea
+            id="run-prompt-input"
+            class="input textarea"
+            placeholder="에이전트에게 전달할 프롬프트를 입력하세요"
+          ></textarea>
+          <div class="actions">
+            <button id="run-submit-btn" class="btn">실행</button>
+            <button id="run-cancel-btn" class="btn">선택 실행 취소</button>
+            <button id="run-retry-btn" class="btn">선택 실행 재시도</button>
+          </div>
+
+          <h2>실행 로그</h2>
+          <div id="run-meta" class="muted">선택된 실행 없음</div>
+          <pre id="run-log" class="run-log"></pre>
+        </section>
+
+        <aside class="panel side-panel">
+          <h3>최근 실행</h3>
+          <ul id="run-list" class="activity-list"></ul>
+        </aside>
+      </main>
+
+      <main id="inspector-view" class="grid-view hidden">
+        <section class="panel main-panel">
+          <h2>에이전트 / 스킬 실시간 인스펙터</h2>
+          <div id="inspector-summary" class="muted">에이전트를 선택하면 연결된 스킬과 파일 내용을 확인합니다.</div>
+          <div class="inspector-meta-grid">
+            <div class="metric-row"><span>에이전트</span><strong id="inspector-agent-name">-</strong></div>
+            <div class="metric-row"><span>부서/역할</span><strong id="inspector-agent-role">-</strong></div>
+            <div class="metric-row"><span>스킬</span><strong id="inspector-skill-name">-</strong></div>
+          </div>
+
+          <div class="inspector-section">
+            <h3>SKILL.md</h3>
+            <div id="inspector-skill-path" class="activity-sub"></div>
+            <pre id="inspector-skill-content" class="run-log inspector-code"></pre>
+          </div>
+
+          <div class="inspector-section">
+            <h3>agent.toml</h3>
+            <div id="inspector-agent-toml-path" class="activity-sub"></div>
+            <pre id="inspector-agent-toml-content" class="run-log inspector-code"></pre>
+          </div>
+
+          <div class="inspector-section">
+            <h3>scripts</h3>
+            <ul id="inspector-scripts-list" class="activity-list"></ul>
+            <pre id="inspector-script-content" class="run-log inspector-code"></pre>
+          </div>
+
+          <div class="inspector-section">
+            <h3>references</h3>
+            <ul id="inspector-references-list" class="activity-list"></ul>
+            <pre id="inspector-reference-content" class="run-log inspector-code"></pre>
+          </div>
+        </section>
+
+        <aside class="panel side-panel">
+          <h3>에이전트 목록</h3>
+          <ul id="inspector-agent-list" class="activity-list"></ul>
+        </aside>
+      </main>
+    </div>
+
+    <div id="workspace-picker-modal" class="modal hidden">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h3>프로젝트 폴더 선택</h3>
+          <button id="workspace-picker-close" class="btn" type="button">닫기</button>
+        </div>
+        <div id="workspace-picker-current" class="muted"></div>
+        <div class="actions">
+          <button id="workspace-picker-up" class="btn" type="button">상위 폴더</button>
+          <button id="workspace-picker-choose" class="btn" type="button">이 폴더 선택</button>
+        </div>
+        <ul id="workspace-picker-list" class="activity-list"></ul>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
