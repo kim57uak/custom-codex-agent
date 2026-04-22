@@ -32,6 +32,11 @@
     hasError: false,
     liveText: "초기화 중...",
     collapsedNodeIds: new Set(),
+    commandPalette: {
+      open: false,
+      query: "",
+      activeIndex: 0,
+    },
   };
 
   const el = {
@@ -70,7 +75,9 @@
     workspacePickerUp: document.getElementById("workspace-picker-up"),
     workspacePickerChoose: document.getElementById("workspace-picker-choose"),
     workspacePickerList: document.getElementById("workspace-picker-list"),
+    runPromptWrap: document.getElementById("run-prompt-wrap"),
     runPromptInput: document.getElementById("run-prompt-input"),
+    runCommandPalette: document.getElementById("run-command-palette"),
     runSubmitBtn: document.getElementById("run-submit-btn"),
     runCancelBtn: document.getElementById("run-cancel-btn"),
     runRetryBtn: document.getElementById("run-retry-btn"),
@@ -312,8 +319,116 @@
       el.runApprovalSelect.value = state.selectedApprovalPolicy || "on-request";
     }
     renderRunAgentOptions();
+    renderCommandPalette();
     renderRunList();
     renderRunLog();
+  }
+
+  function filterCommandPaletteAgents(query) {
+    const normalized = String(query || "")
+      .trim()
+      .toLowerCase();
+    const agents = (state.executableAgents || []).filter((item) => item && item.runnable);
+    if (!normalized) return agents;
+    return agents.filter((item) => {
+      const haystacks = [
+        item.name,
+        item.role_label_ko,
+        item.department_label_ko,
+        item.short_description,
+      ];
+      return haystacks.some((value) => String(value || "").toLowerCase().includes(normalized));
+    });
+  }
+
+  function closeCommandPalette() {
+    state.commandPalette.open = false;
+    state.commandPalette.query = "";
+    state.commandPalette.activeIndex = 0;
+    renderCommandPalette();
+  }
+
+  function openCommandPalette(query) {
+    const candidates = filterCommandPaletteAgents(query);
+    state.commandPalette.open = true;
+    state.commandPalette.query = String(query || "");
+    state.commandPalette.activeIndex = candidates.length > 0 ? Math.min(state.commandPalette.activeIndex, candidates.length - 1) : 0;
+    renderCommandPalette();
+  }
+
+  function moveCommandPalette(step) {
+    const candidates = filterCommandPaletteAgents(state.commandPalette.query);
+    if (!state.commandPalette.open || candidates.length === 0) return;
+    const size = candidates.length;
+    const current = state.commandPalette.activeIndex || 0;
+    state.commandPalette.activeIndex = (current + step + size) % size;
+    renderCommandPalette();
+  }
+
+  function selectCommandPaletteAgentByIndex(index) {
+    const candidates = filterCommandPaletteAgents(state.commandPalette.query);
+    if (candidates.length === 0) return;
+    const safeIndex = Math.max(0, Math.min(index, candidates.length - 1));
+    const target = candidates[safeIndex];
+    if (!target) return;
+
+    state.selectedAgentName = target.name;
+    if (el.runAgentSelect) {
+      el.runAgentSelect.value = target.name;
+    }
+    if (el.runPromptInput) {
+      const prev = String(el.runPromptInput.value || "");
+      const cleaned = prev.replace(/(?:^|\s)\/([^\n\r]*)$/, "").replace(/\s+$/, "");
+      el.runPromptInput.value = cleaned;
+      el.runPromptInput.focus();
+    }
+    state.liveText = `실행 대상 선택: ${target.department_label_ko} / ${target.role_label_ko}`;
+    closeCommandPalette();
+    render();
+  }
+
+  function updateCommandPaletteByPromptValue() {
+    if (!el.runPromptInput) return;
+    const value = String(el.runPromptInput.value || "");
+    const match = value.match(/(?:^|\s)\/([^\n\r]*)$/);
+    if (!match) {
+      closeCommandPalette();
+      return;
+    }
+    const query = match[1] || "";
+    openCommandPalette(query);
+  }
+
+  function extractSlashCommandQuery(value) {
+    const match = String(value || "").match(/(?:^|\s)\/([^\n\r]*)$/);
+    return match ? match[1] || "" : null;
+  }
+
+  function renderCommandPalette() {
+    if (!el.runCommandPalette) return;
+    if (!state.commandPalette.open) {
+      el.runCommandPalette.classList.add("hidden");
+      el.runCommandPalette.innerHTML = "";
+      return;
+    }
+    const candidates = filterCommandPaletteAgents(state.commandPalette.query);
+    el.runCommandPalette.classList.remove("hidden");
+    if (candidates.length === 0) {
+      el.runCommandPalette.innerHTML = `<div class="command-palette-empty">일치하는 에이전트가 없습니다.</div>`;
+      return;
+    }
+    el.runCommandPalette.innerHTML = `<ul class="command-palette-list">${candidates
+      .map((item, idx) => {
+        const isActive = idx === state.commandPalette.activeIndex;
+        const label = `${item.department_label_ko} / ${item.role_label_ko}`;
+        const sub = `${item.name}${item.short_description ? ` - ${item.short_description}` : ""}`;
+        return `<li class="command-palette-item"><button type="button" class="command-palette-btn ${
+          isActive ? "active" : ""
+        }" data-command-agent-index="${idx}"><div class="command-palette-main">${escapeHtml(
+          label
+        )}</div><div class="command-palette-sub">${escapeHtml(sub)}</div></button></li>`;
+      })
+      .join("")}</ul>`;
   }
 
   async function loadInspector(agentName) {
@@ -934,8 +1049,8 @@
       const backupPath = result && result.backup_path ? String(result.backup_path) : "";
       const backupSize = formatBytes(result && result.size_bytes ? result.size_bytes : 0);
       const deletedCount = Number((result && result.deleted_entry_count) || 0);
-      showToast(`백업 완료 + 원본 삭제 ${deletedCount}건: ${backupPath} (${backupSize})`, "success");
-      state.liveText = `백업/삭제 완료: ${backupPath} (삭제 ${deletedCount}건)`;
+      showToast(`백업 완료: ${backupPath} (${backupSize}) / 삭제 ${deletedCount}건`, "success");
+      state.liveText = `백업 완료: ${backupPath} (삭제 ${deletedCount}건)`;
       await refreshAll();
     } catch (err) {
       const message = `백업 실패: ${String((err && err.message) || err || "")}`;
@@ -1163,6 +1278,13 @@
       .replaceAll("'", "&#39;");
   }
 
+  function isEditableElement(target) {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target instanceof HTMLInputElement) return true;
+    if (target instanceof HTMLTextAreaElement) return true;
+    return target.isContentEditable;
+  }
+
   function bind() {
     if (el.tabOrg) {
       el.tabOrg.addEventListener("click", function () {
@@ -1224,6 +1346,63 @@
     if (el.runAgentSelect) {
       el.runAgentSelect.addEventListener("change", function () {
         state.selectedAgentName = el.runAgentSelect.value;
+        closeCommandPalette();
+      });
+    }
+    if (el.runPromptInput) {
+      el.runPromptInput.addEventListener("input", function () {
+        updateCommandPaletteByPromptValue();
+      });
+      el.runPromptInput.addEventListener("keydown", function (event) {
+        if (event.key === "/" || event.code === "Slash") {
+          window.setTimeout(function () {
+            updateCommandPaletteByPromptValue();
+          }, 0);
+        }
+        const slashQuery = extractSlashCommandQuery((el.runPromptInput && el.runPromptInput.value) || "");
+        if (!state.commandPalette.open && slashQuery !== null && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+          event.preventDefault();
+          openCommandPalette(slashQuery);
+          moveCommandPalette(event.key === "ArrowDown" ? 1 : -1);
+          return;
+        }
+        if (!state.commandPalette.open) return;
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          moveCommandPalette(1);
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          moveCommandPalette(-1);
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          selectCommandPaletteAgentByIndex(state.commandPalette.activeIndex || 0);
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeCommandPalette();
+        }
+      });
+      el.runPromptInput.addEventListener("blur", function () {
+        window.setTimeout(function () {
+          closeCommandPalette();
+        }, 120);
+      });
+    }
+    if (el.runCommandPalette) {
+      el.runCommandPalette.addEventListener("click", function (event) {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const button = target.closest("[data-command-agent-index]");
+        if (!button) return;
+        const rawIndex = button.getAttribute("data-command-agent-index");
+        const index = Number(rawIndex);
+        if (!Number.isInteger(index)) return;
+        selectCommandPaletteAgentByIndex(index);
       });
     }
     if (el.runWorkspaceInput) {
@@ -1392,6 +1571,25 @@
         renderInspector();
       });
     }
+    document.addEventListener("keydown", function (event) {
+      if (state.tab !== "console") return;
+      if (!(event.key === "/" || event.code === "Slash")) return;
+      if (!el.runPromptInput) return;
+      if (isEditableElement(event.target)) return;
+      event.preventDefault();
+      el.runPromptInput.focus();
+      if (!String(el.runPromptInput.value || "").startsWith("/")) {
+        el.runPromptInput.value = "/";
+      }
+      updateCommandPaletteByPromptValue();
+    });
+    document.addEventListener("click", function (event) {
+      if (!state.commandPalette.open || !el.runPromptWrap) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (el.runPromptWrap.contains(target)) return;
+      closeCommandPalette();
+    });
   }
 
   bind();

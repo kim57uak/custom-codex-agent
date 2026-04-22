@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Custom Codex Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260420-02" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260420-04" />
   </head>
   <body>
     <div class="app-shell">
@@ -91,11 +91,14 @@
             <option value="never">never</option>
           </select>
           <label class="field-label" for="run-prompt-input">프롬프트</label>
-          <textarea
-            id="run-prompt-input"
-            class="input textarea"
-            placeholder="에이전트에게 전달할 프롬프트를 입력하세요"
-          ></textarea>
+          <div id="run-prompt-wrap" class="run-prompt-wrap">
+            <textarea
+              id="run-prompt-input"
+              class="input textarea"
+              placeholder="에이전트에게 전달할 프롬프트를 입력하세요 (/로 에이전트 빠른 선택)"
+            ></textarea>
+            <div id="run-command-palette" class="command-palette hidden"></div>
+          </div>
           <div class="actions">
             <button id="run-submit-btn" class="btn">실행</button>
             <button id="run-cancel-btn" class="btn">선택 실행 취소</button>
@@ -172,6 +175,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260420-02"></script>
+    <script src="/static/app.js?v=20260420-06"></script>
   </body>
 </html>
