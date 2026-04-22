@@ -38,6 +38,7 @@ class AppSettings(BaseModel):
     codex_cli_subcommand: tuple[str, ...] = Field(default=("exec",))
     workspace_root: Path = Field(default=DEFAULT_PROJECT_ROOT)
     founder_name: str = Field(default="대표이사")
+    workflow_recommendation_max_agents: int = Field(default=6)
 
     @property
     def history_file_path(self) -> Path:
@@ -103,4 +104,5 @@ SETTINGS = AppSettings(
     codex_cli_subcommand=_parse_codex_subcommand(os.getenv("CUSTOM_CODEX_AGENT_CODEX_CLI_SUBCOMMAND")),
     workspace_root=_parse_path(os.getenv("CUSTOM_CODEX_AGENT_WORKSPACE_ROOT"), DEFAULT_PROJECT_ROOT),
     founder_name=os.getenv("CUSTOM_CODEX_AGENT_FOUNDER_NAME", "대표이사"),
+    workflow_recommendation_max_agents=int(os.getenv("CUSTOM_CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS", "6")),
 )

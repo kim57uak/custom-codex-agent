@@ -17,6 +17,8 @@ from app.services.event_stream import EventBroker
 from app.services.file_watcher import CodexFileWatcher
 from app.services.run_orchestrator import RunOrchestrator
 from app.services.run_store import RunStore
+from app.services.workflow_orchestrator import WorkflowOrchestrator
+from app.services.workflow_store import WorkflowStore
 
 
 reader = CodexConfigReader(SETTINGS)
@@ -27,6 +29,11 @@ try:
 except sqlite3.OperationalError:
     run_store = RunStore(Path("/tmp/custom_codex_agent_runs.sqlite"))
 run_orchestrator = RunOrchestrator(SETTINGS, broker, run_store)
+try:
+    workflow_store = WorkflowStore(SETTINGS.run_db_path)
+except sqlite3.OperationalError:
+    workflow_store = WorkflowStore(Path("/tmp/custom_codex_agent_runs.sqlite"))
+workflow_orchestrator = WorkflowOrchestrator(SETTINGS, service, broker, run_orchestrator, workflow_store)
 watcher: CodexFileWatcher | None = None
 
 app = FastAPI(title="Custom Codex Agent API", version="0.1.0")
@@ -37,10 +44,28 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-app.include_router(build_api_router(service, broker, run_orchestrator, SETTINGS.write_api_token, SETTINGS))
+app.include_router(
+    build_api_router(
+        service,
+        broker,
+        run_orchestrator,
+        workflow_orchestrator,
+        SETTINGS.write_api_token,
+        SETTINGS,
+    )
+)
+
+
+class NoCacheStaticFiles(StaticFiles):
+    def file_response(self, *args, **kwargs):  # type: ignore[override]
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 
 static_dir = Path(__file__).resolve().parent / "static"
-app.mount("/static", StaticFiles(directory=static_dir), name="static")
+app.mount("/static", NoCacheStaticFiles(directory=static_dir), name="static")
 
 
 @app.on_event("startup")
@@ -101,7 +126,11 @@ def index() -> FileResponse | JSONResponse:
 
     index_file = static_dir / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        response = FileResponse(index_file)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
     return JSONResponse(
         {
             "status": "frontend-static-missing",

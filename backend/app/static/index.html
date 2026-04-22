@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Custom Codex Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260420-04" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260422-02" />
   </head>
   <body>
     <div class="app-shell">
@@ -26,6 +26,7 @@
         <button id="tab-org" class="tab active">기업 조직도</button>
         <button id="tab-dashboard" class="tab">운영 대시보드</button>
         <button id="tab-console" class="tab">실행 콘솔</button>
+        <button id="tab-workflow" class="tab">Workflow</button>
         <button id="tab-inspector" class="tab">스킬 인스펙터</button>
       </nav>
 
@@ -116,6 +117,115 @@
         </aside>
       </main>
 
+      <main id="workflow-view" class="grid-view hidden">
+        <section class="panel main-panel">
+          <div class="workflow-hero">
+            <div class="workflow-hero-copy">
+              <p class="eyebrow workflow-eyebrow">Multi-Agent Workflow Studio</p>
+              <h2>목표를 쓰면, 에이전트 팀을 조립하고 바로 흘려보냅니다</h2>
+              <p class="muted workflow-hero-text">
+                추천, 수동 편집, 단계별 지시, 순차 실행, 로그 추적을 한 화면에서 다룹니다.
+              </p>
+              <div class="workflow-hero-metrics">
+                <div class="workflow-hero-metric">
+                  <span>추천 상태</span>
+                  <strong id="workflow-recommendation-status">대기 중</strong>
+                </div>
+                <div class="workflow-hero-metric">
+                  <span>구성된 단계</span>
+                  <strong id="workflow-stage-count">0</strong>
+                </div>
+                <div class="workflow-hero-metric">
+                  <span>선택된 실행</span>
+                  <strong id="workflow-selected-run-label">없음</strong>
+                </div>
+              </div>
+            </div>
+            <div class="workflow-goal-panel">
+              <label class="field-label" for="workflow-goal-input">작업 목표</label>
+              <textarea
+                id="workflow-goal-input"
+                class="input textarea workflow-goal-input"
+                placeholder="Codex에게 작업 목표를 설명하면 적합한 에이전트 조합을 추천합니다."
+              ></textarea>
+              <div class="actions workflow-hero-actions">
+                <button id="workflow-recommend-btn" class="btn workflow-primary-btn">추천 에이전트 찾기</button>
+                <button id="workflow-clear-btn" class="btn workflow-secondary-btn" type="button">워크플로 비우기</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="workflow-layout">
+            <section class="workflow-column">
+              <div class="workflow-section-heading">
+                <h3>추천 결과</h3>
+                <span id="workflow-recommendation-meta" class="muted">추천 결과 없음</span>
+              </div>
+              <div class="workflow-manual-add">
+                <label class="field-label" for="workflow-agent-filter-input">수동 에이전트 추가</label>
+                <input
+                  id="workflow-agent-filter-input"
+                  class="input"
+                  type="text"
+                  placeholder="에이전트 이름/역할/부서로 검색"
+                />
+                <div class="workflow-manual-add-row">
+                  <select id="workflow-agent-select" class="input"></select>
+                  <button id="workflow-agent-add-btn" class="btn" type="button">수동 추가</button>
+                </div>
+              </div>
+              <div id="workflow-recommendation-list" class="workflow-card-list"></div>
+            </section>
+
+            <section class="workflow-column workflow-editor-column">
+              <div class="workflow-section-heading">
+                <h3>워크플로 단계</h3>
+                <span id="workflow-editor-meta" class="muted">단계를 추가하세요</span>
+              </div>
+              <div id="workflow-step-list" class="workflow-step-list"></div>
+            </section>
+          </div>
+
+          <div class="workflow-controls-grid">
+            <div class="workflow-control-block">
+              <label class="field-label" for="workflow-workspace-input">프로젝트 폴더(절대 경로)</label>
+              <div class="workspace-row">
+                <input
+                  id="workflow-workspace-input"
+                  class="input"
+                  type="text"
+                  placeholder="/Users/.../project/path"
+                />
+                <button id="workflow-workspace-picker-btn" class="btn" type="button">폴더 선택</button>
+              </div>
+            </div>
+            <div class="workflow-control-block">
+              <label class="field-label" for="workflow-sandbox-select">샌드박스 정책</label>
+              <select id="workflow-sandbox-select" class="input"></select>
+            </div>
+            <div class="workflow-control-block">
+              <label class="field-label" for="workflow-approval-select">승인 정책</label>
+              <select id="workflow-approval-select" class="input"></select>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button id="workflow-run-btn" class="btn">워크플로 실행</button>
+            <button id="workflow-cancel-btn" class="btn" type="button">선택 워크플로 중단</button>
+            <button id="workflow-retry-btn" class="btn" type="button">선택 워크플로 재실행</button>
+          </div>
+
+          <h2>워크플로 로그</h2>
+          <div id="workflow-meta" class="muted">선택된 워크플로 없음</div>
+          <pre id="workflow-log" class="run-log"></pre>
+        </section>
+
+        <aside class="panel side-panel">
+          <h3>최근 워크플로 실행</h3>
+          <ul id="workflow-run-list" class="activity-list"></ul>
+        </aside>
+      </main>
+
       <main id="inspector-view" class="grid-view hidden">
         <section class="panel main-panel">
           <h2>에이전트 / 스킬 실시간 인스펙터</h2>
@@ -175,6 +285,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260420-06"></script>
+    <script src="/static/app.js?v=20260422-02"></script>
   </body>
 </html>

@@ -26,15 +26,35 @@ from app.models import (
     RunDetailModel,
     RunEventsResponse,
     RunEventModel,
+    UiOptionModel,
     RunsResponse,
     RunSummaryModel,
     SkillAgentBackupResponse,
     SkillAgentRestoreResponse,
+    WorkflowAgentIconModel,
+    WorkflowEventModel,
+    WorkflowEventsResponse,
+    WorkflowRecommendRequest,
+    WorkflowRecommendResponse,
+    WorkflowRunCreateRequest,
+    WorkflowRunDetailModel,
+    WorkflowRunsResponse,
+    WorkflowRunSummaryModel,
+    WorkflowStepActionRequest,
+    WorkflowStepRunModel,
+    WorkflowUiConfigResponse,
 )
 from app.config import AppSettings
 from app.services.dashboard_service import DashboardService
 from app.services.event_stream import EventBroker
 from app.services.run_orchestrator import RunOrchestrator
+from app.services.workflow_catalog import (
+    WORKFLOW_APPROVAL_OPTIONS,
+    WORKFLOW_ICON_RULES,
+    WORKFLOW_SANDBOX_OPTIONS,
+    WORKFLOW_STEP_STATUS_OPTIONS,
+)
+from app.services.workflow_orchestrator import WorkflowOrchestrator
 
 
 def _to_run_status(raw_status: str) -> str:
@@ -46,6 +66,7 @@ def build_api_router(
     service: DashboardService,
     broker: EventBroker,
     run_orchestrator: RunOrchestrator,
+    workflow_orchestrator: WorkflowOrchestrator,
     write_api_token: str,
     settings: AppSettings,
 ) -> APIRouter:
@@ -297,6 +318,21 @@ def build_api_router(
     def get_run_config() -> RunConfigResponse:
         return RunConfigResponse(default_workspace_root=str(run_orchestrator.default_workspace_root))
 
+    @router.get("/workflows/ui-config", response_model=WorkflowUiConfigResponse)
+    def get_workflow_ui_config() -> WorkflowUiConfigResponse:
+        return WorkflowUiConfigResponse(
+            sandbox_modes=[UiOptionModel(value=value, label=label) for value, label in WORKFLOW_SANDBOX_OPTIONS],
+            approval_policies=[UiOptionModel(value=value, label=label) for value, label in WORKFLOW_APPROVAL_OPTIONS],
+            workflow_step_statuses=[
+                UiOptionModel(value=value, label=label) for value, label in WORKFLOW_STEP_STATUS_OPTIONS
+            ],
+            agent_icons=[
+                WorkflowAgentIconModel(key=rule.key, label=rule.label, keywords=list(rule.keywords))
+                for rule in WORKFLOW_ICON_RULES
+            ],
+            recommendation_max_agents=settings.workflow_recommendation_max_agents,
+        )
+
     @router.get("/fs/directories", response_model=DirectoryBrowseResponse)
     def list_directories(path: str | None = Query(default=None)) -> DirectoryBrowseResponse:
         target_path = (path or "").strip()
@@ -539,6 +575,182 @@ def build_api_router(
             exit_code=record.exit_code,
             error_message=record.error_message,
         )
+
+    @router.post("/workflows/recommend", response_model=WorkflowRecommendResponse)
+    async def recommend_workflow_agents(
+        request: WorkflowRecommendRequest,
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> WorkflowRecommendResponse:
+        verify_write_token(x_api_token)
+        try:
+            recommendations = await workflow_orchestrator.recommend_agents(
+                request.goal_prompt,
+                max_agents=request.max_agents,
+            )
+        except ValueError as err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
+        return WorkflowRecommendResponse(goal=request.goal_prompt.strip(), recommended_agents=recommendations)
+
+    @router.get("/workflow-runs", response_model=WorkflowRunsResponse)
+    def list_workflow_runs(limit: int = Query(default=30, ge=1, le=200)) -> WorkflowRunsResponse:
+        runs = workflow_orchestrator.list_workflow_runs(limit=limit)
+        return WorkflowRunsResponse(
+            runs=[
+                WorkflowRunSummaryModel(
+                    workflow_run_id=run.workflow_run_id,
+                    goal_prompt_preview=workflow_orchestrator.to_goal_preview(run.goal_prompt),
+                    workspace_root=run.workspace_root,
+                    status=run.status,
+                    current_step_index=run.current_step_index,
+                    total_steps=run.total_steps,
+                    created_at=run.created_at,
+                    started_at=run.started_at,
+                    completed_at=run.completed_at,
+                    error_message=run.error_message,
+                )
+                for run in runs
+            ]
+        )
+
+    @router.get("/workflow-runs/{workflow_run_id}", response_model=WorkflowRunDetailModel)
+    def get_workflow_run(workflow_run_id: str) -> WorkflowRunDetailModel:
+        run = workflow_orchestrator.get_workflow_run(workflow_run_id)
+        if run is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
+        steps = workflow_orchestrator.list_workflow_steps(workflow_run_id)
+        return WorkflowRunDetailModel(
+            workflow_run_id=run.workflow_run_id,
+            goal_prompt=run.goal_prompt,
+            workspace_root=run.workspace_root,
+            sandbox_mode=run.sandbox_mode,
+            approval_policy=run.approval_policy,
+            status=run.status,
+            current_step_index=run.current_step_index,
+            total_steps=run.total_steps,
+            steps=[
+                WorkflowStepRunModel(
+                    step_index=step.step_index,
+                    agent_name=step.agent_name,
+                    skill_name=step.skill_name,
+                    icon_key=step.icon_key,
+                    title=step.title,
+                    prompt=step.prompt,
+                    status=step.status,
+                    run_id=step.run_id,
+                    reason=step.reason,
+                    summary=step.summary,
+                    last_event_message=step.last_event_message,
+                    started_at=step.started_at,
+                    completed_at=step.completed_at,
+                    exit_code=step.exit_code,
+                    error_message=step.error_message,
+                )
+                for step in steps
+            ],
+            created_at=run.created_at,
+            started_at=run.started_at,
+            completed_at=run.completed_at,
+            error_message=run.error_message,
+        )
+
+    @router.get("/workflow-runs/{workflow_run_id}/events", response_model=WorkflowEventsResponse)
+    def get_workflow_events(
+        workflow_run_id: str,
+        limit: int = Query(default=500, ge=1, le=4000),
+    ) -> WorkflowEventsResponse:
+        run = workflow_orchestrator.get_workflow_run(workflow_run_id)
+        if run is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
+        events = workflow_orchestrator.list_workflow_events(workflow_run_id, limit=limit)
+        return WorkflowEventsResponse(
+            events=[
+                WorkflowEventModel(
+                    event_id=event.event_id,
+                    workflow_run_id=event.workflow_run_id,
+                    step_index=event.step_index,
+                    event_type=event.event_type,
+                    message=event.message,
+                    created_at=event.created_at,
+                )
+                for event in events
+            ]
+        )
+
+    @router.post("/workflow-runs", response_model=WorkflowRunDetailModel)
+    async def create_workflow_run(
+        request: WorkflowRunCreateRequest,
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> WorkflowRunDetailModel:
+        verify_write_token(x_api_token)
+        try:
+            created = await workflow_orchestrator.create_workflow_run(
+                goal_prompt=request.goal_prompt,
+                steps=request.steps,
+                workspace_root=request.workspace_root,
+                sandbox_mode=request.sandbox_mode,
+                approval_policy=request.approval_policy,
+            )
+        except ValueError as err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
+        return get_workflow_run(created.workflow_run_id)
+
+    @router.post("/workflow-runs/{workflow_run_id}/cancel", response_model=WorkflowRunDetailModel)
+    async def cancel_workflow_run(
+        workflow_run_id: str,
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> WorkflowRunDetailModel:
+        verify_write_token(x_api_token)
+        updated = await workflow_orchestrator.cancel_workflow_run(workflow_run_id)
+        if updated is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
+        return get_workflow_run(updated.workflow_run_id)
+
+    @router.post("/workflow-runs/{workflow_run_id}/retry", response_model=WorkflowRunDetailModel)
+    async def retry_workflow_run(
+        workflow_run_id: str,
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> WorkflowRunDetailModel:
+        verify_write_token(x_api_token)
+        created = await workflow_orchestrator.retry_workflow_run(workflow_run_id)
+        if created is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
+        return get_workflow_run(created.workflow_run_id)
+
+    @router.post("/workflow-runs/{workflow_run_id}/retry-from-step", response_model=WorkflowRunDetailModel)
+    async def retry_workflow_run_from_step(
+        workflow_run_id: str,
+        request: WorkflowStepActionRequest,
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> WorkflowRunDetailModel:
+        verify_write_token(x_api_token)
+        try:
+            created = await workflow_orchestrator.retry_workflow_run_from_step(
+                workflow_run_id,
+                request.step_index,
+            )
+        except ValueError as err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
+        if created is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
+        return get_workflow_run(created.workflow_run_id)
+
+    @router.post("/workflow-runs/{workflow_run_id}/skip-step", response_model=WorkflowRunDetailModel)
+    async def skip_workflow_step(
+        workflow_run_id: str,
+        request: WorkflowStepActionRequest,
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> WorkflowRunDetailModel:
+        verify_write_token(x_api_token)
+        try:
+            created = await workflow_orchestrator.skip_workflow_step_and_continue(
+                workflow_run_id,
+                request.step_index,
+            )
+        except ValueError as err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
+        if created is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
+        return get_workflow_run(created.workflow_run_id)
 
     @router.get("/events")
     async def stream_events() -> StreamingResponse:

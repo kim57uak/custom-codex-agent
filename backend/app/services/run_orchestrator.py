@@ -97,6 +97,61 @@ class RunOrchestrator:
         workspace_root = self.validate_workspace_root(record.workspace_root or None)
         return await self.create_run(agent_name=record.agent_name, prompt=record.prompt, workspace_root=workspace_root)
 
+    async def wait_for_run(self, run_id: str) -> RunRecord | None:
+        """
+        summary: 특정 run이 종료될 때까지 기다린 뒤 최신 run 레코드를 반환한다.
+        purpose/context: 워크플로 오케스트레이터가 단계별 단일 run을 순차 실행할 때 공용 대기 지점으로 사용한다.
+        input: create_run 이후 발급된 run_id를 받는다.
+        output: 완료/실패/취소 상태로 갱신된 RunRecord 또는 미존재 시 None을 반환한다.
+        rules/constraints: 이미 종료된 run이면 추가 대기 없이 즉시 현재 상태를 반환한다.
+        failure behavior: 내부 task 예외는 기존 실행 로직에서 상태를 기록하므로 여기서는 최신 레코드 조회만 수행한다.
+        """
+
+        record = self._store.get_run(run_id)
+        if record is None:
+            return None
+        if record.status in {"completed", "failed", "canceled"}:
+            return record
+        task = self._run_tasks.get(run_id)
+        if task is not None:
+            try:
+                await task
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # 실행 task 내부에서 상태와 이벤트를 이미 기록하므로 여기서는 후속 조회만 수행한다.
+                pass
+        return self._store.get_run(run_id)
+
+    async def execute_codex_text(
+        self,
+        prompt: str,
+        workspace_root: Path | None = None,
+        sandbox_mode: str | None = None,
+        approval_policy: str | None = None,
+    ) -> tuple[int | None, str, str]:
+        """
+        summary: Codex CLI를 단발성 텍스트 실행으로 호출하고 stdout/stderr를 수집한다.
+        purpose/context: 워크플로 추천처럼 run 저장이 필요 없는 메타 작업에서 동일한 CLI 실행 규칙을 재사용한다.
+        input: prompt, 선택적 작업 폴더, 샌드박스/승인 정책을 받는다.
+        output: `(return_code, stdout_text, stderr_text)` 튜플을 반환한다.
+        rules/constraints: 실행 커맨드 구성은 일반 run과 동일한 규칙을 사용한다.
+        failure behavior: 실행 파일이 없으면 `FileNotFoundError`를 그대로 올려 호출자가 진단 메시지를 만든다.
+        """
+
+        process = await asyncio.create_subprocess_exec(
+            *self._build_command(sandbox_mode=sandbox_mode, approval_policy=approval_policy),
+            cwd=str(workspace_root or self.default_workspace_root),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await self._write_prompt(process, prompt)
+        stdout_bytes, stderr_bytes = await process.communicate()
+        stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
+        return process.returncode, stdout_text, stderr_text
+
     async def _execute_run(
         self,
         run_id: str,
