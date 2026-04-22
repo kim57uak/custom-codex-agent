@@ -43,6 +43,7 @@
     selectedWorkflowAgentName: "",
     workflowRuns: [],
     selectedWorkflowRunId: null,
+    selectedWorkflowStepIndex: 0,
     selectedWorkflowRunSteps: [],
     workflowEventsByRunId: new Map(),
     selectedWorkflowWorkspaceRoot: "",
@@ -128,6 +129,7 @@
     workflowAgentSelect: document.getElementById("workflow-agent-select"),
     workflowAgentAddBtn: document.getElementById("workflow-agent-add-btn"),
     workflowStepList: document.getElementById("workflow-step-list"),
+    workflowStepInspector: document.getElementById("workflow-step-inspector"),
     workflowEditorMeta: document.getElementById("workflow-editor-meta"),
     workflowWorkspaceInput: document.getElementById("workflow-workspace-input"),
     workflowWorkspacePickerBtn: document.getElementById("workflow-workspace-picker-btn"),
@@ -405,6 +407,29 @@
     state.workflowRecommendationStatus = String(nextStatus || "").trim() || "대기 중";
   }
 
+  function normalizeWorkflowStepSelection() {
+    const steps = (state.workflowDraft && state.workflowDraft.steps) || [];
+    if (steps.length === 0) {
+      state.selectedWorkflowStepIndex = -1;
+      return;
+    }
+    if (!Number.isInteger(state.selectedWorkflowStepIndex) || state.selectedWorkflowStepIndex < 0) {
+      state.selectedWorkflowStepIndex = 0;
+      return;
+    }
+    if (state.selectedWorkflowStepIndex >= steps.length) {
+      state.selectedWorkflowStepIndex = steps.length - 1;
+    }
+  }
+
+  function selectWorkflowStep(index) {
+    const steps = (state.workflowDraft && state.workflowDraft.steps) || [];
+    if (!Number.isInteger(index) || index < 0 || index >= steps.length) return;
+    state.selectedWorkflowStepIndex = index;
+    renderWorkflowSteps();
+    renderWorkflowStepInspector();
+  }
+
   function getWorkflowStepStatusLabel(status) {
     const statuses = (state.workflowUiConfig && state.workflowUiConfig.workflow_step_statuses) || [];
     const matched = statuses.find((item) => item.value === status);
@@ -486,22 +511,26 @@
         (item, index) => {
           const cardStatus = getWorkflowRecommendationCardStatus(item.agent_name);
           return `
-          <article class="workflow-recommend-card">
-            <div class="workflow-agent-avatar">
+          <article class="workflow-recommend-card workflow-palette-card">
+            <div class="workflow-agent-avatar workflow-palette-avatar">
               <div class="workflow-agent-avatar-glow"></div>
               <div class="workflow-agent-icon workflow-agent-icon-lg">${getWorkflowIconSvg(item.icon_key)}</div>
               <span class="workflow-card-state workflow-card-state-${cardStatus.className}">${escapeHtml(cardStatus.label)}</span>
             </div>
             <div class="workflow-card-body">
+              <div class="workflow-card-kicker">Agent Palette</div>
               <div class="workflow-card-title-row">
                 <strong>${escapeHtml(item.agent_name)}</strong>
-                <span class="workflow-card-sub">${escapeHtml(item.skill_name || "스킬 없음")}</span>
+                <span class="workflow-node-chip workflow-node-chip-skill">${escapeHtml(item.skill_name || "스킬 없음")}</span>
               </div>
-              <div class="workflow-card-role">${escapeHtml(item.department_label_ko || "-")} / ${escapeHtml(item.role_label_ko || "-")}</div>
+              <div class="workflow-node-chip-row">
+                <span class="workflow-node-chip">${escapeHtml(item.department_label_ko || "-")}</span>
+                <span class="workflow-node-chip">${escapeHtml(item.role_label_ko || "-")}</span>
+              </div>
               <div class="workflow-card-desc">${escapeHtml(item.short_description || item.reason || "")}</div>
               <div class="workflow-card-reason">${escapeHtml(item.reason || "")}</div>
             </div>
-            <button class="btn" type="button" data-workflow-add-index="${index}">추가</button>
+            <button class="btn workflow-node-add-btn" type="button" data-workflow-add-index="${index}">+ Stage</button>
           </article>
         `;
         }
@@ -618,71 +647,133 @@
     if (!el.workflowStepList || !el.workflowEditorMeta) return;
     const steps = (state.workflowDraft && state.workflowDraft.steps) || [];
     el.workflowEditorMeta.textContent = steps.length > 0 ? `${steps.length}개 단계 / 드래그로 순서 변경` : "단계를 추가하세요";
+    normalizeWorkflowStepSelection();
     if (steps.length === 0) {
       el.workflowStepList.innerHTML = `<div class="workflow-empty">추천 결과에서 에이전트를 추가하거나 수동으로 구성하세요.</div>`;
       return;
     }
-    el.workflowStepList.innerHTML = steps
-      .map(
-        (step, index) => {
-          const displayStatus = getWorkflowDisplayStatus(step);
-          const progressText = getWorkflowProgressText(step);
-          const showRetryFromStep =
-            !!state.selectedWorkflowRunId && (step.status === "failed" || step.status === "canceled");
-          const showSkipStep =
-            !!state.selectedWorkflowRunId &&
-            (step.status === "failed" || step.status === "canceled") &&
-            index < steps.length - 1;
-          return `
-          <article
-            class="workflow-step-card ${step.status === "running" ? "is-running" : ""}"
-            draggable="true"
-            data-workflow-step-index="${index}"
-          >
-            <div class="workflow-step-handle" title="순서 변경">::</div>
-            <div class="workflow-agent-avatar workflow-step-avatar">
-              <div class="workflow-agent-avatar-glow"></div>
-              <div class="workflow-agent-icon workflow-agent-icon-lg">${getWorkflowIconSvg(step.iconKey)}</div>
-              <span class="workflow-card-state workflow-card-state-${escapeHtml(displayStatus)}">${escapeHtml(
-                getWorkflowStepStatusLabel(displayStatus)
-              )}</span>
-            </div>
-            <div class="workflow-step-main">
-              <div class="workflow-card-title-row">
-                <strong>${escapeHtml(step.agentName)}</strong>
-                <span class="workflow-card-sub">${escapeHtml(step.skillName || "스킬 없음")}</span>
-              </div>
-              <div class="workflow-card-role">${escapeHtml(step.departmentLabel || "-")} / ${escapeHtml(step.roleLabel || "-")}</div>
-              <div class="workflow-step-status-row">
-                <span class="workflow-step-index">단계 ${index + 1}</span>
-                <span class="workflow-card-sub">${escapeHtml(progressText || "")}</span>
-              </div>
-              <label class="field-label" for="workflow-step-prompt-${index}">단계 프롬프트</label>
-              <textarea
-                id="workflow-step-prompt-${index}"
-                class="input workflow-step-prompt"
-                data-workflow-prompt-index="${index}"
-              >${escapeHtml(step.prompt || "")}</textarea>
-            </div>
-            <div class="workflow-step-actions">
-              <button class="btn" type="button" data-workflow-duplicate-index="${index}">복제</button>
-              <button class="btn" type="button" data-workflow-remove-index="${index}">삭제</button>
-              ${
-                showRetryFromStep
-                  ? `<button class="btn" type="button" data-workflow-retry-from-step-index="${index}">이 단계부터 재시도</button>`
-                  : ""
-              }
-              ${
-                showSkipStep
-                  ? `<button class="btn" type="button" data-workflow-skip-step-index="${index}">이 단계 건너뛰기</button>`
-                  : ""
-              }
-            </div>
-          </article>
-        `;
-        }
-      )
-      .join("");
+    el.workflowStepList.innerHTML = `
+      <div class="workflow-flow-canvas">
+        <div class="workflow-flow-board">
+          ${steps
+            .map((step, index) => {
+              const displayStatus = getWorkflowDisplayStatus(step);
+              const progressText = getWorkflowProgressText(step);
+              const isSelected = state.selectedWorkflowStepIndex === index;
+              const progressLabel = progressText || "대기 중";
+              return `
+                <article
+                  class="workflow-step-card workflow-node-card workflow-stage-compact ${step.status === "running" ? "is-running" : ""} ${
+                isSelected ? "selected" : ""
+              }"
+                  draggable="true"
+                  data-workflow-step-index="${index}"
+                  data-workflow-select-index="${index}"
+                >
+                  <div class="workflow-node-rail">
+                    <span class="workflow-node-rail-dot"></span>
+                    ${index < steps.length - 1 ? `<span class="workflow-node-rail-line"></span>` : ""}
+                  </div>
+                  <div class="workflow-step-handle workflow-node-drag" title="순서 변경">::</div>
+                  <div class="workflow-agent-avatar workflow-step-avatar">
+                    <div class="workflow-agent-avatar-glow"></div>
+                    <div class="workflow-agent-icon workflow-agent-icon-lg">${getWorkflowIconSvg(step.iconKey)}</div>
+                    <span class="workflow-card-state workflow-card-state-${escapeHtml(displayStatus)}">${escapeHtml(
+                      getWorkflowStepStatusLabel(displayStatus)
+                    )}</span>
+                  </div>
+                  <div class="workflow-step-main workflow-node-main workflow-stage-summary">
+                    <div class="workflow-node-header">
+                      <div>
+                        <div class="workflow-card-kicker">Stage ${index + 1}</div>
+                        <div class="workflow-card-title-row">
+                          <strong>${escapeHtml(step.agentName)}</strong>
+                          <span class="workflow-node-chip workflow-node-chip-skill">${escapeHtml(step.skillName || "스킬 없음")}</span>
+                        </div>
+                      </div>
+                      <span class="workflow-step-index">Step ${index + 1}</span>
+                    </div>
+                    <div class="workflow-node-progress workflow-node-progress-compact">
+                      <span class="workflow-node-progress-label">Current Execution</span>
+                      <div class="workflow-node-progress-text">${escapeHtml(progressLabel)}</div>
+                    </div>
+                  </div>
+                  <div class="workflow-step-actions workflow-node-actions workflow-stage-actions">
+                    <button class="btn" type="button" data-workflow-select-index="${index}">${isSelected ? "선택됨" : "열기"}</button>
+                  </div>
+                </article>
+              `;
+            })
+            .join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderWorkflowStepInspector() {
+    if (!el.workflowStepInspector) return;
+    const steps = (state.workflowDraft && state.workflowDraft.steps) || [];
+    normalizeWorkflowStepSelection();
+    if (steps.length === 0 || state.selectedWorkflowStepIndex < 0 || state.selectedWorkflowStepIndex >= steps.length) {
+      el.workflowStepInspector.innerHTML = `
+        <div class="workflow-inspector-empty">
+          <h4>Step Inspector</h4>
+          <p>단계를 선택하면 상세 지시와 고급 제어를 이 레이어에서 편집할 수 있습니다.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const step = steps[state.selectedWorkflowStepIndex];
+    const displayStatus = getWorkflowDisplayStatus(step);
+    const progressText = getWorkflowProgressText(step) || "대기 중";
+    const showRetryFromStep = !!state.selectedWorkflowRunId && (step.status === "failed" || step.status === "canceled");
+    const showSkipStep =
+      !!state.selectedWorkflowRunId &&
+      (step.status === "failed" || step.status === "canceled") &&
+      state.selectedWorkflowStepIndex < steps.length - 1;
+
+    el.workflowStepInspector.innerHTML = `
+      <article class="workflow-inspector-card">
+        <div class="workflow-inspector-head">
+          <div>
+            <p class="workflow-card-kicker">Step Inspector</p>
+            <h4>Stage ${state.selectedWorkflowStepIndex + 1} · ${escapeHtml(step.agentName)}</h4>
+          </div>
+          <span class="workflow-card-state workflow-card-state-${escapeHtml(displayStatus)}">${escapeHtml(
+      getWorkflowStepStatusLabel(displayStatus)
+    )}</span>
+        </div>
+        <div class="workflow-node-chip-row">
+          <span class="workflow-node-chip workflow-node-chip-skill">${escapeHtml(step.skillName || "스킬 없음")}</span>
+          <span class="workflow-node-chip">${escapeHtml(step.departmentLabel || "-")}</span>
+          <span class="workflow-node-chip">${escapeHtml(step.roleLabel || "-")}</span>
+        </div>
+        <div class="workflow-node-progress">
+          <span class="workflow-node-progress-label">Current Execution</span>
+          <div class="workflow-node-progress-text">${escapeHtml(progressText)}</div>
+        </div>
+        <label class="field-label" for="workflow-step-prompt-${state.selectedWorkflowStepIndex}">Instruction</label>
+        <textarea
+          id="workflow-step-prompt-${state.selectedWorkflowStepIndex}"
+          class="input workflow-step-prompt workflow-inspector-prompt"
+          data-workflow-prompt-index="${state.selectedWorkflowStepIndex}"
+        >${escapeHtml(step.prompt || "")}</textarea>
+        <details class="workflow-inspector-details">
+          <summary>고급 메타데이터</summary>
+          <div class="workflow-inspector-detail-grid">
+            <div><span>run_id</span><strong>${escapeHtml(step.runId || "-")}</strong></div>
+            <div><span>status</span><strong>${escapeHtml(step.status || "-")}</strong></div>
+          </div>
+        </details>
+        <div class="workflow-step-actions workflow-inspector-actions">
+          <button class="btn" type="button" data-workflow-duplicate-index="${state.selectedWorkflowStepIndex}">Duplicate</button>
+          <button class="btn" type="button" data-workflow-remove-index="${state.selectedWorkflowStepIndex}">Remove</button>
+          ${showRetryFromStep ? `<button class="btn" type="button" data-workflow-retry-from-step-index="${state.selectedWorkflowStepIndex}">Retry From Here</button>` : ""}
+          ${showSkipStep ? `<button class="btn" type="button" data-workflow-skip-step-index="${state.selectedWorkflowStepIndex}">Skip Step</button>` : ""}
+        </div>
+      </article>
+    `;
   }
 
   function renderWorkflowRunList() {
@@ -761,6 +852,7 @@
     renderWorkflowManualAgentOptions();
     renderWorkflowRecommendations();
     renderWorkflowSteps();
+    renderWorkflowStepInspector();
     renderWorkflowRunList();
     renderWorkflowLog();
   }
@@ -1075,6 +1167,10 @@
       steps: steps,
     };
     state.selectedWorkflowRunSteps = steps.map((step) => Object.assign({}, step));
+    if (!Number.isInteger(state.selectedWorkflowStepIndex) || state.selectedWorkflowStepIndex < 0) {
+      state.selectedWorkflowStepIndex = 0;
+    }
+    normalizeWorkflowStepSelection();
     state.workflowEditorSource = "run";
   }
 
@@ -1100,6 +1196,7 @@
       },
     ]);
     normalizeWorkflowDraftStepsForEditing();
+    state.selectedWorkflowStepIndex = (state.workflowDraft.steps || []).length - 1;
     setWorkflowRecommendationStatus("후보 선별 중");
     state.workflowEditorSource = "draft";
     renderWorkflow();
@@ -1110,10 +1207,18 @@
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= steps.length || toIndex >= steps.length) {
       return;
     }
+    const selectedIndex = state.selectedWorkflowStepIndex;
     const next = steps.slice();
     const [moved] = next.splice(fromIndex, 1);
     next.splice(toIndex, 0, moved);
     state.workflowDraft.steps = next;
+    if (selectedIndex === fromIndex) {
+      state.selectedWorkflowStepIndex = toIndex;
+    } else if (selectedIndex > fromIndex && selectedIndex <= toIndex) {
+      state.selectedWorkflowStepIndex = selectedIndex - 1;
+    } else if (selectedIndex < fromIndex && selectedIndex >= toIndex) {
+      state.selectedWorkflowStepIndex = selectedIndex + 1;
+    }
     normalizeWorkflowDraftStepsForEditing();
     setWorkflowRecommendationStatus("단계 재배치 중");
     state.workflowEditorSource = "draft";
@@ -1235,6 +1340,89 @@
     }
   }
 
+  function updateWorkflowStepPrompt(index, value) {
+    if (!Number.isInteger(index) || !state.workflowDraft.steps[index]) return;
+    state.workflowDraft.steps[index].prompt = value || "";
+    normalizeWorkflowDraftStepsForEditing();
+    setWorkflowRecommendationStatus("단계 편집 중");
+    state.workflowEditorSource = "draft";
+    state.selectedWorkflowStepIndex = index;
+  }
+
+  function removeWorkflowStepByIndex(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= state.workflowDraft.steps.length) return;
+    state.workflowDraft.steps.splice(index, 1);
+    normalizeWorkflowDraftStepsForEditing();
+    if (state.selectedWorkflowStepIndex > index) {
+      state.selectedWorkflowStepIndex -= 1;
+    } else if (state.selectedWorkflowStepIndex === index) {
+      state.selectedWorkflowStepIndex = Math.max(0, index - 1);
+    }
+    setWorkflowRecommendationStatus("단계 편집 중");
+    state.workflowEditorSource = "draft";
+    renderWorkflow();
+  }
+
+  function duplicateWorkflowStepByIndex(index) {
+    if (!Number.isInteger(index) || !state.workflowDraft.steps[index]) return;
+    const clone = Object.assign({}, state.workflowDraft.steps[index], {
+      status: "ready",
+      runId: "",
+      progressText: "복제된 단계",
+    });
+    state.workflowDraft.steps.splice(index + 1, 0, clone);
+    normalizeWorkflowDraftStepsForEditing();
+    state.selectedWorkflowStepIndex = index + 1;
+    setWorkflowRecommendationStatus("단계 편집 중");
+    state.workflowEditorSource = "draft";
+    renderWorkflow();
+  }
+
+  function handleWorkflowStepActionClick(target) {
+    if (!(target instanceof HTMLElement)) return false;
+    const selectButton = target.closest("[data-workflow-select-index]");
+    if (selectButton) {
+      const index = Number(selectButton.getAttribute("data-workflow-select-index"));
+      if (Number.isInteger(index)) {
+        selectWorkflowStep(index);
+      }
+      return true;
+    }
+    const removeButton = target.closest("[data-workflow-remove-index]");
+    if (removeButton) {
+      const index = Number(removeButton.getAttribute("data-workflow-remove-index"));
+      if (Number.isInteger(index)) {
+        removeWorkflowStepByIndex(index);
+      }
+      return true;
+    }
+    const duplicateButton = target.closest("[data-workflow-duplicate-index]");
+    if (duplicateButton) {
+      const index = Number(duplicateButton.getAttribute("data-workflow-duplicate-index"));
+      if (Number.isInteger(index)) {
+        duplicateWorkflowStepByIndex(index);
+      }
+      return true;
+    }
+    const retryFromStepButton = target.closest("[data-workflow-retry-from-step-index]");
+    if (retryFromStepButton) {
+      const index = Number(retryFromStepButton.getAttribute("data-workflow-retry-from-step-index"));
+      if (Number.isInteger(index)) {
+        retryWorkflowFromStep(index);
+      }
+      return true;
+    }
+    const skipStepButton = target.closest("[data-workflow-skip-step-index]");
+    if (skipStepButton) {
+      const index = Number(skipStepButton.getAttribute("data-workflow-skip-step-index"));
+      if (Number.isInteger(index)) {
+        skipWorkflowStep(index);
+      }
+      return true;
+    }
+    return false;
+  }
+
   function addSelectedWorkflowAgent() {
     const agentMeta = findExecutableAgent(state.selectedWorkflowAgentName);
     if (!agentMeta) {
@@ -1256,6 +1444,7 @@
       },
     ]);
     normalizeWorkflowDraftStepsForEditing();
+    state.selectedWorkflowStepIndex = (state.workflowDraft.steps || []).length - 1;
     setWorkflowRecommendationStatus("수동 편집 중");
     state.workflowEditorSource = "draft";
     renderWorkflow();
@@ -2433,67 +2622,9 @@
       });
     }
     if (el.workflowStepList) {
-      el.workflowStepList.addEventListener("input", function (event) {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
-        const textarea = target.closest("[data-workflow-prompt-index]");
-        if (!(textarea instanceof HTMLTextAreaElement)) return;
-        const rawIndex = textarea.getAttribute("data-workflow-prompt-index");
-        const index = Number(rawIndex);
-        if (!Number.isInteger(index)) return;
-        if (!state.workflowDraft.steps[index]) return;
-        state.workflowDraft.steps[index].prompt = textarea.value || "";
-        normalizeWorkflowDraftStepsForEditing();
-        setWorkflowRecommendationStatus("단계 편집 중");
-        state.workflowEditorSource = "draft";
-      });
       el.workflowStepList.addEventListener("click", function (event) {
         const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
-        const removeButton = target.closest("[data-workflow-remove-index]");
-        if (removeButton) {
-          const index = Number(removeButton.getAttribute("data-workflow-remove-index"));
-          if (Number.isInteger(index)) {
-            state.workflowDraft.steps.splice(index, 1);
-            normalizeWorkflowDraftStepsForEditing();
-            setWorkflowRecommendationStatus("단계 편집 중");
-            state.workflowEditorSource = "draft";
-            renderWorkflow();
-          }
-          return;
-        }
-        const duplicateButton = target.closest("[data-workflow-duplicate-index]");
-        if (duplicateButton) {
-          const index = Number(duplicateButton.getAttribute("data-workflow-duplicate-index"));
-          if (Number.isInteger(index) && state.workflowDraft.steps[index]) {
-            const clone = Object.assign({}, state.workflowDraft.steps[index], {
-              status: "ready",
-              runId: "",
-              progressText: "복제된 단계",
-            });
-            state.workflowDraft.steps.splice(index + 1, 0, clone);
-            normalizeWorkflowDraftStepsForEditing();
-            setWorkflowRecommendationStatus("단계 편집 중");
-            state.workflowEditorSource = "draft";
-            renderWorkflow();
-          }
-          return;
-        }
-        const retryFromStepButton = target.closest("[data-workflow-retry-from-step-index]");
-        if (retryFromStepButton) {
-          const index = Number(retryFromStepButton.getAttribute("data-workflow-retry-from-step-index"));
-          if (Number.isInteger(index)) {
-            retryWorkflowFromStep(index);
-          }
-          return;
-        }
-        const skipStepButton = target.closest("[data-workflow-skip-step-index]");
-        if (skipStepButton) {
-          const index = Number(skipStepButton.getAttribute("data-workflow-skip-step-index"));
-          if (Number.isInteger(index)) {
-            skipWorkflowStep(index);
-          }
-        }
+        if (handleWorkflowStepActionClick(target)) return;
       });
       el.workflowStepList.addEventListener("dragstart", function (event) {
         const target = event.target;
@@ -2526,6 +2657,21 @@
         const toIndex = Number(card.getAttribute("data-workflow-step-index"));
         if (!Number.isInteger(fromIndex) || !Number.isInteger(toIndex)) return;
         moveWorkflowStep(fromIndex, toIndex);
+      });
+    }
+    if (el.workflowStepInspector) {
+      el.workflowStepInspector.addEventListener("input", function (event) {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const textarea = target.closest("[data-workflow-prompt-index]");
+        if (!(textarea instanceof HTMLTextAreaElement)) return;
+        const index = Number(textarea.getAttribute("data-workflow-prompt-index"));
+        if (!Number.isInteger(index)) return;
+        updateWorkflowStepPrompt(index, textarea.value || "");
+      });
+      el.workflowStepInspector.addEventListener("click", function (event) {
+        const target = event.target;
+        handleWorkflowStepActionClick(target);
       });
     }
     if (el.workflowRunList) {

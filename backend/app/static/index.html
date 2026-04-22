@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Custom Codex Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260422-02" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260422-05" />
   </head>
   <body>
     <div class="app-shell">
@@ -182,32 +182,38 @@
                 <h3>워크플로 단계</h3>
                 <span id="workflow-editor-meta" class="muted">단계를 추가하세요</span>
               </div>
-              <div id="workflow-step-list" class="workflow-step-list"></div>
+              <div class="workflow-builder-surface">
+                <div id="workflow-step-list" class="workflow-step-list"></div>
+                <aside id="workflow-step-inspector" class="workflow-step-inspector"></aside>
+              </div>
             </section>
           </div>
 
-          <div class="workflow-controls-grid">
-            <div class="workflow-control-block">
-              <label class="field-label" for="workflow-workspace-input">프로젝트 폴더(절대 경로)</label>
-              <div class="workspace-row">
-                <input
-                  id="workflow-workspace-input"
-                  class="input"
-                  type="text"
-                  placeholder="/Users/.../project/path"
-                />
-                <button id="workflow-workspace-picker-btn" class="btn" type="button">폴더 선택</button>
+          <details class="workflow-advanced-panel">
+            <summary>실행 환경 설정 (고급)</summary>
+            <div class="workflow-controls-grid">
+              <div class="workflow-control-block">
+                <label class="field-label" for="workflow-workspace-input">프로젝트 폴더(절대 경로)</label>
+                <div class="workspace-row">
+                  <input
+                    id="workflow-workspace-input"
+                    class="input"
+                    type="text"
+                    placeholder="/Users/.../project/path"
+                  />
+                  <button id="workflow-workspace-picker-btn" class="btn" type="button">폴더 선택</button>
+                </div>
+              </div>
+              <div class="workflow-control-block">
+                <label class="field-label" for="workflow-sandbox-select">샌드박스 정책</label>
+                <select id="workflow-sandbox-select" class="input"></select>
+              </div>
+              <div class="workflow-control-block">
+                <label class="field-label" for="workflow-approval-select">승인 정책</label>
+                <select id="workflow-approval-select" class="input"></select>
               </div>
             </div>
-            <div class="workflow-control-block">
-              <label class="field-label" for="workflow-sandbox-select">샌드박스 정책</label>
-              <select id="workflow-sandbox-select" class="input"></select>
-            </div>
-            <div class="workflow-control-block">
-              <label class="field-label" for="workflow-approval-select">승인 정책</label>
-              <select id="workflow-approval-select" class="input"></select>
-            </div>
-          </div>
+          </details>
 
           <div class="actions">
             <button id="workflow-run-btn" class="btn">워크플로 실행</button>
@@ -285,6 +291,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260422-02"></script>
+    <script src="/static/app.js?v=20260422-05"></script>
   </body>
 </html>
