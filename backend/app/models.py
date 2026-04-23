@@ -62,6 +62,7 @@ class DashboardMetricModel(BaseModel):
     key: str
     label: str
     value: int
+    trend_values: list[int] = Field(default_factory=list)
 
 
 class ActivityItemModel(BaseModel):

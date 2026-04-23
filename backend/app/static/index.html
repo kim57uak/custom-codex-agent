@@ -4,293 +4,333 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Custom Codex Agent</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260422-05" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Cpath d='M18 32c0-8.284 6.716-15 15-15h13v8H33c-3.866 0-7 3.134-7 7s3.134 7 7 7h13v8H33c-8.284 0-15-6.716-15-15Z' fill='%2300ff88'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;800&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css?v=20260423-13" />
   </head>
-  <body>
-    <div class="app-shell">
-      <header class="hero panel">
-        <div>
-          <p class="eyebrow">Custom Codex Agent</p>
-          <h1>조직도 / 운영 대시보드</h1>
-          <p id="live-state" class="muted">데이터 로딩 중...</p>
+  <body data-theme="cyber-fusion">
+    <aside class="rail-nav">
+      <div class="brand-logo">C</div>
+      <nav class="rail-tabs" aria-label="Primary Navigation">
+        <button id="tab-org" class="rail-tab active" type="button"><span>◎</span></button>
+        <button id="tab-dashboard" class="rail-tab" type="button"><span>▦</span></button>
+        <button id="tab-console" class="rail-tab" type="button"><span>></span></button>
+        <button id="tab-workflow" class="rail-tab" type="button"><span>◇</span></button>
+        <button id="tab-inspector" class="rail-tab" type="button"><span>i</span></button>
+      </nav>
+      <div class="rail-bottom">
+        <label class="field-label" for="theme-switcher">Theme</label>
+        <select id="theme-switcher" class="theme-select">
+          <option value="cyber_fusion">Cyber Fusion</option>
+          <option value="glass_enterprise">Glass Enterprise</option>
+          <option value="minimal_pro">Minimal Pro</option>
+        </select>
+      </div>
+    </aside>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="viewport-header">
+          <div class="header-kicker">Adaptive Operations Surface</div>
+          <h1 id="viewport-title">MANAGEMENT_TOPOLOGY</h1>
+          <p id="live-state" class="live-state">Initializing...</p>
         </div>
-        <div class="actions">
-          <button id="scan-btn" class="btn">스캔</button>
-          <button id="refresh-btn" class="btn">활동 새로고침</button>
-          <button id="backup-btn" class="btn">스킬/에이전트 백업</button>
-          <button id="restore-btn" class="btn">스킬/에이전트 리스토어</button>
+        <div class="topbar-actions">
+          <button id="scan-btn" class="action-btn" type="button">SYSTEM_SCAN</button>
+          <button id="refresh-btn" class="action-btn" type="button">SYNC_ACTIVITY</button>
+          <button id="backup-btn" class="action-btn" type="button">BACKUP_UNITS</button>
+          <button id="restore-btn" class="action-btn action-btn-primary" type="button">RESTORE_UNITS</button>
         </div>
       </header>
 
-      <nav class="tab-bar">
-        <button id="tab-org" class="tab active">기업 조직도</button>
-        <button id="tab-dashboard" class="tab">운영 대시보드</button>
-        <button id="tab-console" class="tab">실행 콘솔</button>
-        <button id="tab-workflow" class="tab">Workflow</button>
-        <button id="tab-inspector" class="tab">스킬 인스펙터</button>
-      </nav>
-
       <section id="error-banner" class="error-banner hidden"></section>
 
-      <main id="org-view" class="grid-view">
-        <section class="panel main-panel">
-          <h2>조직 계층</h2>
-          <div id="org-tree" class="org-tree"></div>
-        </section>
-        <aside class="panel side-panel">
-          <h3>요약</h3>
-          <div id="overview-metrics" class="metric-list"></div>
-          <h3>부서별 인원</h3>
-          <div id="department-metrics" class="metric-list"></div>
-          <h3>상태 분포</h3>
-          <div id="status-metrics" class="metric-list"></div>
-        </aside>
-      </main>
-
-      <main id="dashboard-view" class="grid-view hidden">
-        <section class="panel main-panel">
-          <h2>대시보드 메트릭</h2>
-          <div id="dashboard-metrics" class="metric-grid"></div>
-          <h2>최근 타임라인</h2>
-          <ul id="timeline-list" class="activity-list"></ul>
-        </section>
-        <aside class="panel side-panel">
-          <h3>활성 에이전트</h3>
-          <ul id="active-agents" class="activity-list"></ul>
-          <h3>최근 스킬</h3>
-          <ul id="recent-skills" class="activity-list"></ul>
-          <h3>최근 스레드</h3>
-          <ul id="recent-threads" class="activity-list"></ul>
-        </aside>
-      </main>
-
-      <main id="console-view" class="grid-view hidden">
-        <section class="panel main-panel">
-          <h2>에이전트 실행</h2>
-          <label class="field-label" for="run-agent-select">실행 대상 에이전트</label>
-          <select id="run-agent-select" class="input"></select>
-          <label class="field-label" for="run-workspace-input">프로젝트 폴더(절대 경로)</label>
-          <div class="workspace-row">
-            <input
-              id="run-workspace-input"
-              class="input"
-              type="text"
-              placeholder="/Users/.../project/path"
-            />
-            <button id="run-workspace-picker-btn" class="btn" type="button">폴더 선택</button>
+      <section id="org-view" class="view active-view">
+        <div class="view-canvas org-canvas-shell">
+          <div class="hud-strip">
+            <div id="overview-metrics" class="hud-group"></div>
+            <div id="department-metrics" class="hud-group"></div>
+            <div id="status-metrics" class="hud-group"></div>
           </div>
-          <label class="field-label" for="run-sandbox-select">샌드박스 정책</label>
-          <select id="run-sandbox-select" class="input">
-            <option value="workspace-write">workspace-write</option>
-            <option value="read-only">read-only</option>
-            <option value="danger-full-access">danger-full-access</option>
-          </select>
-          <label class="field-label" for="run-approval-select">승인 정책</label>
-          <select id="run-approval-select" class="input">
-            <option value="on-request">on-request</option>
-            <option value="untrusted">untrusted</option>
-            <option value="never">never</option>
-          </select>
-          <label class="field-label" for="run-prompt-input">프롬프트</label>
-          <div id="run-prompt-wrap" class="run-prompt-wrap">
-            <textarea
-              id="run-prompt-input"
-              class="input textarea"
-              placeholder="에이전트에게 전달할 프롬프트를 입력하세요 (/로 에이전트 빠른 선택)"
-            ></textarea>
-            <div id="run-command-palette" class="command-palette hidden"></div>
+          <div id="org-tree" class="org-stage"></div>
+        </div>
+      </section>
+
+      <section id="dashboard-view" class="view hidden">
+        <div class="view-canvas dashboard-shell">
+          <div id="dashboard-metrics" class="dashboard-grid"></div>
+          <div class="dashboard-feed-card stage-card span-all">
+            <div class="section-kicker">GLOBAL_ACTIVITY_FEED</div>
+            <ul id="timeline-list" class="feed-list"></ul>
           </div>
-          <div class="actions">
-            <button id="run-submit-btn" class="btn">실행</button>
-            <button id="run-cancel-btn" class="btn">선택 실행 취소</button>
-            <button id="run-retry-btn" class="btn">선택 실행 재시도</button>
+          <div class="dashboard-feed-card">
+            <div class="section-kicker">ACTIVE_UNITS</div>
+            <ul id="active-agents" class="feed-list compact-feed"></ul>
+          </div>
+          <div class="dashboard-feed-card">
+            <div class="section-kicker">RECENT_SKILLS</div>
+            <ul id="recent-skills" class="feed-list compact-feed"></ul>
+          </div>
+          <div class="dashboard-feed-card">
+            <div class="section-kicker">RECENT_THREADS</div>
+            <ul id="recent-threads" class="feed-list compact-feed"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="console-view" class="view hidden">
+        <div class="view-canvas exec-pane">
+          <section class="stage-card console-box">
+            <div class="section-kicker">MISSION_PARAMETERS</div>
+            <div class="form-group">
+              <label class="field-label" for="run-agent-select">UNIT_SELECTION</label>
+              <select id="run-agent-select" class="proto-input"></select>
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="run-workspace-input">WORKSPACE_ROOT</label>
+              <div class="inline-row">
+                <input id="run-workspace-input" class="proto-input" type="text" placeholder="/abs/path" />
+                <button id="run-workspace-picker-btn" class="action-btn" type="button">PICK</button>
+              </div>
+            </div>
+            <div class="split-fields">
+              <div class="form-group">
+                <label class="field-label" for="run-sandbox-select">SANDBOX_POLICY</label>
+                <select id="run-sandbox-select" class="proto-input">
+                  <option value="workspace-write">workspace-write</option>
+                  <option value="read-only">read-only</option>
+                  <option value="danger-full-access">danger-full-access</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="field-label" for="run-approval-select">APPROVAL_MODE</label>
+                <select id="run-approval-select" class="proto-input">
+                  <option value="on-request">on-request</option>
+                  <option value="untrusted">untrusted</option>
+                  <option value="never">never</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="run-prompt-input">DIRECTIVE_LEXICON</label>
+              <textarea id="run-prompt-input" class="proto-input proto-textarea" placeholder="Enter tactical mission goals..."></textarea>
+            </div>
+            <div class="inline-row">
+              <button id="run-submit-btn" class="action-btn action-btn-primary flex-fill" type="button">COMMENCE</button>
+              <button id="run-cancel-btn" class="action-btn" type="button">ABORT</button>
+              <button id="run-retry-btn" class="action-btn" type="button">RETRY</button>
+            </div>
+            <div id="run-list" class="run-chip-grid"></div>
+          </section>
+
+          <section class="stage-card console-box terminal-box">
+            <div class="terminal-header">
+              <div>
+                <div class="section-kicker">TACTICAL_LOG_STREAM</div>
+                <div id="run-meta" class="terminal-meta">선택된 실행 없음</div>
+              </div>
+            </div>
+            <pre id="run-log" class="terminal-screen"></pre>
+          </section>
+        </div>
+      </section>
+
+      <section id="workflow-view" class="view hidden">
+        <div class="view-canvas workflow-shell">
+          <div id="workflow-progress-hud" class="progress-hud hidden">
+            <div class="progress-dot"></div>
+            <span id="workflow-progress-text">Analyzing Strategic Objectives...</span>
           </div>
 
-          <h2>실행 로그</h2>
-          <div id="run-meta" class="muted">선택된 실행 없음</div>
-          <pre id="run-log" class="run-log"></pre>
-        </section>
-
-        <aside class="panel side-panel">
-          <h3>최근 실행</h3>
-          <ul id="run-list" class="activity-list"></ul>
-        </aside>
-      </main>
-
-      <main id="workflow-view" class="grid-view hidden">
-        <section class="panel main-panel">
-          <div class="workflow-hero">
-            <div class="workflow-hero-copy">
-              <p class="eyebrow workflow-eyebrow">Multi-Agent Workflow Studio</p>
-              <h2>목표를 쓰면, 에이전트 팀을 조립하고 바로 흘려보냅니다</h2>
-              <p class="muted workflow-hero-text">
-                추천, 수동 편집, 단계별 지시, 순차 실행, 로그 추적을 한 화면에서 다룹니다.
-              </p>
-              <div class="workflow-hero-metrics">
-                <div class="workflow-hero-metric">
-                  <span>추천 상태</span>
-                  <strong id="workflow-recommendation-status">대기 중</strong>
-                </div>
-                <div class="workflow-hero-metric">
-                  <span>구성된 단계</span>
-                  <strong id="workflow-stage-count">0</strong>
-                </div>
-                <div class="workflow-hero-metric">
-                  <span>선택된 실행</span>
-                  <strong id="workflow-selected-run-label">없음</strong>
+          <section class="stage-card workflow-stage-panel">
+            <div class="workflow-panel-head">
+              <div>
+                <div class="section-kicker">STEP_01_COMPOSE</div>
+                <h2 class="workflow-panel-title">네트워크 조립</h2>
+                <p class="workflow-panel-copy">추천된 에이전트를 추가하고, 노드를 드래그해 실행 흐름을 시각적으로 정리합니다.</p>
+              </div>
+              <div class="workflow-status-row workflow-status-grid">
+                <div class="status-pill"><span>추천 상태</span><strong id="workflow-recommendation-status">대기 중</strong></div>
+                <div class="status-pill"><span>구성 단계</span><strong id="workflow-stage-count">0</strong></div>
+                <div class="status-pill"><span>선택 실행</span><strong id="workflow-selected-run-label">없음</strong></div>
+                <div class="status-pill wide-pill"><span>추천 메타</span><strong id="workflow-recommendation-meta">추천 결과 없음</strong></div>
+              </div>
+            </div>
+            <div class="workflow-stage-frame">
+              <div id="workflow-step-list" class="workflow-stage"></div>
+              <div class="workflow-stage-dock">
+                <div class="section-kicker">EXECUTION_CONTROLS</div>
+                <button id="workflow-run-btn" class="action-btn action-btn-primary workflow-stage-dock-primary" type="button">EXECUTE_NETWORK</button>
+                <div class="inline-row compact-actions workflow-stage-dock-actions">
+                  <button id="workflow-cancel-btn" class="action-btn" type="button">STOP</button>
+                  <button id="workflow-retry-btn" class="action-btn" type="button">RETRY</button>
                 </div>
               </div>
             </div>
-            <div class="workflow-goal-panel">
-              <label class="field-label" for="workflow-goal-input">작업 목표</label>
-              <textarea
-                id="workflow-goal-input"
-                class="input textarea workflow-goal-input"
-                placeholder="Codex에게 작업 목표를 설명하면 적합한 에이전트 조합을 추천합니다."
-              ></textarea>
-              <div class="actions workflow-hero-actions">
-                <button id="workflow-recommend-btn" class="btn workflow-primary-btn">추천 에이전트 찾기</button>
-                <button id="workflow-clear-btn" class="btn workflow-secondary-btn" type="button">워크플로 비우기</button>
-              </div>
-            </div>
-          </div>
+          </section>
 
-          <div class="workflow-layout">
-            <section class="workflow-column">
-              <div class="workflow-section-heading">
-                <h3>추천 결과</h3>
-                <span id="workflow-recommendation-meta" class="muted">추천 결과 없음</span>
-              </div>
-              <div class="workflow-manual-add">
-                <label class="field-label" for="workflow-agent-filter-input">수동 에이전트 추가</label>
-                <input
-                  id="workflow-agent-filter-input"
-                  class="input"
-                  type="text"
-                  placeholder="에이전트 이름/역할/부서로 검색"
-                />
-                <div class="workflow-manual-add-row">
-                  <select id="workflow-agent-select" class="input"></select>
-                  <button id="workflow-agent-add-btn" class="btn" type="button">수동 추가</button>
+          <div class="workflow-bottom-strip workflow-bottom-grid">
+            <section class="workflow-command-card workflow-brief-card">
+              <div id="workflow-recommendation-list" class="workflow-recommendation-strip"></div>
+
+              <div class="form-group">
+                <label class="field-label" for="workflow-goal-input">MISSION_OBJECTIVE</label>
+                <div class="workflow-goal-row">
+                  <textarea id="workflow-goal-input" class="proto-input workflow-goal-input" placeholder="완성하고 싶은 결과를 한 문장으로 적어주세요. 예: 신규 고객 온보딩 플로우를 설계하고 QA 체크리스트까지 구성"></textarea>
+                  <div class="workflow-command-actions workflow-primary-actions workflow-goal-actions">
+                    <button id="workflow-recommend-btn" class="action-btn action-btn-primary" type="button">RECOMMEND</button>
+                    <button id="workflow-clear-btn" class="action-btn" type="button">CLEAR</button>
+                  </div>
                 </div>
               </div>
-              <div id="workflow-recommendation-list" class="workflow-card-list"></div>
+
+              <div class="workflow-config-grid">
+                <div class="form-group workflow-config-span">
+                  <label class="field-label" for="workflow-workspace-input">WORKSPACE_ROOT</label>
+                  <div class="inline-row">
+                    <input id="workflow-workspace-input" class="proto-input" type="text" placeholder="/abs/path" />
+                    <button id="workflow-workspace-picker-btn" class="action-btn" type="button">PICK</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="workflow-sandbox-select">SANDBOX_POLICY</label>
+                  <select id="workflow-sandbox-select" class="proto-input"></select>
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="workflow-approval-select">APPROVAL_MODE</label>
+                  <select id="workflow-approval-select" class="proto-input"></select>
+                </div>
+              </div>
+
+              <div class="workflow-manual-controls workflow-curation-grid">
+                <input id="workflow-agent-filter-input" class="proto-input" type="text" placeholder="Search agent by role / team" />
+                <select id="workflow-agent-select" class="proto-input"></select>
+                <button id="workflow-agent-add-btn" class="action-btn" type="button">ADD_AGENT</button>
+              </div>
+
             </section>
 
-            <section class="workflow-column workflow-editor-column">
-              <div class="workflow-section-heading">
-                <h3>워크플로 단계</h3>
-                <span id="workflow-editor-meta" class="muted">단계를 추가하세요</span>
+            <section class="workflow-run-strip workflow-run-panel">
+              <div class="workflow-panel-head">
+                <div>
+                  <div class="section-kicker">STEP_03_REVIEW</div>
+                  <h3 class="workflow-panel-subtitle">최근 실행 이력</h3>
+                  <p class="workflow-panel-copy">직전 실행을 눌러 비교하고, 현재 조립한 네트워크와 결과를 대조합니다.</p>
+                </div>
               </div>
-              <div class="workflow-builder-surface">
-                <div id="workflow-step-list" class="workflow-step-list"></div>
-                <aside id="workflow-step-inspector" class="workflow-step-inspector"></aside>
-              </div>
+              <div id="workflow-run-list" class="run-chip-grid workflow-run-scroll"></div>
             </section>
           </div>
 
-          <details class="workflow-advanced-panel">
-            <summary>실행 환경 설정 (고급)</summary>
-            <div class="workflow-controls-grid">
-              <div class="workflow-control-block">
-                <label class="field-label" for="workflow-workspace-input">프로젝트 폴더(절대 경로)</label>
-                <div class="workspace-row">
-                  <input
-                    id="workflow-workspace-input"
-                    class="input"
-                    type="text"
-                    placeholder="/Users/.../project/path"
-                  />
-                  <button id="workflow-workspace-picker-btn" class="btn" type="button">폴더 선택</button>
-                </div>
-              </div>
-              <div class="workflow-control-block">
-                <label class="field-label" for="workflow-sandbox-select">샌드박스 정책</label>
-                <select id="workflow-sandbox-select" class="input"></select>
-              </div>
-              <div class="workflow-control-block">
-                <label class="field-label" for="workflow-approval-select">승인 정책</label>
-                <select id="workflow-approval-select" class="input"></select>
+          <section class="workflow-log-shell stage-card workflow-monitor-panel">
+            <div class="terminal-header">
+              <div>
+                <div class="section-kicker">STEP_04_MONITOR</div>
+                <div id="workflow-meta" class="terminal-meta">선택된 워크플로 없음</div>
               </div>
             </div>
-          </details>
+            <pre id="workflow-log" class="terminal-screen"></pre>
+          </section>
+        </div>
+      </section>
 
-          <div class="actions">
-            <button id="workflow-run-btn" class="btn">워크플로 실행</button>
-            <button id="workflow-cancel-btn" class="btn" type="button">선택 워크플로 중단</button>
-            <button id="workflow-retry-btn" class="btn" type="button">선택 워크플로 재실행</button>
-          </div>
+      <section id="inspector-view" class="view hidden">
+        <div class="view-canvas inspector-shell">
+          <section class="stage-card inspector-directory">
+            <div class="section-kicker">AGENT_DIRECTORY</div>
+            <div id="inspector-agent-list" class="inspector-agent-grid"></div>
+          </section>
+          <section class="stage-card inspector-detail">
+            <div class="terminal-header inspector-detail-head">
+              <div>
+                <div class="section-kicker">LOGIC_INSPECTOR_DETAILS</div>
+                <h2 class="detail-title" id="inspector-agent-name">-</h2>
+                <p id="inspector-summary" class="detail-subtitle">에이전트를 선택하면 연결된 스킬과 파일 내용을 확인합니다.</p>
+              </div>
+              <div class="detail-pills">
+                <div class="status-pill"><span>ROLE</span><strong id="inspector-agent-role">-</strong></div>
+                <div class="status-pill"><span>SKILL</span><strong id="inspector-skill-name">-</strong></div>
+              </div>
+            </div>
+            <div class="inspector-detail-grid">
+              <article class="file-card">
+                <div class="file-card-head">
+                  <div>
+                    <div class="section-kicker">SKILL.MD</div>
+                    <div id="inspector-skill-path" class="file-path"></div>
+                  </div>
+                </div>
+                <pre id="inspector-skill-content" class="terminal-screen inspector-screen"></pre>
+              </article>
+              <article class="file-card">
+                <div class="file-card-head">
+                  <div>
+                    <div class="section-kicker">AGENT.TOML / JSON</div>
+                    <div id="inspector-agent-toml-path" class="file-path"></div>
+                  </div>
+                </div>
+                <pre id="inspector-agent-toml-content" class="terminal-screen inspector-screen"></pre>
+              </article>
+              <article class="file-card">
+                <div class="file-card-head">
+                  <div>
+                    <div class="section-kicker">ATTACHED_SCRIPTS</div>
+                  </div>
+                </div>
+                <div id="inspector-scripts-list" class="file-chip-grid"></div>
+                <pre id="inspector-script-content" class="terminal-screen inspector-screen"></pre>
+              </article>
+              <article class="file-card">
+                <div class="file-card-head">
+                  <div>
+                    <div class="section-kicker">REFERENCES</div>
+                  </div>
+                </div>
+                <div id="inspector-references-list" class="file-chip-grid"></div>
+                <pre id="inspector-reference-content" class="terminal-screen inspector-screen"></pre>
+              </article>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
 
-          <h2>워크플로 로그</h2>
-          <div id="workflow-meta" class="muted">선택된 워크플로 없음</div>
-          <pre id="workflow-log" class="run-log"></pre>
-        </section>
+    <aside id="context-drawer" class="context-drawer" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <div id="drawer-kicker" class="section-kicker">UNIT_PROFILE</div>
+          <h2 id="drawer-title" class="drawer-title">Target</h2>
+          <p id="drawer-subtitle" class="drawer-subtitle"></p>
+        </div>
+        <button id="drawer-close-btn" class="drawer-close" type="button">✕</button>
+      </div>
+      <div id="drawer-body" class="drawer-body"></div>
+    </aside>
 
-        <aside class="panel side-panel">
-          <h3>최근 워크플로 실행</h3>
-          <ul id="workflow-run-list" class="activity-list"></ul>
-        </aside>
-      </main>
-
-      <main id="inspector-view" class="grid-view hidden">
-        <section class="panel main-panel">
-          <h2>에이전트 / 스킬 실시간 인스펙터</h2>
-          <div id="inspector-summary" class="muted">에이전트를 선택하면 연결된 스킬과 파일 내용을 확인합니다.</div>
-          <div class="inspector-meta-grid">
-            <div class="metric-row"><span>에이전트</span><strong id="inspector-agent-name">-</strong></div>
-            <div class="metric-row"><span>부서/역할</span><strong id="inspector-agent-role">-</strong></div>
-            <div class="metric-row"><span>스킬</span><strong id="inspector-skill-name">-</strong></div>
-          </div>
-
-          <div class="inspector-section">
-            <h3>SKILL.md</h3>
-            <div id="inspector-skill-path" class="activity-sub"></div>
-            <pre id="inspector-skill-content" class="run-log inspector-code"></pre>
-          </div>
-
-          <div class="inspector-section">
-            <h3>agent.toml</h3>
-            <div id="inspector-agent-toml-path" class="activity-sub"></div>
-            <pre id="inspector-agent-toml-content" class="run-log inspector-code"></pre>
-          </div>
-
-          <div class="inspector-section">
-            <h3>scripts</h3>
-            <ul id="inspector-scripts-list" class="activity-list"></ul>
-            <pre id="inspector-script-content" class="run-log inspector-code"></pre>
-          </div>
-
-          <div class="inspector-section">
-            <h3>references</h3>
-            <ul id="inspector-references-list" class="activity-list"></ul>
-            <pre id="inspector-reference-content" class="run-log inspector-code"></pre>
-          </div>
-        </section>
-
-        <aside class="panel side-panel">
-          <h3>에이전트 목록</h3>
-          <ul id="inspector-agent-list" class="activity-list"></ul>
-        </aside>
-      </main>
-    </div>
-
-    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+    <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
 
     <div id="workspace-picker-modal" class="modal hidden">
       <div class="modal-panel">
         <div class="modal-header">
           <h3>프로젝트 폴더 선택</h3>
-          <button id="workspace-picker-close" class="btn" type="button">닫기</button>
+          <button id="workspace-picker-close" class="action-btn" type="button">닫기</button>
         </div>
-        <div id="workspace-picker-current" class="muted"></div>
-        <div class="actions">
-          <button id="workspace-picker-up" class="btn" type="button">상위 폴더</button>
-          <button id="workspace-picker-choose" class="btn" type="button">이 폴더 선택</button>
+        <div id="workspace-picker-current" class="terminal-meta"></div>
+        <div class="inline-row">
+          <button id="workspace-picker-up" class="action-btn" type="button">상위 폴더</button>
+          <button id="workspace-picker-choose" class="action-btn action-btn-primary" type="button">이 폴더 선택</button>
         </div>
-        <ul id="workspace-picker-list" class="activity-list"></ul>
+        <div id="workspace-picker-list" class="directory-grid"></div>
       </div>
     </div>
 
-    <script src="/static/app.js?v=20260422-05"></script>
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="/static/app.js?v=20260423-13"></script>
   </body>
 </html>

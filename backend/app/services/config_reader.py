@@ -104,6 +104,15 @@ class CodexConfigReader:
         """
         return self._read_sqlite_rows(self._settings.state_db_path, query, (limit,))
 
+    def read_threads_since(self, unix_ts: int) -> list[dict[str, object]]:
+        query = """
+        select id, title, updated_at, agent_role, agent_nickname
+        from threads
+        where updated_at >= ?
+        order by updated_at desc
+        """
+        return self._read_sqlite_rows(self._settings.state_db_path, query, (unix_ts,))
+
     def read_recent_logs(self, limit: int = 20) -> list[dict[str, object]]:
         query = """
         select ts, level, target, feedback_log_body
@@ -112,6 +121,15 @@ class CodexConfigReader:
         limit ?
         """
         return self._read_sqlite_rows(self._settings.log_db_path, query, (limit,))
+
+    def read_logs_since(self, unix_ts: int) -> list[dict[str, object]]:
+        query = """
+        select ts, level, target, feedback_log_body
+        from logs
+        where ts >= ?
+        order by ts desc, ts_nanos desc, id desc
+        """
+        return self._read_sqlite_rows(self._settings.log_db_path, query, (unix_ts,))
 
     def read_recent_history(self, limit: int = 20) -> list[dict[str, object]]:
         history_path = self._settings.history_file_path
@@ -127,6 +145,23 @@ class CodexConfigReader:
             record["timestamp"] = datetime.fromtimestamp(record.get("ts", 0), tz=timezone.utc)
             items.append(record)
         return list(reversed(items))
+
+    def read_history_since(self, unix_ts: int) -> list[dict[str, object]]:
+        history_path = self._settings.history_file_path
+        if not history_path.exists():
+            return []
+        items: list[dict[str, object]] = []
+        for line in history_path.read_text(encoding="utf-8").splitlines():
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            ts = int(record.get("ts") or 0)
+            if ts < unix_ts:
+                continue
+            record["timestamp"] = datetime.fromtimestamp(ts, tz=timezone.utc)
+            items.append(record)
+        return items
 
     def get_scan_timestamp(self) -> datetime:
         return datetime.now(tz=timezone.utc)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.models import (
     ActivityItemModel,
@@ -22,6 +22,8 @@ from app.services.config_reader import CodexConfigReader
 
 DEFAULT_DEPARTMENT_LABEL_KO = "관리지원"
 DEFAULT_ROLE_LABEL_KO = "관리지원 담당"
+TREND_WINDOW_DAYS = 7
+TREND_BUCKETS = 12
 
 
 class DashboardService:
@@ -216,18 +218,19 @@ class DashboardService:
         recent_threads = self._reader.read_recent_threads(limit=8)
         recent_logs = self._reader.read_recent_logs(limit=8)
         recent_history = self._reader.read_recent_history(limit=8)
+        metric_trends = self._build_metric_trends(inventory)
         active_agents = self._guess_active_agents(inventory, recent_threads)
         recent_skills = self._guess_recent_skills(inventory, recent_history)
         department_breakdown = Counter(agent.department_label_ko for agent in inventory.agents)
         status_breakdown = Counter(agent.status for agent in inventory.agents)
 
         metrics = [
-            DashboardMetricModel(key="skills", label="전체 스킬", value=overview.total_skills),
-            DashboardMetricModel(key="agents", label="전체 에이전트", value=overview.total_agents),
-            DashboardMetricModel(key="routed", label="라우팅 에이전트", value=overview.routed_agents),
-            DashboardMetricModel(key="threads", label="최근 활성 스레드", value=overview.active_threads),
-            DashboardMetricModel(key="activeAgents", label="활동 추정 에이전트", value=overview.active_agents),
-            DashboardMetricModel(key="broken", label="깨진 매핑", value=overview.broken_mappings),
+            DashboardMetricModel(key="skills", label="전체 스킬", value=overview.total_skills, trend_values=metric_trends.get("skills", [])),
+            DashboardMetricModel(key="agents", label="전체 에이전트", value=overview.total_agents, trend_values=metric_trends.get("agents", [])),
+            DashboardMetricModel(key="routed", label="라우팅 에이전트", value=overview.routed_agents, trend_values=metric_trends.get("routed", [])),
+            DashboardMetricModel(key="threads", label="최근 활성 스레드", value=overview.active_threads, trend_values=metric_trends.get("threads", [])),
+            DashboardMetricModel(key="activeAgents", label="활동 추정 에이전트", value=overview.active_agents, trend_values=metric_trends.get("activeAgents", [])),
+            DashboardMetricModel(key="broken", label="깨진 매핑", value=overview.broken_mappings, trend_values=metric_trends.get("broken", [])),
         ]
 
         return DashboardResponse(
@@ -259,6 +262,38 @@ class DashboardService:
                 for status, count in status_breakdown.most_common()
             ],
         )
+
+    def _build_metric_trends(self, inventory: InventoryResponse) -> dict[str, list[int]]:
+        now = datetime.now(tz=timezone.utc)
+        window_start = now - timedelta(days=TREND_WINDOW_DAYS)
+        window_start_ts = int(window_start.timestamp())
+        threads = self._reader.read_threads_since(window_start_ts)
+        if not threads:
+            return {}
+
+        bucket_seconds = max(1, int((TREND_WINDOW_DAYS * 24 * 60 * 60) / TREND_BUCKETS))
+        thread_counts = [0] * TREND_BUCKETS
+        active_agent_sets: list[set[str]] = [set() for _ in range(TREND_BUCKETS)]
+
+        for thread in threads:
+            updated_at = self._safe_int(thread.get("updated_at"))
+            if updated_at is None or updated_at < window_start_ts:
+                continue
+            bucket_index = min(TREND_BUCKETS - 1, max(0, int((updated_at - window_start_ts) // bucket_seconds)))
+            thread_counts[bucket_index] += 1
+            inferred_agent = self._infer_thread_agent_key(thread, inventory)
+            if inferred_agent:
+                active_agent_sets[bucket_index].add(inferred_agent)
+
+        trends: dict[str, list[int]] = {}
+        if any(value > 0 for value in thread_counts):
+            trends["threads"] = thread_counts
+
+        active_agent_counts = [len(bucket) for bucket in active_agent_sets]
+        if any(value > 0 for value in active_agent_counts):
+            trends["activeAgents"] = active_agent_counts
+
+        return trends
 
     def _extract_routes(self, router_config: dict[str, object]) -> list[RouteModel]:
         routing_hints = router_config.get("routing_hints", {})
@@ -310,6 +345,27 @@ class DashboardService:
             for skill_name, count in skill_counter.most_common(5)
         ]
 
+    def _infer_thread_agent_key(self, thread: dict[str, object], inventory: InventoryResponse) -> str | None:
+        nickname = self._to_optional_str(thread.get("agent_nickname"))
+        if nickname:
+            return nickname
+        role = self._to_optional_str(thread.get("agent_role"))
+        if role:
+            return role
+
+        title = str(thread.get("title") or "").lower()
+        for agent in inventory.agents:
+            agent_tokens = {
+                agent.name.lower(),
+                agent.name.replace("-agent", "").lower(),
+                agent.role_label_ko.lower(),
+            }
+            if any(token and token in title for token in agent_tokens):
+                return agent.name
+        if "router" in title:
+            return "router-agent"
+        return None
+
     @staticmethod
     def _short_description(text: str) -> str:
         normalized = " ".join(str(text or "").split())
@@ -342,6 +398,13 @@ class DashboardService:
             return None
         text = str(value).strip()
         return text or None
+
+    @staticmethod
+    def _safe_int(value: object) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _from_unix(value: object) -> datetime | None:

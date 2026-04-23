@@ -49,6 +49,8 @@ Rules:
 }}
 """.strip()
 
+WORKFLOW_RECOMMENDATION_TIMEOUT_SECONDS = 20
+
 
 class WorkflowOrchestrator:
     """
@@ -474,11 +476,14 @@ class WorkflowOrchestrator:
             max_agents=max_agents,
         )
         try:
-            return_code, stdout_text, _stderr_text = await self._run_orchestrator.execute_codex_text(
-                prompt=prompt,
-                workspace_root=self._settings.workspace_root,
-                sandbox_mode="read-only",
-                approval_policy="on-request",
+            return_code, stdout_text, _stderr_text = await asyncio.wait_for(
+                self._run_orchestrator.execute_codex_text(
+                    prompt=prompt,
+                    workspace_root=self._settings.workspace_root,
+                    sandbox_mode="read-only",
+                    approval_policy="on-request",
+                ),
+                timeout=WORKFLOW_RECOMMENDATION_TIMEOUT_SECONDS,
             )
         except Exception:
             return []
