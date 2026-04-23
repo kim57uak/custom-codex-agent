@@ -323,7 +323,8 @@ body[data-theme="minimal-pro"] .proto-input {
   position: relative;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   background-image: radial-gradient(var(--grid) 1.5px, transparent 1.5px);
   background-size: 40px 40px;
 }
@@ -853,24 +854,44 @@ body[data-theme="minimal-pro"] .modal-panel {
 }
 
 .hud-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  display: block;
   margin-bottom: 20px;
 }
 
-.hud-group {
+.org-hud-shell {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.org-hud-head {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.hud-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
-  overflow-x: auto;
+  align-items: stretch;
 }
 
 .hud-card {
-  min-width: 150px;
+  min-width: 0;
+  width: 100%;
+  min-height: 132px;
   padding: 16px 18px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.75);
+}
+
+#org-view,
+#org-view .view-canvas,
+#org-view .org-canvas-shell {
+  overflow: visible;
 }
 
 body[data-theme="glass-enterprise"] .hud-card {
@@ -896,18 +917,12 @@ body[data-theme="minimal-pro"] .hud-card {
 
 .org-stage {
   position: relative;
-  height: calc(100% - 112px);
-  min-height: 620px;
-  overflow: auto;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  padding: 8px 4px 20px;
 }
 
-.org-scene {
-  position: relative;
-  width: max(100%, var(--scene-width, 1200px));
-  min-height: var(--scene-height, 700px);
-}
-
-.org-wires,
 .workflow-wires {
   position: absolute;
   inset: 0;
@@ -916,7 +931,6 @@ body[data-theme="minimal-pro"] .hud-card {
   pointer-events: none;
 }
 
-.org-wire,
 .workflow-wire {
   fill: none;
   stroke: var(--accent);
@@ -924,7 +938,6 @@ body[data-theme="minimal-pro"] .hud-card {
   opacity: 0.25;
 }
 
-.org-wire.active,
 .workflow-wire.active {
   opacity: 1;
   stroke-dasharray: 6;
@@ -935,7 +948,177 @@ body[data-theme="minimal-pro"] .hud-card {
   to { stroke-dashoffset: -1000; }
 }
 
-.org-layer,
+.org-hierarchy {
+  width: min(100%, 1440px);
+  min-width: 0;
+  margin: 0 auto;
+  display: grid;
+  gap: 22px;
+  align-content: start;
+}
+
+.org-founder-card,
+.org-branch-head,
+.org-member-card {
+  width: 100%;
+  border: 1px solid var(--org-accent-color, var(--border));
+  appearance: none;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.org-founder-card {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 28px 30px;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+  background: linear-gradient(180deg, var(--org-accent-soft, rgba(255, 255, 255, 0.03)), transparent);
+  box-shadow: 0 0 28px var(--org-accent-glow, transparent);
+}
+
+.org-founder-kicker,
+.org-branch-kicker {
+  color: var(--text-m);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.org-founder-title,
+.org-branch-title {
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+}
+
+.org-founder-title {
+  color: var(--org-accent-color, var(--text));
+}
+
+.org-founder-name {
+  font-size: 1rem;
+  color: var(--text-m);
+}
+
+.org-founder-meta,
+.org-branch-meta {
+  color: var(--text-m);
+  font-size: 0.82rem;
+}
+
+.org-founder-connector {
+  display: flex;
+  justify-content: center;
+}
+
+.org-founder-connector span {
+  width: 2px;
+  height: 46px;
+  background: linear-gradient(180deg, var(--accent), transparent);
+  opacity: 0.6;
+}
+
+.org-branch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.org-branch-card {
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  min-height: 260px;
+  border-color: var(--org-accent-color, var(--border));
+  box-shadow: inset 0 0 0 1px var(--org-accent-soft, transparent);
+}
+
+.org-branch-head {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+}
+
+.org-branch-subtitle {
+  color: var(--text-m);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.org-branch-title {
+  color: var(--org-accent-color, var(--text));
+}
+
+.org-member-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.org-member-card {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--org-accent-soft, rgba(255, 255, 255, 0.02)), rgba(255, 255, 255, 0.02));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.org-member-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.org-member-role {
+  display: block;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.org-member-name,
+.org-member-empty {
+  color: var(--text-m);
+  font-size: 0.78rem;
+}
+
+.org-member-status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--org-accent-color, var(--border));
+  color: var(--org-accent-color, var(--text-m));
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.org-founder-card:hover,
+.org-branch-head:hover,
+.org-member-card:hover {
+  border-color: var(--org-accent-color, var(--accent));
+  box-shadow: 0 0 18px var(--org-accent-glow, var(--accent-glow));
+}
+
+body[data-theme="glass-enterprise"] .org-member-card {
+  background: rgba(255, 255, 255, 0.62);
+}
+
+body[data-theme="minimal-pro"] .org-branch-card,
+body[data-theme="minimal-pro"] .org-member-card,
+body[data-theme="minimal-pro"] .org-member-status {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
 .workflow-layer {
   position: relative;
   min-height: inherit;
@@ -1850,7 +2033,30 @@ body[data-theme="minimal-pro"] .drawer-section {
   }
 
   .hud-strip {
+    margin-bottom: 16px;
+  }
+
+  .hud-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .org-hud-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .org-hierarchy {
+    min-width: 0;
+    gap: 18px;
+  }
+
+  .org-branch-grid {
     grid-template-columns: 1fr;
+  }
+
+  .org-founder-card,
+  .org-branch-card {
+    max-width: none;
   }
 
   .workflow-stage {

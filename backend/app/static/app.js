@@ -5,6 +5,7 @@
   const SANDBOX_MODE_KEY = "custom-codex-agent-sandbox-mode";
   const APPROVAL_POLICY_KEY = "custom-codex-agent-approval-policy";
   const UI_THEME_KEY = "custom-codex-agent-ui-theme";
+  const ORG_HUD_EXPANDED_KEY = "custom-codex-agent-org-hud-expanded";
   const REFRESH_INTERVAL_MS = 120000;
   const WORKFLOW_DRAG_THRESHOLD_PX = 10;
 
@@ -86,6 +87,7 @@
     selectedInspectorAgentName: "",
     selectedInspectorScriptPath: "",
     selectedInspectorReferencePath: "",
+    orgHudExpanded: false,
     drawer: {
       open: false,
       kicker: "UNIT_PROFILE",
@@ -127,9 +129,7 @@
     refreshBtn: document.getElementById("refresh-btn"),
     backupBtn: document.getElementById("backup-btn"),
     restoreBtn: document.getElementById("restore-btn"),
-    overviewMetrics: document.getElementById("overview-metrics"),
-    departmentMetrics: document.getElementById("department-metrics"),
-    statusMetrics: document.getElementById("status-metrics"),
+    orgHudGrid: document.getElementById("org-hud-grid"),
     orgTree: document.getElementById("org-tree"),
     dashboardMetrics: document.getElementById("dashboard-metrics"),
     timelineList: document.getElementById("timeline-list"),
@@ -172,6 +172,8 @@
     workflowRunList: document.getElementById("workflow-run-list"),
     workflowMeta: document.getElementById("workflow-meta"),
     workflowLog: document.getElementById("workflow-log"),
+    orgHudToggleBtn: document.getElementById("org-hud-toggle-btn"),
+    orgHudPanel: document.getElementById("org-hud-panel"),
     inspectorAgentList: document.getElementById("inspector-agent-list"),
     inspectorAgentName: document.getElementById("inspector-agent-name"),
     inspectorSummary: document.getElementById("inspector-summary"),
@@ -207,6 +209,51 @@
 
   function getCurrentTheme() {
     return THEME_META[normalizeTheme(state.theme)] || THEME_META.cyber_fusion;
+  }
+
+  function hashText(text) {
+    return Array.from(String(text || "")).reduce(function (acc, char) {
+      return ((acc * 31) + char.charCodeAt(0)) >>> 0;
+    }, 7);
+  }
+
+  function getDepartmentAccent(department) {
+    const palettes = {
+      cyber_fusion: [
+        { solid: "hsl(155 92% 52%)", soft: "hsla(155, 92%, 52%, 0.12)", glow: "hsla(155, 92%, 52%, 0.24)" },
+        { solid: "hsl(196 92% 58%)", soft: "hsla(196, 92%, 58%, 0.12)", glow: "hsla(196, 92%, 58%, 0.24)" },
+        { solid: "hsl(34 100% 58%)", soft: "hsla(34, 100%, 58%, 0.12)", glow: "hsla(34, 100%, 58%, 0.24)" },
+        { solid: "hsl(279 80% 68%)", soft: "hsla(279, 80%, 68%, 0.12)", glow: "hsla(279, 80%, 68%, 0.22)" },
+        { solid: "hsl(344 92% 64%)", soft: "hsla(344, 92%, 64%, 0.12)", glow: "hsla(344, 92%, 64%, 0.22)" },
+        { solid: "hsl(88 72% 56%)", soft: "hsla(88, 72%, 56%, 0.12)", glow: "hsla(88, 72%, 56%, 0.2)" },
+      ],
+      glass_enterprise: [
+        { solid: "hsl(224 72% 56%)", soft: "hsla(224, 72%, 56%, 0.1)", glow: "hsla(224, 72%, 56%, 0.16)" },
+        { solid: "hsl(170 62% 40%)", soft: "hsla(170, 62%, 40%, 0.1)", glow: "hsla(170, 62%, 40%, 0.16)" },
+        { solid: "hsl(24 82% 54%)", soft: "hsla(24, 82%, 54%, 0.1)", glow: "hsla(24, 82%, 54%, 0.16)" },
+        { solid: "hsl(286 58% 58%)", soft: "hsla(286, 58%, 58%, 0.1)", glow: "hsla(286, 58%, 58%, 0.16)" },
+        { solid: "hsl(348 72% 58%)", soft: "hsla(348, 72%, 58%, 0.1)", glow: "hsla(348, 72%, 58%, 0.16)" },
+        { solid: "hsl(92 54% 42%)", soft: "hsla(92, 54%, 42%, 0.1)", glow: "hsla(92, 54%, 42%, 0.16)" },
+      ],
+      minimal_pro: [
+        { solid: "hsl(0 0% 100%)", soft: "hsla(0, 0%, 100%, 0.08)", glow: "hsla(0, 0%, 100%, 0.14)" },
+        { solid: "hsl(208 16% 82%)", soft: "hsla(208, 16%, 82%, 0.1)", glow: "hsla(208, 16%, 82%, 0.14)" },
+        { solid: "hsl(49 100% 80%)", soft: "hsla(49, 100%, 80%, 0.08)", glow: "hsla(49, 100%, 80%, 0.14)" },
+        { solid: "hsl(160 44% 78%)", soft: "hsla(160, 44%, 78%, 0.08)", glow: "hsla(160, 44%, 78%, 0.14)" },
+        { solid: "hsl(339 48% 80%)", soft: "hsla(339, 48%, 80%, 0.08)", glow: "hsla(339, 48%, 80%, 0.14)" },
+        { solid: "hsl(264 40% 84%)", soft: "hsla(264, 40%, 84%, 0.08)", glow: "hsla(264, 40%, 84%, 0.14)" },
+      ],
+    };
+    const themeId = normalizeTheme(state.theme);
+    const palette = palettes[themeId] || palettes.cyber_fusion;
+    return palette[hashText(department) % palette.length];
+  }
+
+  function getOrgAccentStyle(accent, isFounder) {
+    const solid = isFounder ? "var(--accent)" : accent.solid;
+    const soft = isFounder ? "var(--accent-glow)" : accent.soft;
+    const glow = isFounder ? "var(--accent-glow)" : accent.glow;
+    return `--org-accent-color:${solid};--org-accent-soft:${soft};--org-accent-glow:${glow};`;
   }
 
   function escapeHtml(value) {
@@ -398,12 +445,17 @@
   }
 
   function renderOverviewHud() {
-    if (!el.overviewMetrics || !el.departmentMetrics || !el.statusMetrics) return;
+    if (!el.orgHudGrid) return;
+    if (el.orgHudPanel) {
+      el.orgHudPanel.classList.toggle("hidden", !state.orgHudExpanded);
+    }
+    if (el.orgHudToggleBtn) {
+      el.orgHudToggleBtn.textContent = state.orgHudExpanded ? "지표 숨기기" : "지표 보기";
+      el.orgHudToggleBtn.setAttribute("aria-expanded", state.orgHudExpanded ? "true" : "false");
+    }
     const overview = state.overview;
     if (!overview) {
-      el.overviewMetrics.innerHTML = "";
-      el.departmentMetrics.innerHTML = "";
-      el.statusMetrics.innerHTML = "";
+      el.orgHudGrid.innerHTML = "";
       return;
     }
     const overviewItems = [
@@ -412,23 +464,15 @@
       ["ACTIVE_THREADS", overview.active_threads],
       ["ACTIVE_AGENTS", overview.active_agents],
     ];
-    el.overviewMetrics.innerHTML = overviewItems
+    const dept = ((state.dashboard && state.dashboard.department_breakdown) || []).slice(0, 6);
+    const statuses = ((state.dashboard && state.dashboard.status_breakdown) || []).slice(0, 6);
+    const hudItems = overviewItems
+      .concat(dept.map(function (metric) { return [metric.label, metric.value]; }))
+      .concat(statuses.map(function (metric) { return [metric.label, metric.value]; }));
+
+    el.orgHudGrid.innerHTML = hudItems
       .map(function (item) {
         return `<button class="hud-card" type="button" data-hud-title="${escapeHtml(item[0])}" data-hud-value="${escapeHtml(String(item[1]))}"><div class="hud-card-label">${escapeHtml(item[0])}</div><div class="hud-card-value">${escapeHtml(String(item[1]))}</div></button>`;
-      })
-      .join("");
-
-    const dept = ((state.dashboard && state.dashboard.department_breakdown) || []).slice(0, 6);
-    el.departmentMetrics.innerHTML = dept
-      .map(function (metric) {
-        return `<button class="hud-card" type="button" data-hud-title="${escapeHtml(metric.label)}" data-hud-value="${escapeHtml(String(metric.value))}"><div class="hud-card-label">${escapeHtml(metric.label)}</div><div class="hud-card-value">${escapeHtml(String(metric.value))}</div></button>`;
-      })
-      .join("");
-
-    const statuses = ((state.dashboard && state.dashboard.status_breakdown) || []).slice(0, 6);
-    el.statusMetrics.innerHTML = statuses
-      .map(function (metric) {
-        return `<button class="hud-card" type="button" data-hud-title="${escapeHtml(metric.label)}" data-hud-value="${escapeHtml(String(metric.value))}"><div class="hud-card-label">${escapeHtml(metric.label)}</div><div class="hud-card-value">${escapeHtml(String(metric.value))}</div></button>`;
       })
       .join("");
   }
@@ -536,6 +580,45 @@
     });
   }
 
+  function buildOrgHierarchy(graph) {
+    const nodesById = new Map();
+    const childrenByParent = new Map();
+    const childSet = new Set();
+
+    (graph.nodes || []).forEach(function (node) {
+      nodesById.set(node.id, node);
+      if (!childrenByParent.has(node.id)) childrenByParent.set(node.id, []);
+    });
+
+    (graph.edges || []).forEach(function (edge) {
+      if (!childrenByParent.has(edge.source)) childrenByParent.set(edge.source, []);
+      childrenByParent.get(edge.source).push(edge.target);
+      childSet.add(edge.target);
+    });
+
+    const roots = Array.from(nodesById.values()).filter(function (node) {
+      return !childSet.has(node.id);
+    });
+    const founder = roots[0] || graph.nodes[0] || null;
+    const departments = founder
+      ? (childrenByParent.get(founder.id) || [])
+          .map(function (id) { return nodesById.get(id); })
+          .filter(Boolean)
+          .sort(function (left, right) {
+            if (left.id === "dept:staff") return -1;
+            if (right.id === "dept:staff") return 1;
+            return String(left.label || left.id).localeCompare(String(right.label || right.id), "ko");
+          })
+      : [];
+
+    return {
+      founder: founder,
+      departments: departments,
+      nodesById: nodesById,
+      childrenByParent: childrenByParent,
+    };
+  }
+
   function renderOrg() {
     renderOverviewHud();
     if (!el.orgTree) return;
@@ -544,48 +627,74 @@
       el.orgTree.innerHTML = `<div class="stage-card" style="padding:24px;">조직도 데이터가 없습니다.</div>`;
       return;
     }
-    const layout = computeGraphLayout(graph, 220, 150, 90, 120, 60, 40);
-    const iconMap = {
-      department: "◈",
-      agent: "●",
-      router: "◇",
-      skill: "□",
-      keyword: "△",
-    };
-    const wires = (graph.edges || [])
-      .map(function (edge) {
-        const source = layout.positions.get(edge.source);
-        const target = layout.positions.get(edge.target);
-        if (!source || !target) return "";
-        const midY = source.bottomY + (target.top - source.bottomY) / 2;
-        return `<path class="org-wire active" d="M ${source.centerX} ${source.bottomY} C ${source.centerX} ${midY}, ${target.centerX} ${midY}, ${target.centerX} ${target.top}" />`;
-      })
-      .join("");
-    const nodes = (graph.nodes || [])
-      .map(function (node) {
-        const pos = layout.positions.get(node.id);
-        if (!pos) return "";
-        const isMember = node.type === "agent" ? "member-node" : "";
+    const hierarchy = buildOrgHierarchy(graph);
+    const founder = hierarchy.founder;
+    const departments = hierarchy.departments;
+
+    if (!founder) {
+      el.orgTree.innerHTML = `<div class="stage-card" style="padding:24px;">조직도 루트 노드를 찾을 수 없습니다.</div>`;
+      return;
+    }
+
+    const departmentCards = departments
+      .map(function (department) {
+        const members = (hierarchy.childrenByParent.get(department.id) || [])
+          .map(function (id) { return hierarchy.nodesById.get(id); })
+          .filter(Boolean)
+          .sort(function (left, right) {
+            return String(left.label || left.id).localeCompare(String(right.label || right.id), "ko");
+          });
+        const accent = getDepartmentAccent(department.id);
+        const memberMarkup = members.length > 0
+          ? members
+              .map(function (member) {
+                return `
+                  <button
+                    class="org-member-card"
+                    type="button"
+                    data-org-node-id="${escapeHtml(member.id)}"
+                  >
+                    <div class="org-member-main">
+                      <span class="org-member-role">${escapeHtml(member.label || member.id)}</span>
+                      <span class="org-member-name">${escapeHtml(member.sublabel || "")}</span>
+                    </div>
+                    <span class="org-member-status">${escapeHtml(member.status || "healthy")}</span>
+                  </button>
+                `;
+              })
+              .join("")
+          : `<div class="org-member-empty">배정된 에이전트가 없습니다.</div>`;
+
         return `
-          <button
-            class="node-card org-node-card ${isMember}"
-            type="button"
-            style="left:${pos.left}px;top:${pos.top}px;"
-            data-org-node-id="${escapeHtml(node.id)}"
-          >
-            <div class="node-icon">${escapeHtml(iconMap[node.type] || "·")}</div>
-            <div class="node-title">${escapeHtml(node.label || node.id)}</div>
-            <div class="node-subtitle">${escapeHtml(node.sublabel || "")}</div>
-            <div class="node-meta">${escapeHtml(node.status || "healthy")}</div>
-          </button>
+          <article class="stage-card org-branch-card" style="${getOrgAccentStyle(accent, false)}">
+            <button
+              class="org-branch-head"
+              type="button"
+              data-org-node-id="${escapeHtml(department.id)}"
+            >
+              <div class="org-branch-kicker">DEPARTMENT</div>
+              <div class="org-branch-title">${escapeHtml(department.label || department.id)}</div>
+              <div class="org-branch-subtitle">${escapeHtml(department.sublabel || "에이전트 운영 조직")}</div>
+              <div class="org-branch-meta">${members.length}개 에이전트</div>
+            </button>
+            <div class="org-member-list">${memberMarkup}</div>
+          </article>
         `;
       })
       .join("");
 
     el.orgTree.innerHTML = `
-      <div class="org-scene" style="--scene-width:${layout.sceneWidth}px;--scene-height:${layout.sceneHeight}px;">
-        <svg class="org-wires" viewBox="0 0 ${layout.sceneWidth} ${layout.sceneHeight}" preserveAspectRatio="xMidYMin meet">${wires}</svg>
-        <div class="org-layer">${nodes}</div>
+      <div class="org-hierarchy">
+        <button class="stage-card org-founder-card" type="button" data-org-node-id="${escapeHtml(founder.id)}" style="${getOrgAccentStyle({ solid: "", soft: "", glow: "" }, true)}">
+          <div class="org-founder-kicker">TOP LEVEL</div>
+          <div class="org-founder-title">${escapeHtml(founder.label || founder.id)}</div>
+          <div class="org-founder-name">${escapeHtml(founder.sublabel || "")}</div>
+          <div class="org-founder-meta">${departments.length}개 부서와 연결됨</div>
+        </button>
+        <div class="org-founder-connector" aria-hidden="true">
+          <span></span>
+        </div>
+        <div class="org-branch-grid">${departmentCards}</div>
       </div>
     `;
   }
@@ -1562,6 +1671,7 @@
     state.selectedWorkflowWorkspaceRoot = state.selectedWorkspaceRoot;
     state.selectedWorkflowSandboxMode = state.selectedSandboxMode;
     state.selectedWorkflowApprovalPolicy = state.selectedApprovalPolicy;
+    state.orgHudExpanded = window.localStorage.getItem(ORG_HUD_EXPANDED_KEY) === "true";
   }
 
   function setupEvents() {
@@ -1588,6 +1698,14 @@
         state.theme = normalizeTheme(el.themeSwitcher.value);
         window.localStorage.setItem(UI_THEME_KEY, state.theme);
         render();
+      });
+    }
+
+    if (el.orgHudToggleBtn) {
+      el.orgHudToggleBtn.addEventListener("click", function () {
+        state.orgHudExpanded = !state.orgHudExpanded;
+        window.localStorage.setItem(ORG_HUD_EXPANDED_KEY, state.orgHudExpanded ? "true" : "false");
+        renderOverviewHud();
       });
     }
 
