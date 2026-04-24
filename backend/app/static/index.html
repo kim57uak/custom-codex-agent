@@ -30,6 +30,11 @@
           <option value="glass_enterprise">Glass Enterprise</option>
           <option value="minimal_pro">Minimal Pro</option>
         </select>
+        <div class="theme-quick-switch" aria-label="Theme Quick Switch">
+          <button class="theme-quick-btn" type="button" data-theme-value="cyber_fusion" title="Cyber Fusion">CYB</button>
+          <button class="theme-quick-btn" type="button" data-theme-value="glass_enterprise" title="Glass Enterprise">GLS</button>
+          <button class="theme-quick-btn" type="button" data-theme-value="minimal_pro" title="Minimal Pro">MIN</button>
+        </div>
       </div>
     </aside>
 
@@ -170,6 +175,16 @@
             </div>
             <div class="workflow-stage-frame">
               <div id="workflow-step-list" class="workflow-stage"></div>
+              <div id="workflow-empty-state" class="workflow-empty-state hidden">
+                <div class="workflow-empty-card">
+                  <div class="workflow-goal-row workflow-goal-row-inline">
+                    <textarea id="workflow-goal-input" class="proto-input workflow-goal-input" placeholder="완성하고 싶은 결과를 한 문장으로 적어주세요. 예: 신규 고객 온보딩 플로우를 설계하고 QA 체크리스트까지 구성"></textarea>
+                    <div class="workflow-command-actions workflow-primary-actions workflow-goal-actions">
+                      <button id="workflow-recommend-btn" class="action-btn action-btn-primary" type="button">RECOMMEND</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <div class="workflow-stage-dock">
                 <div class="section-kicker">EXECUTION_CONTROLS</div>
                 <button id="workflow-run-btn" class="action-btn action-btn-primary workflow-stage-dock-primary" type="button">EXECUTE_NETWORK</button>
@@ -181,68 +196,117 @@
             </div>
           </section>
 
-          <div class="workflow-bottom-strip workflow-bottom-grid">
-            <section class="workflow-command-card workflow-brief-card">
-              <div id="workflow-recommendation-list" class="workflow-recommendation-strip"></div>
-
-              <div class="form-group">
-                <label class="field-label" for="workflow-goal-input">MISSION_OBJECTIVE</label>
-                <div class="workflow-goal-row">
-                  <textarea id="workflow-goal-input" class="proto-input workflow-goal-input" placeholder="완성하고 싶은 결과를 한 문장으로 적어주세요. 예: 신규 고객 온보딩 플로우를 설계하고 QA 체크리스트까지 구성"></textarea>
-                  <div class="workflow-command-actions workflow-primary-actions workflow-goal-actions">
-                    <button id="workflow-recommend-btn" class="action-btn action-btn-primary" type="button">RECOMMEND</button>
-                    <button id="workflow-clear-btn" class="action-btn" type="button">CLEAR</button>
+          <div class="workflow-accordion-stack">
+            <details class="workflow-accordion">
+              <summary class="workflow-accordion-summary">
+                <div>
+                  <div class="section-kicker">ADVANCED_CONTROLS</div>
+                  <h3 class="workflow-panel-subtitle">고급 설정</h3>
+                </div>
+                <p class="workflow-panel-copy">작업 폴더, 샌드박스 정책, 수동 에이전트 추가 같은 운영 기능을 필요할 때만 엽니다.</p>
+              </summary>
+              <div class="workflow-accordion-body">
+                <section class="workflow-command-card workflow-brief-card">
+                  <div class="workflow-config-grid">
+                    <div class="form-group workflow-config-span">
+                      <label class="field-label" for="workflow-workspace-input">WORKSPACE_ROOT</label>
+                      <div class="inline-row">
+                        <input id="workflow-workspace-input" class="proto-input" type="text" placeholder="/abs/path" />
+                        <button id="workflow-workspace-picker-btn" class="action-btn" type="button">PICK</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="field-label" for="workflow-sandbox-select">SANDBOX_POLICY</label>
+                      <select id="workflow-sandbox-select" class="proto-input"></select>
+                    </div>
+                    <div class="form-group">
+                      <label class="field-label" for="workflow-approval-select">APPROVAL_MODE</label>
+                      <select id="workflow-approval-select" class="proto-input"></select>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div class="workflow-config-grid">
-                <div class="form-group workflow-config-span">
-                  <label class="field-label" for="workflow-workspace-input">WORKSPACE_ROOT</label>
-                  <div class="inline-row">
-                    <input id="workflow-workspace-input" class="proto-input" type="text" placeholder="/abs/path" />
-                    <button id="workflow-workspace-picker-btn" class="action-btn" type="button">PICK</button>
+                  <div class="workflow-manual-controls workflow-curation-grid">
+                    <input id="workflow-agent-filter-input" class="proto-input" type="text" placeholder="Search agent by role / team" />
+                    <select id="workflow-agent-select" class="proto-input"></select>
+                    <button id="workflow-agent-add-btn" class="action-btn" type="button">ADD_AGENT</button>
                   </div>
-                </div>
-                <div class="form-group">
-                  <label class="field-label" for="workflow-sandbox-select">SANDBOX_POLICY</label>
-                  <select id="workflow-sandbox-select" class="proto-input"></select>
-                </div>
-                <div class="form-group">
-                  <label class="field-label" for="workflow-approval-select">APPROVAL_MODE</label>
-                  <select id="workflow-approval-select" class="proto-input"></select>
-                </div>
+                </section>
               </div>
+            </details>
 
-              <div class="workflow-manual-controls workflow-curation-grid">
-                <input id="workflow-agent-filter-input" class="proto-input" type="text" placeholder="Search agent by role / team" />
-                <select id="workflow-agent-select" class="proto-input"></select>
-                <button id="workflow-agent-add-btn" class="action-btn" type="button">ADD_AGENT</button>
+            <details class="workflow-accordion" open>
+              <summary class="workflow-accordion-summary">
+                <div>
+                  <div class="section-kicker">LIVE_CONVERSATION</div>
+                  <h3 class="workflow-panel-subtitle">대화 이어가기</h3>
+                </div>
+                <p class="workflow-panel-copy">실행 중 Codex가 질문하거나, 사용자가 추가 지시를 주고 싶을 때 선택 단계에 답변을 붙여 다시 이어갈 수 있습니다.</p>
+              </summary>
+              <div class="workflow-accordion-body">
+                <section class="workflow-command-card workflow-conversation-card">
+                  <div class="workflow-conversation-head">
+                    <div id="workflow-conversation-status" class="workflow-conversation-status">선택된 실행이 없어서 초안 단계에 메모를 추가하는 모드입니다.</div>
+                    <div id="workflow-conversation-hint" class="terminal-meta">실행 이력을 선택하면 해당 단계부터 답변을 반영해 다시 실행할 수 있습니다.</div>
+                  </div>
+                  <div class="workflow-conversation-grid">
+                    <div class="form-group">
+                      <label class="field-label" for="workflow-conversation-step-select">TARGET_STEP</label>
+                      <select id="workflow-conversation-step-select" class="proto-input"></select>
+                    </div>
+                    <div class="form-group workflow-config-span">
+                      <label class="field-label" for="workflow-conversation-input">USER_REPLY</label>
+                      <textarea id="workflow-conversation-input" class="proto-input workflow-conversation-input" placeholder="예: 보고서 분량은 10장으로 줄여줘. 핵심 비교표를 먼저 보여주고, 필요한 파일은 /Users/... 경로를 참고해."></textarea>
+                    </div>
+                  </div>
+                  <div class="workflow-conversation-actions">
+                    <button id="workflow-conversation-apply-btn" class="action-btn" type="button">초안 단계에 반영</button>
+                    <button id="workflow-conversation-retry-btn" class="action-btn action-btn-primary" type="button">선택 단계부터 다시 실행</button>
+                  </div>
+                </section>
               </div>
+            </details>
 
-            </section>
-
-            <section class="workflow-run-strip workflow-run-panel">
-              <div class="workflow-panel-head">
+            <details class="workflow-accordion">
+              <summary class="workflow-accordion-summary">
                 <div>
                   <div class="section-kicker">STEP_03_REVIEW</div>
                   <h3 class="workflow-panel-subtitle">최근 실행 이력</h3>
-                  <p class="workflow-panel-copy">직전 실행을 눌러 비교하고, 현재 조립한 네트워크와 결과를 대조합니다.</p>
                 </div>
+                <p class="workflow-panel-copy">직전 실행을 눌러 비교하고, 현재 조립한 네트워크와 결과를 대조합니다.</p>
+              </summary>
+              <div class="workflow-accordion-body">
+                <section class="workflow-run-strip workflow-run-panel">
+                  <div id="workflow-run-list" class="run-chip-grid workflow-run-scroll"></div>
+                </section>
               </div>
-              <div id="workflow-run-list" class="run-chip-grid workflow-run-scroll"></div>
-            </section>
-          </div>
+            </details>
 
-          <section class="workflow-log-shell stage-card workflow-monitor-panel">
-            <div class="terminal-header">
-              <div>
-                <div class="section-kicker">STEP_04_MONITOR</div>
-                <div id="workflow-meta" class="terminal-meta">선택된 워크플로 없음</div>
+            <details class="workflow-accordion">
+              <summary class="workflow-accordion-summary">
+                <div>
+                  <div class="section-kicker">STEP_04_MONITOR</div>
+                  <h3 class="workflow-panel-subtitle">실행 로그</h3>
+                </div>
+                <p class="workflow-panel-copy">읽기 쉬운 이벤트 타임라인과 원문 로그를 필요할 때만 펼쳐 확인합니다.</p>
+              </summary>
+              <div class="workflow-accordion-body">
+                <section class="workflow-log-shell stage-card workflow-monitor-panel">
+                  <div class="terminal-header">
+                    <div>
+                      <div class="section-kicker">EXECUTION_TIMELINE</div>
+                      <div id="workflow-meta" class="terminal-meta">선택된 워크플로 없음</div>
+                    </div>
+                    <div class="workflow-log-view-switch" role="tablist" aria-label="Workflow Log View">
+                      <button id="workflow-log-view-timeline" class="action-btn workflow-log-view-btn" type="button">타임라인</button>
+                      <button id="workflow-log-view-raw" class="action-btn workflow-log-view-btn" type="button">원문 로그</button>
+                    </div>
+                  </div>
+                  <div id="workflow-log-feed" class="workflow-log-feed"></div>
+                  <pre id="workflow-log" class="terminal-screen workflow-raw-log hidden"></pre>
+                </section>
               </div>
-            </div>
-            <pre id="workflow-log" class="terminal-screen"></pre>
-          </section>
+            </details>
+          </div>
         </div>
       </section>
 

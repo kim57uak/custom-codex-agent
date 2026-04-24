@@ -290,6 +290,7 @@ class WorkflowRunCreateRequest(BaseModel):
 
 class WorkflowStepActionRequest(BaseModel):
     step_index: int
+    follow_up_note: str | None = None
 
 
 class WorkflowStepRunModel(BaseModel):

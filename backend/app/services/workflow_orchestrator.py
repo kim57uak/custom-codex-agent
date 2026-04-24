@@ -181,7 +181,12 @@ class WorkflowOrchestrator:
             approval_policy=record.approval_policy,
         )
 
-    async def retry_workflow_run_from_step(self, workflow_run_id: str, step_index: int) -> WorkflowRunRecord | None:
+    async def retry_workflow_run_from_step(
+        self,
+        workflow_run_id: str,
+        step_index: int,
+        follow_up_note: str | None = None,
+    ) -> WorkflowRunRecord | None:
         """
         summary: 기존 워크플로 실행의 특정 단계부터 새 워크플로 run을 다시 시작한다.
         purpose/context: 실패 단계 재시도처럼 전체를 다시 돌리지 않고 필요한 단계부터 이어가는 운영 경로를 제공한다.
@@ -194,6 +199,7 @@ class WorkflowOrchestrator:
         return await self._restart_workflow_from_existing_run(
             workflow_run_id=workflow_run_id,
             step_index=step_index,
+            follow_up_note=follow_up_note,
         )
 
     async def skip_workflow_step_and_continue(self, workflow_run_id: str, step_index: int) -> WorkflowRunRecord | None:
@@ -365,7 +371,12 @@ class WorkflowOrchestrator:
         finally:
             self._active_run_ids.pop(workflow_run_id, None)
 
-    async def _restart_workflow_from_existing_run(self, workflow_run_id: str, step_index: int) -> WorkflowRunRecord | None:
+    async def _restart_workflow_from_existing_run(
+        self,
+        workflow_run_id: str,
+        step_index: int,
+        follow_up_note: str | None = None,
+    ) -> WorkflowRunRecord | None:
         source_run = self._store.get_workflow_run(workflow_run_id)
         if source_run is None:
             return None
@@ -392,6 +403,12 @@ class WorkflowOrchestrator:
             )
             for step in restart_steps
         ]
+        cleaned_follow_up = str(follow_up_note or "").strip()
+        if cleaned_follow_up and step_inputs:
+            step_inputs[0].prompt = (
+                f"{step_inputs[0].prompt.rstrip()}\n\n"
+                f"[User Follow-up]\n{cleaned_follow_up}"
+            )
         return await self.create_workflow_run(
             goal_prompt=source_run.goal_prompt,
             steps=step_inputs,

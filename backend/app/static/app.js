@@ -6,8 +6,10 @@
   const APPROVAL_POLICY_KEY = "custom-codex-agent-approval-policy";
   const UI_THEME_KEY = "custom-codex-agent-ui-theme";
   const ORG_HUD_EXPANDED_KEY = "custom-codex-agent-org-hud-expanded";
+  const WORKFLOW_LOG_VIEW_KEY = "custom-codex-agent-workflow-log-view";
   const REFRESH_INTERVAL_MS = 120000;
   const WORKFLOW_DRAG_THRESHOLD_PX = 10;
+  const WORKFLOW_ORDER_SNAP_PX = 140;
 
   const THEME_META = {
     cyber_fusion: {
@@ -50,6 +52,7 @@
   let toastTimer = null;
   let dragState = null;
   let lastWorkflowDragEndedAt = 0;
+  let workflowSceneRenderQueued = false;
   let deferredInteractiveRender = false;
 
   const state = {
@@ -88,6 +91,9 @@
     selectedInspectorScriptPath: "",
     selectedInspectorReferencePath: "",
     orgHudExpanded: false,
+    workflowConversationStepIndex: 0,
+    workflowConversationText: "",
+    workflowLogView: "timeline",
     drawer: {
       open: false,
       kicker: "UNIT_PROFILE",
@@ -115,6 +121,7 @@
     liveState: document.getElementById("live-state"),
     errorBanner: document.getElementById("error-banner"),
     themeSwitcher: document.getElementById("theme-switcher"),
+    themeQuickButtons: Array.from(document.querySelectorAll("[data-theme-value]")),
     tabOrg: document.getElementById("tab-org"),
     tabDashboard: document.getElementById("tab-dashboard"),
     tabConsole: document.getElementById("tab-console"),
@@ -151,6 +158,8 @@
     workflowProgressHud: document.getElementById("workflow-progress-hud"),
     workflowProgressText: document.getElementById("workflow-progress-text"),
     workflowStepList: document.getElementById("workflow-step-list"),
+    workflowEmptyState: document.getElementById("workflow-empty-state"),
+    workflowStageDock: document.querySelector(".workflow-stage-dock"),
     workflowGoalInput: document.getElementById("workflow-goal-input"),
     workflowWorkspaceInput: document.getElementById("workflow-workspace-input"),
     workflowWorkspacePickerBtn: document.getElementById("workflow-workspace-picker-btn"),
@@ -158,20 +167,27 @@
     workflowApprovalSelect: document.getElementById("workflow-approval-select"),
     workflowRecommendBtn: document.getElementById("workflow-recommend-btn"),
     workflowAgentAddBtn: document.getElementById("workflow-agent-add-btn"),
-    workflowClearBtn: document.getElementById("workflow-clear-btn"),
     workflowRunBtn: document.getElementById("workflow-run-btn"),
     workflowCancelBtn: document.getElementById("workflow-cancel-btn"),
     workflowRetryBtn: document.getElementById("workflow-retry-btn"),
     workflowAgentFilterInput: document.getElementById("workflow-agent-filter-input"),
     workflowAgentSelect: document.getElementById("workflow-agent-select"),
-    workflowRecommendationList: document.getElementById("workflow-recommendation-list"),
     workflowRecommendationStatus: document.getElementById("workflow-recommendation-status"),
     workflowStageCount: document.getElementById("workflow-stage-count"),
     workflowSelectedRunLabel: document.getElementById("workflow-selected-run-label"),
     workflowRecommendationMeta: document.getElementById("workflow-recommendation-meta"),
     workflowRunList: document.getElementById("workflow-run-list"),
     workflowMeta: document.getElementById("workflow-meta"),
+    workflowLogViewTimelineBtn: document.getElementById("workflow-log-view-timeline"),
+    workflowLogViewRawBtn: document.getElementById("workflow-log-view-raw"),
+    workflowLogFeed: document.getElementById("workflow-log-feed"),
     workflowLog: document.getElementById("workflow-log"),
+    workflowConversationStatus: document.getElementById("workflow-conversation-status"),
+    workflowConversationHint: document.getElementById("workflow-conversation-hint"),
+    workflowConversationStepSelect: document.getElementById("workflow-conversation-step-select"),
+    workflowConversationInput: document.getElementById("workflow-conversation-input"),
+    workflowConversationApplyBtn: document.getElementById("workflow-conversation-apply-btn"),
+    workflowConversationRetryBtn: document.getElementById("workflow-conversation-retry-btn"),
     orgHudToggleBtn: document.getElementById("org-hud-toggle-btn"),
     orgHudPanel: document.getElementById("org-hud-panel"),
     inspectorAgentList: document.getElementById("inspector-agent-list"),
@@ -341,6 +357,13 @@
 
   function showToast(message, variant) {
     if (!el.toastContainer) return;
+    if (toastTimer) {
+      clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    Array.from(el.toastContainer.children).forEach(function (item) {
+      item.remove();
+    });
     const toast = document.createElement("div");
     toast.className = `toast-item ${variant || ""}`;
     toast.textContent = String(message || "");
@@ -348,9 +371,6 @@
     requestAnimationFrame(function () {
       toast.classList.add("visible");
     });
-    if (toastTimer) {
-      clearTimeout(toastTimer);
-    }
     toastTimer = setTimeout(function () {
       toast.classList.remove("visible");
       setTimeout(function () {
@@ -370,6 +390,13 @@
     el.body.setAttribute("data-theme", theme.bodyTheme);
     if (el.themeSwitcher && el.themeSwitcher.value !== state.theme) {
       el.themeSwitcher.value = state.theme;
+    }
+    if (el.themeQuickButtons && el.themeQuickButtons.length > 0) {
+      el.themeQuickButtons.forEach(function (button) {
+        const active = button.getAttribute("data-theme-value") === state.theme;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
     }
     if (el.viewportTitle) {
       el.viewportTitle.textContent = theme.titles[state.tab] || theme.titles.org;
@@ -884,7 +911,7 @@
       .join("");
   }
 
-  function buildDefaultStepFromAgent(agent) {
+  function buildDefaultStepFromAgent(agent, sourceType = "manual") {
     return {
       id: nextWorkflowStepId(),
       agentName: agent.name,
@@ -896,6 +923,23 @@
       status: "ready",
       summary: agent.short_description || "",
       runId: "",
+      sourceType: sourceType,
+    };
+  }
+
+  function buildRecommendedWorkflowStep(item) {
+    return {
+      id: nextWorkflowStepId(),
+      agentName: item.agent_name,
+      roleLabel: item.role_label_ko,
+      departmentLabel: item.department_label_ko,
+      skillName: item.skill_name || "",
+      iconKey: item.icon_key || "bot",
+      prompt: item.default_prompt || "",
+      status: "ready",
+      summary: item.reason || item.short_description || "",
+      runId: "",
+      sourceType: "recommended",
     };
   }
 
@@ -906,10 +950,12 @@
     };
   }
 
-  function layoutWorkflowNodes() {
+  function layoutWorkflowNodes(preserveExisting = false) {
     const positions = {};
     (state.workflowDraft.steps || []).forEach(function (step, index) {
-      positions[step.id] = getDefaultWorkflowNodePosition(index);
+      positions[step.id] = preserveExisting && state.workflowNodePositions[step.id]
+        ? state.workflowNodePositions[step.id]
+        : getDefaultWorkflowNodePosition(index);
     });
     state.workflowNodePositions = positions;
   }
@@ -920,26 +966,20 @@
     if (removed[0]) {
       delete state.workflowNodePositions[removed[0].id];
     }
-    layoutWorkflowNodes();
-    renderWorkflow();
-  }
-
-  function removeWorkflowRecommendation(index) {
-    if (!Number.isInteger(index) || index < 0) return;
-    state.workflowRecommendations.splice(index, 1);
+    layoutWorkflowNodes(true);
     renderWorkflow();
   }
 
   function reorderWorkflowStepsFromCanvas() {
     const steps = (state.workflowDraft.steps || []).slice();
     if (steps.length < 2) {
-      layoutWorkflowNodes();
+      layoutWorkflowNodes(true);
       return false;
     }
     const reordered = steps.slice().sort(function (leftStep, rightStep) {
       const leftPos = state.workflowNodePositions[leftStep.id] || { left: 0, top: 0 };
       const rightPos = state.workflowNodePositions[rightStep.id] || { left: 0, top: 0 };
-      if (leftPos.left !== rightPos.left) {
+      if (Math.abs(leftPos.left - rightPos.left) > WORKFLOW_ORDER_SNAP_PX) {
         return leftPos.left - rightPos.left;
       }
       return leftPos.top - rightPos.top;
@@ -948,45 +988,33 @@
       return step.id !== steps[index].id;
     });
     state.workflowDraft.steps = reordered;
-    layoutWorkflowNodes();
+    layoutWorkflowNodes(true);
     return changed;
   }
 
+  function scheduleWorkflowSceneRender() {
+    if (workflowSceneRenderQueued) return;
+    workflowSceneRenderQueued = true;
+    window.requestAnimationFrame(function () {
+      workflowSceneRenderQueued = false;
+      renderWorkflowScene();
+    });
+  }
+
   function renderWorkflowRecommendations() {
-    if (!el.workflowRecommendationList) return;
     const items = state.workflowRecommendations || [];
     if (el.workflowRecommendationMeta) {
-      el.workflowRecommendationMeta.textContent = items.length > 0 ? `${items.length}개 추천됨` : "추천 결과 없음";
+      el.workflowRecommendationMeta.textContent = items.length > 0 ? `${items.length}개 추천 노드 반영됨` : "추천 결과 없음";
     }
-    if (items.length === 0) {
-      el.workflowRecommendationList.innerHTML = `
-        <div class="workflow-recommendation-strip-header">
-          <div class="section-kicker">RECOMMENDED_AGENTS</div>
-        </div>
-        <div class="workflow-recommendation-empty">RECOMMEND 실행 후 추천 에이전트가 이곳에 한 줄로 표시됩니다.</div>
-      `;
-      return;
-    }
-    el.workflowRecommendationList.innerHTML = `
-      <div class="workflow-recommendation-strip-header">
-        <div class="section-kicker">RECOMMENDED_AGENTS</div>
-        <div class="terminal-meta">칩을 클릭하면 네트워크에 추가됩니다.</div>
-      </div>
-      <div class="workflow-recommendation-strip-scroll">
-        ${items.map(function (item, index) {
-          return `
-            <article class="workflow-recommendation-pill">
-              <button class="workflow-recommendation-pill-main" type="button" data-recommend-index="${index}">
-                <div class="feed-title">${escapeHtml(item.agent_name)}</div>
-                <div class="recommendation-meta">${escapeHtml(item.department_label_ko)} / ${escapeHtml(item.role_label_ko)}</div>
-                <div class="recommendation-meta">${escapeHtml(item.reason || "")}</div>
-              </button>
-              <button class="workflow-recommendation-pill-remove" type="button" data-remove-recommend-index="${index}" aria-label="${escapeHtml(item.agent_name)} remove">✕</button>
-            </article>
-          `;
-        }).join("")}
-      </div>
-    `;
+  }
+
+  function applyWorkflowRecommendations(items) {
+    const manualSteps = (state.workflowDraft.steps || []).filter(function (step) {
+      return step.sourceType !== "recommended";
+    });
+    const recommendedSteps = (items || []).map(buildRecommendedWorkflowStep);
+    state.workflowDraft.steps = manualSteps.concat(recommendedSteps);
+    layoutWorkflowNodes(true);
   }
 
   function normalizeWorkflowPositions() {
@@ -1000,6 +1028,49 @@
 
   function getSelectedWorkflowDetail() {
     return state.selectedWorkflowRunId ? (state.workflowRunDetails.get(state.selectedWorkflowRunId) || null) : null;
+  }
+
+  function getWorkflowConversationSteps() {
+    const detail = getSelectedWorkflowDetail();
+    if (detail && Array.isArray(detail.steps) && detail.steps.length > 0) {
+      return detail.steps.map(function (step) {
+        return {
+          stepIndex: step.step_index,
+          title: step.title || `STEP ${String((step.step_index || 0) + 1).padStart(2, "0")}`,
+          agentName: step.agent_name || "",
+          status: step.status || "ready",
+          summary: step.summary || step.last_event_message || "",
+          prompt: step.prompt || "",
+          source: "runtime",
+        };
+      });
+    }
+    return (state.workflowDraft.steps || []).map(function (step, index) {
+      return {
+        stepIndex: index,
+        title: `STEP ${String(index + 1).padStart(2, "0")}`,
+        agentName: step.agentName || "",
+        status: step.status || "ready",
+        summary: step.summary || "",
+        prompt: step.prompt || "",
+        source: "draft",
+      };
+    });
+  }
+
+  function normalizeWorkflowConversationStepIndex(steps) {
+    if (!Array.isArray(steps) || steps.length === 0) {
+      state.workflowConversationStepIndex = 0;
+      return;
+    }
+    const hasCurrent = steps.some(function (step) { return step.stepIndex === state.workflowConversationStepIndex; });
+    if (hasCurrent) return;
+    const detail = getSelectedWorkflowDetail();
+    if (detail && Number.isInteger(detail.current_step_index) && steps.some(function (step) { return step.stepIndex === detail.current_step_index; })) {
+      state.workflowConversationStepIndex = detail.current_step_index;
+      return;
+    }
+    state.workflowConversationStepIndex = steps[0].stepIndex;
   }
 
   function getWorkflowRuntimeStep(step, index) {
@@ -1046,6 +1117,7 @@
         const displaySummary = (runtimeStep && (runtimeStep.summary || runtimeStep.last_event_message)) || step.summary || step.skillName || step.prompt || "";
         const activeClass = runtimeStatus === "running" ? " flow-node-active" : "";
         const queuedClass = runtimeStatus === "queued" ? " flow-node-queued" : "";
+        const sourceLabel = step.sourceType === "recommended" ? "추천" : "수동";
         return `
           <article class="flow-node${activeClass}${queuedClass}" style="left:${pos.left}px;top:${pos.top}px;" data-workflow-step-index="${index}" data-workflow-step-id="${escapeHtml(step.id)}" data-workflow-step-status="${escapeHtml(displayStatus)}" aria-busy="${runtimeStatus === "running" ? "true" : "false"}">
             <div class="flow-node-head">
@@ -1055,16 +1127,15 @@
             </div>
             <div class="node-meta">${escapeHtml(step.departmentLabel || "")}</div>
             <div class="node-meta">${escapeHtml(displaySummary)}</div>
-            <div class="node-actions"><span class="mini-btn">STEP ${String(index + 1).padStart(2, "0")}</span><span class="mini-btn workflow-step-status workflow-step-status-${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span></div>
+            <div class="node-actions"><span class="mini-btn">${escapeHtml(sourceLabel)}</span><span class="mini-btn">STEP ${String(index + 1).padStart(2, "0")}</span><span class="mini-btn workflow-step-status workflow-step-status-${escapeHtml(displayStatus)}">${escapeHtml(displayStatus)}</span></div>
           </article>
         `;
       })
       .join("");
-    const placeholder = steps.length === 0 ? `<div class="stage-card" style="padding:24px;">추천 에이전트를 추가하면 네트워크 노드가 생성됩니다.</div>` : "";
     el.workflowStepList.innerHTML = `
       <div class="workflow-scene" style="--scene-width:${sceneWidth}px;--scene-height:${sceneHeight}px;">
         <svg class="workflow-wires" viewBox="0 0 ${sceneWidth} ${sceneHeight}" preserveAspectRatio="xMidYMin meet">${wires}</svg>
-        <div class="workflow-layer">${nodes}${placeholder}</div>
+        <div class="workflow-layer">${nodes}</div>
       </div>
     `;
   }
@@ -1119,10 +1190,11 @@
   }
 
   function renderWorkflowLog() {
-    if (!el.workflowMeta || !el.workflowLog) return;
+    if (!el.workflowMeta || !el.workflowLog || !el.workflowLogFeed) return;
     if (!state.selectedWorkflowRunId) {
       el.workflowMeta.textContent = "선택된 워크플로 없음";
       el.workflowLog.textContent = "";
+      el.workflowLogFeed.innerHTML = `<div class="workflow-log-empty">실행 이력을 선택하면 읽기 쉬운 타임라인이 여기 표시됩니다.</div>`;
       return;
     }
     const run = state.workflowRuns.find(function (item) { return item.workflow_run_id === state.selectedWorkflowRunId; });
@@ -1164,7 +1236,84 @@
       const sourceLabel = event.source === "run" ? " run" : "";
       return `[${fmtDate(event.created_at)}] ${event.event_type}${sourceLabel}${stepLabel}${agentLabel} ${event.message}`;
     }).join("\n") : "> Workflow telemetry idle...";
+    el.workflowLogFeed.innerHTML = mergedEvents.length > 0
+      ? mergedEvents.slice().reverse().map(function (event) {
+          const stepLabel = Number.isInteger(event.step_index) ? `STEP ${String(event.step_index + 1).padStart(2, "0")}` : "GLOBAL";
+          const agentLabel = event.agent_name || (event.source === "run" ? "Run Stream" : "Workflow");
+          return `
+            <article class="workflow-log-entry" data-workflow-log-source="${escapeHtml(event.source)}">
+              <div class="workflow-log-entry-head">
+                <div>
+                  <div class="workflow-log-entry-type">${escapeHtml(event.event_type)}</div>
+                  <div class="workflow-log-entry-meta">${escapeHtml(stepLabel)} · ${escapeHtml(agentLabel)}</div>
+                </div>
+                <div class="workflow-log-entry-time">${escapeHtml(fmtDate(event.created_at))}</div>
+              </div>
+              <div class="workflow-log-entry-body">${escapeHtml(event.message)}</div>
+            </article>
+          `;
+        }).join("")
+      : `<div class="workflow-log-empty">아직 표시할 실행 로그가 없습니다.</div>`;
     el.workflowLog.scrollTop = el.workflowLog.scrollHeight;
+  }
+
+  function renderWorkflowLogView() {
+    const showRaw = state.workflowLogView === "raw";
+    if (el.workflowLogFeed) {
+      el.workflowLogFeed.classList.toggle("hidden", showRaw);
+    }
+    if (el.workflowLog) {
+      el.workflowLog.classList.toggle("hidden", !showRaw);
+    }
+    if (el.workflowLogViewTimelineBtn) {
+      const active = !showRaw;
+      el.workflowLogViewTimelineBtn.classList.toggle("active", active);
+      el.workflowLogViewTimelineBtn.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    if (el.workflowLogViewRawBtn) {
+      const active = showRaw;
+      el.workflowLogViewRawBtn.classList.toggle("active", active);
+      el.workflowLogViewRawBtn.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+  }
+
+  function renderWorkflowConversation() {
+    if (!el.workflowConversationStatus || !el.workflowConversationHint || !el.workflowConversationStepSelect || !el.workflowConversationInput || !el.workflowConversationApplyBtn || !el.workflowConversationRetryBtn) {
+      return;
+    }
+    const steps = getWorkflowConversationSteps();
+    normalizeWorkflowConversationStepIndex(steps);
+    const selected = steps.find(function (step) { return step.stepIndex === state.workflowConversationStepIndex; }) || null;
+    el.workflowConversationStepSelect.innerHTML = steps.length > 0
+      ? steps.map(function (step) {
+          const selectedAttr = step.stepIndex === state.workflowConversationStepIndex ? "selected" : "";
+          return `<option value="${escapeHtml(String(step.stepIndex))}" ${selectedAttr}>${escapeHtml(step.title)} · ${escapeHtml(step.agentName)} · ${escapeHtml(step.status)}</option>`;
+        }).join("")
+      : `<option value="0">선택 가능한 단계 없음</option>`;
+    if (el.workflowConversationInput.value !== state.workflowConversationText) {
+      el.workflowConversationInput.value = state.workflowConversationText || "";
+    }
+
+    if (!selected) {
+      el.workflowConversationStatus.textContent = "실행 중이거나 초안으로 준비된 단계가 아직 없습니다.";
+      el.workflowConversationHint.textContent = "먼저 추천 결과를 추가하거나 실행 이력을 선택해 주세요.";
+      el.workflowConversationApplyBtn.disabled = true;
+      el.workflowConversationRetryBtn.disabled = true;
+      return;
+    }
+
+    const detail = getSelectedWorkflowDetail();
+    const runtimeMode = Boolean(detail && detail.steps && detail.steps.length > 0);
+    const statusLabel = selected.status === "approval_required" ? "사용자 답변 필요" : selected.status;
+    const draftStep = (state.workflowDraft.steps || [])[selected.stepIndex] || null;
+    el.workflowConversationStatus.textContent = runtimeMode
+      ? `${selected.title} · ${selected.agentName} · ${statusLabel}`
+      : `${selected.title} 초안 편집 모드 · ${selected.agentName}`;
+    el.workflowConversationHint.textContent = selected.summary || "질문이 오면 답변을 입력하고, 해당 단계 프롬프트에 반영하거나 다시 실행할 수 있습니다.";
+    el.workflowConversationApplyBtn.disabled = !draftStep;
+    el.workflowConversationApplyBtn.textContent = draftStep ? "초안 단계에 반영" : "초안 단계 없음";
+    el.workflowConversationRetryBtn.disabled = !runtimeMode;
+    el.workflowConversationRetryBtn.textContent = runtimeMode ? "선택 단계부터 다시 실행" : "실행 이력 선택 후 가능";
   }
 
   function renderWorkflow() {
@@ -1180,8 +1329,24 @@
     renderWorkflowScene();
     renderWorkflowRunList();
     renderWorkflowLog();
+    renderWorkflowLogView();
+    renderWorkflowConversation();
+    const hasWorkflowSteps = (state.workflowDraft.steps || []).length > 0;
+    const showWorkflowEmptyState = !hasWorkflowSteps && !state.workflowProgressVisible;
+    if (el.workflowEmptyState) {
+      el.workflowEmptyState.classList.toggle("hidden", !showWorkflowEmptyState);
+    }
+    if (el.workflowStageDock) {
+      el.workflowStageDock.classList.toggle("hidden", !hasWorkflowSteps);
+    }
+    if (el.workflowRecommendBtn) {
+      el.workflowRecommendBtn.disabled = state.workflowProgressVisible;
+      el.workflowRecommendBtn.classList.toggle("is-busy", state.workflowProgressVisible);
+      el.workflowRecommendBtn.textContent = state.workflowProgressVisible ? "ANALYZING..." : "RECOMMEND";
+      el.workflowRecommendBtn.setAttribute("aria-busy", state.workflowProgressVisible ? "true" : "false");
+    }
     if (el.workflowRecommendationStatus) {
-      el.workflowRecommendationStatus.textContent = state.workflowProgressVisible ? "추천 중" : (state.workflowRecommendations.length > 0 ? "준비 완료" : "대기 중");
+      el.workflowRecommendationStatus.textContent = state.workflowProgressVisible ? "추천 중" : (state.workflowRecommendations.length > 0 ? `${state.workflowRecommendations.length}개 반영` : "대기 중");
     }
     if (el.workflowStageCount) {
       el.workflowStageCount.textContent = String((state.workflowDraft.steps || []).length);
@@ -1459,6 +1624,9 @@
   }
 
   async function recommendWorkflow() {
+    if (state.workflowProgressVisible) {
+      return;
+    }
     const goalPrompt = (el.workflowGoalInput && el.workflowGoalInput.value) || "";
     if (!goalPrompt.trim()) {
       showToast("워크플로 목표를 입력하세요.", "error");
@@ -1474,8 +1642,10 @@
         max_agents: state.workflowUiConfig ? state.workflowUiConfig.recommendation_max_agents : null,
       });
       state.workflowRecommendations = result.recommended_agents || [];
+      applyWorkflowRecommendations(state.workflowRecommendations);
       state.workflowProgressVisible = false;
       state.liveText = `워크플로 추천 완료: ${state.workflowRecommendations.length}개`;
+      showToast("추천 결과를 네트워크 노드에 바로 반영했습니다.", "success");
       renderWorkflow();
     } catch (err) {
       state.workflowProgressVisible = false;
@@ -1485,30 +1655,11 @@
     }
   }
 
-  function addWorkflowRecommendation(index) {
-    const item = (state.workflowRecommendations || [])[index];
-    if (!item) return;
-    state.workflowDraft.steps.push({
-      id: nextWorkflowStepId(),
-      agentName: item.agent_name,
-      roleLabel: item.role_label_ko,
-      departmentLabel: item.department_label_ko,
-      skillName: item.skill_name || "",
-      iconKey: item.icon_key || "bot",
-      prompt: item.default_prompt || "",
-      status: "ready",
-      summary: item.reason || item.short_description || "",
-      runId: "",
-    });
-    layoutWorkflowNodes();
-    renderWorkflow();
-  }
-
   function addSelectedWorkflowAgent() {
     const agent = (state.executableAgents || []).find(function (item) { return item.name === state.selectedWorkflowAgentName; });
     if (!agent) return;
-    state.workflowDraft.steps.push(buildDefaultStepFromAgent(agent));
-    layoutWorkflowNodes();
+    state.workflowDraft.steps.push(buildDefaultStepFromAgent(agent, "manual"));
+    layoutWorkflowNodes(true);
     renderWorkflow();
   }
 
@@ -1549,6 +1700,43 @@
     if (!state.selectedWorkflowRunId) return;
     const created = await postJsonWithAuth(`/api/workflow-runs/${encodeURIComponent(state.selectedWorkflowRunId)}/retry`);
     state.selectedWorkflowRunId = created.workflow_run_id;
+    await refreshAll();
+  }
+
+  function applyWorkflowConversationToDraft() {
+    const note = String(state.workflowConversationText || "").trim();
+    if (!note) {
+      showToast("추가로 전달할 답변을 입력하세요.", "error");
+      return;
+    }
+    const step = (state.workflowDraft.steps || [])[state.workflowConversationStepIndex];
+    if (!step) {
+      showToast("반영할 초안 단계를 찾지 못했습니다.", "error");
+      return;
+    }
+    step.prompt = `${String(step.prompt || "").trim()}\n\n[User Follow-up]\n${note}`.trim();
+    step.summary = step.summary || "사용자 답변이 추가됨";
+    state.workflowConversationText = "";
+    renderWorkflow();
+    showToast("선택 단계 프롬프트에 답변을 반영했습니다.", "success");
+  }
+
+  async function retryWorkflowFromConversationStep() {
+    const note = String(state.workflowConversationText || "").trim();
+    if (!state.selectedWorkflowRunId) {
+      showToast("먼저 실행 이력을 선택하세요.", "error");
+      return;
+    }
+    if (!note) {
+      showToast("Codex에게 전달할 답변을 입력하세요.", "error");
+      return;
+    }
+    const created = await postJsonWithAuth(`/api/workflow-runs/${encodeURIComponent(state.selectedWorkflowRunId)}/retry-from-step`, {
+      step_index: state.workflowConversationStepIndex,
+      follow_up_note: note,
+    });
+    state.selectedWorkflowRunId = created.workflow_run_id;
+    state.workflowConversationText = "";
     await refreshAll();
   }
 
@@ -1672,6 +1860,7 @@
     state.selectedWorkflowSandboxMode = state.selectedSandboxMode;
     state.selectedWorkflowApprovalPolicy = state.selectedApprovalPolicy;
     state.orgHudExpanded = window.localStorage.getItem(ORG_HUD_EXPANDED_KEY) === "true";
+    state.workflowLogView = window.localStorage.getItem(WORKFLOW_LOG_VIEW_KEY) === "raw" ? "raw" : "timeline";
   }
 
   function setupEvents() {
@@ -1700,12 +1889,35 @@
         render();
       });
     }
+    if (el.themeQuickButtons && el.themeQuickButtons.length > 0) {
+      el.themeQuickButtons.forEach(function (button) {
+        button.addEventListener("click", function () {
+          state.theme = normalizeTheme(button.getAttribute("data-theme-value"));
+          window.localStorage.setItem(UI_THEME_KEY, state.theme);
+          render();
+        });
+      });
+    }
 
     if (el.orgHudToggleBtn) {
       el.orgHudToggleBtn.addEventListener("click", function () {
         state.orgHudExpanded = !state.orgHudExpanded;
         window.localStorage.setItem(ORG_HUD_EXPANDED_KEY, state.orgHudExpanded ? "true" : "false");
         renderOverviewHud();
+      });
+    }
+    if (el.workflowLogViewTimelineBtn) {
+      el.workflowLogViewTimelineBtn.addEventListener("click", function () {
+        state.workflowLogView = "timeline";
+        window.localStorage.setItem(WORKFLOW_LOG_VIEW_KEY, state.workflowLogView);
+        renderWorkflowLogView();
+      });
+    }
+    if (el.workflowLogViewRawBtn) {
+      el.workflowLogViewRawBtn.addEventListener("click", function () {
+        state.workflowLogView = "raw";
+        window.localStorage.setItem(WORKFLOW_LOG_VIEW_KEY, state.workflowLogView);
+        renderWorkflowLogView();
       });
     }
 
@@ -1733,8 +1945,9 @@
 
     if (el.workflowGoalInput) el.workflowGoalInput.addEventListener("input", function () { state.workflowDraft.goalPrompt = el.workflowGoalInput.value || ""; });
     if (el.workflowGoalInput) el.workflowGoalInput.addEventListener("keydown", function (event) {
-      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) return;
       event.preventDefault();
+      event.stopPropagation();
       recommendWorkflow().catch(handleError);
     });
     if (el.workflowWorkspaceInput) el.workflowWorkspaceInput.addEventListener("change", function () { setWorkspaceRootForTarget("workflow", el.workflowWorkspaceInput.value || ""); });
@@ -1745,10 +1958,22 @@
     if (el.workflowAgentFilterInput) el.workflowAgentFilterInput.addEventListener("input", function () { state.workflowAgentFilter = el.workflowAgentFilterInput.value || ""; renderWorkflowAgentOptions(); });
     if (el.workflowAgentSelect) el.workflowAgentSelect.addEventListener("change", function () { state.selectedWorkflowAgentName = el.workflowAgentSelect.value || ""; });
     if (el.workflowAgentAddBtn) el.workflowAgentAddBtn.addEventListener("click", function () { addSelectedWorkflowAgent(); });
-    if (el.workflowClearBtn) el.workflowClearBtn.addEventListener("click", function () { state.workflowDraft.steps = []; state.workflowRecommendations = []; state.workflowNodePositions = {}; renderWorkflow(); });
     if (el.workflowRunBtn) el.workflowRunBtn.addEventListener("click", function () { createWorkflowRun().catch(handleError); });
     if (el.workflowCancelBtn) el.workflowCancelBtn.addEventListener("click", function () { cancelSelectedWorkflowRun().catch(handleError); });
     if (el.workflowRetryBtn) el.workflowRetryBtn.addEventListener("click", function () { retrySelectedWorkflowRun().catch(handleError); });
+    if (el.workflowConversationStepSelect) el.workflowConversationStepSelect.addEventListener("change", function () {
+      state.workflowConversationStepIndex = Number(el.workflowConversationStepSelect.value || "0");
+      renderWorkflowConversation();
+    });
+    if (el.workflowConversationInput) el.workflowConversationInput.addEventListener("input", function () {
+      state.workflowConversationText = el.workflowConversationInput.value || "";
+    });
+    if (el.workflowConversationApplyBtn) el.workflowConversationApplyBtn.addEventListener("click", function () {
+      applyWorkflowConversationToDraft();
+    });
+    if (el.workflowConversationRetryBtn) el.workflowConversationRetryBtn.addEventListener("click", function () {
+      retryWorkflowFromConversationStep().catch(handleError);
+    });
 
     if (el.drawerCloseBtn) el.drawerCloseBtn.addEventListener("click", closeDrawer);
     if (el.drawerBackdrop) el.drawerBackdrop.addEventListener("click", closeDrawer);
@@ -1828,18 +2053,6 @@
         const runId = runChip.getAttribute("data-run-id") || "";
         state.selectedRunId = runId;
         Promise.all([loadRunEvents(runId), openRunDrawer(runId)]).then(renderConsole).catch(handleError);
-        return;
-      }
-
-      const recChip = target.closest("[data-recommend-index]");
-      if (recChip) {
-        addWorkflowRecommendation(Number(recChip.getAttribute("data-recommend-index")));
-        return;
-      }
-
-      const removeRecommend = target.closest("[data-remove-recommend-index]");
-      if (removeRecommend) {
-        removeWorkflowRecommendation(Number(removeRecommend.getAttribute("data-remove-recommend-index")));
         return;
       }
 
@@ -1950,7 +2163,7 @@
         top: Math.max(40, pointerTop - dragState.offsetY),
       };
       dragState.moved = true;
-      renderWorkflowScene();
+      scheduleWorkflowSceneRender();
     });
 
     document.addEventListener("mouseup", function () {

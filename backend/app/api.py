@@ -727,6 +727,7 @@ def build_api_router(
             created = await workflow_orchestrator.retry_workflow_run_from_step(
                 workflow_run_id,
                 request.step_index,
+                request.follow_up_note,
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
