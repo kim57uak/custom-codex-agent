@@ -197,12 +197,16 @@
     inspectorSkillName: document.getElementById("inspector-skill-name"),
     inspectorSkillPath: document.getElementById("inspector-skill-path"),
     inspectorSkillContent: document.getElementById("inspector-skill-content"),
+    inspectorSkillSaveBtn: document.getElementById("inspector-skill-save-btn"),
     inspectorAgentTomlPath: document.getElementById("inspector-agent-toml-path"),
     inspectorAgentTomlContent: document.getElementById("inspector-agent-toml-content"),
+    inspectorAgentConfigSaveBtn: document.getElementById("inspector-agent-config-save-btn"),
     inspectorScriptsList: document.getElementById("inspector-scripts-list"),
     inspectorScriptContent: document.getElementById("inspector-script-content"),
+    inspectorScriptSaveBtn: document.getElementById("inspector-script-save-btn"),
     inspectorReferencesList: document.getElementById("inspector-references-list"),
     inspectorReferenceContent: document.getElementById("inspector-reference-content"),
+    inspectorReferenceSaveBtn: document.getElementById("inspector-reference-save-btn"),
     drawer: document.getElementById("context-drawer"),
     drawerKicker: document.getElementById("drawer-kicker"),
     drawerTitle: document.getElementById("drawer-title"),
@@ -1370,6 +1374,75 @@
     return data;
   }
 
+  function getInspectorConfigFile(data) {
+    if (!data) return null;
+    return data.agent_toml || data.agent_json || null;
+  }
+
+  function setEditorValue(editor, value) {
+    if (!editor) return;
+    const nextValue = value || "";
+    if (editor.value !== nextValue) {
+      editor.value = nextValue;
+    }
+  }
+
+  function setSaveButtonState(button, enabled) {
+    if (!button) return;
+    button.disabled = !enabled;
+  }
+
+  function replaceInspectorFileInCache(agentName, file) {
+    const data = state.inspectorCache.get(agentName);
+    if (!data || !file || !file.path) return;
+    const replaceInList = function (files) {
+      const index = (files || []).findIndex(function (item) { return item.path === file.path; });
+      if (index >= 0) {
+        files[index] = file;
+        return true;
+      }
+      return false;
+    };
+    if (data.skill_markdown && data.skill_markdown.path === file.path) {
+      data.skill_markdown = file;
+    } else if (data.agent_toml && data.agent_toml.path === file.path) {
+      data.agent_toml = file;
+    } else if (data.agent_json && data.agent_json.path === file.path) {
+      data.agent_json = file;
+    } else if (!replaceInList(data.scripts)) {
+      replaceInList(data.references);
+    }
+  }
+
+  function updateInspectorCachedContent(path, content) {
+    const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;
+    if (!data || !path) return;
+    const update = function (file) {
+      if (file && file.path === path) {
+        file.content = content;
+        return true;
+      }
+      return false;
+    };
+    if (update(data.skill_markdown) || update(data.agent_toml) || update(data.agent_json)) return;
+    (data.scripts || []).some(update) || (data.references || []).some(update);
+  }
+
+  async function saveInspectorFile(file, editor, label) {
+    if (!state.selectedInspectorAgentName || !file || !file.path || !editor) {
+      showToast("저장할 파일을 선택하세요.", "error");
+      return;
+    }
+    const content = editor.value || "";
+    const result = await postJsonWithAuth(`/api/agents/${encodeURIComponent(state.selectedInspectorAgentName)}/inspector/files`, {
+      path: file.path,
+      content,
+    });
+    replaceInspectorFileInCache(state.selectedInspectorAgentName, result.file);
+    renderInspector();
+    showToast(`${label} 저장 완료`, "success");
+  }
+
   function renderInspector() {
     if (!el.inspectorAgentList) return;
     el.inspectorAgentList.innerHTML = (state.executableAgents || [])
@@ -1392,13 +1465,17 @@
       if (el.inspectorAgentRole) el.inspectorAgentRole.textContent = "-";
       if (el.inspectorSkillName) el.inspectorSkillName.textContent = "-";
       if (el.inspectorSkillPath) el.inspectorSkillPath.textContent = "";
-      if (el.inspectorSkillContent) el.inspectorSkillContent.textContent = "";
+      setEditorValue(el.inspectorSkillContent, "");
+      setSaveButtonState(el.inspectorSkillSaveBtn, false);
       if (el.inspectorAgentTomlPath) el.inspectorAgentTomlPath.textContent = "";
-      if (el.inspectorAgentTomlContent) el.inspectorAgentTomlContent.textContent = "";
+      setEditorValue(el.inspectorAgentTomlContent, "");
+      setSaveButtonState(el.inspectorAgentConfigSaveBtn, false);
       if (el.inspectorScriptsList) el.inspectorScriptsList.innerHTML = "";
-      if (el.inspectorScriptContent) el.inspectorScriptContent.textContent = "";
+      setEditorValue(el.inspectorScriptContent, "");
+      setSaveButtonState(el.inspectorScriptSaveBtn, false);
       if (el.inspectorReferencesList) el.inspectorReferencesList.innerHTML = "";
-      if (el.inspectorReferenceContent) el.inspectorReferenceContent.textContent = "";
+      setEditorValue(el.inspectorReferenceContent, "");
+      setSaveButtonState(el.inspectorReferenceSaveBtn, false);
       return;
     }
 
@@ -1407,9 +1484,12 @@
     if (el.inspectorAgentRole) el.inspectorAgentRole.textContent = `${data.department_label_ko || "-"} / ${data.role_label_ko || "-"}`;
     if (el.inspectorSkillName) el.inspectorSkillName.textContent = data.skill_name || "-";
     if (el.inspectorSkillPath) el.inspectorSkillPath.textContent = data.skill_markdown && data.skill_markdown.path ? data.skill_markdown.path : "";
-    if (el.inspectorSkillContent) el.inspectorSkillContent.textContent = data.skill_markdown && data.skill_markdown.content ? data.skill_markdown.content : "SKILL.md 없음";
-    if (el.inspectorAgentTomlPath) el.inspectorAgentTomlPath.textContent = data.agent_toml && data.agent_toml.path ? data.agent_toml.path : (data.agent_json && data.agent_json.path ? data.agent_json.path : "");
-    if (el.inspectorAgentTomlContent) el.inspectorAgentTomlContent.textContent = (data.agent_toml && data.agent_toml.content) || (data.agent_json && data.agent_json.content) || "agent.toml / config.json 없음";
+    setEditorValue(el.inspectorSkillContent, data.skill_markdown && data.skill_markdown.content ? data.skill_markdown.content : "");
+    setSaveButtonState(el.inspectorSkillSaveBtn, Boolean(data.skill_markdown && data.skill_markdown.path));
+    const configFile = getInspectorConfigFile(data);
+    if (el.inspectorAgentTomlPath) el.inspectorAgentTomlPath.textContent = configFile && configFile.path ? configFile.path : "";
+    setEditorValue(el.inspectorAgentTomlContent, configFile && configFile.content ? configFile.content : "");
+    setSaveButtonState(el.inspectorAgentConfigSaveBtn, Boolean(configFile && configFile.path));
 
     const scripts = data.scripts || [];
     if ((!state.selectedInspectorScriptPath || !scripts.some(function (file) { return file.path === state.selectedInspectorScriptPath; })) && scripts[0]) {
@@ -1417,13 +1497,13 @@
     }
     if (el.inspectorScriptsList) {
       el.inspectorScriptsList.innerHTML = scripts.map(function (file) {
-        return `<button class="file-chip" type="button" data-inspector-script="${escapeHtml(file.path)}">${escapeHtml(file.name)}</button>`;
+        const active = file.path === state.selectedInspectorScriptPath ? "active" : "";
+        return `<button class="file-chip ${active}" type="button" data-inspector-script="${escapeHtml(file.path)}">${escapeHtml(file.name)}</button>`;
       }).join("");
     }
     const activeScript = scripts.find(function (file) { return file.path === state.selectedInspectorScriptPath; });
-    if (el.inspectorScriptContent) {
-      el.inspectorScriptContent.textContent = activeScript ? activeScript.content : "";
-    }
+    setEditorValue(el.inspectorScriptContent, activeScript ? activeScript.content : "");
+    setSaveButtonState(el.inspectorScriptSaveBtn, Boolean(activeScript && activeScript.path));
 
     const references = data.references || [];
     if ((!state.selectedInspectorReferencePath || !references.some(function (file) { return file.path === state.selectedInspectorReferencePath; })) && references[0]) {
@@ -1431,13 +1511,13 @@
     }
     if (el.inspectorReferencesList) {
       el.inspectorReferencesList.innerHTML = references.map(function (file) {
-        return `<button class="file-chip" type="button" data-inspector-reference="${escapeHtml(file.path)}">${escapeHtml(file.name)}</button>`;
+        const active = file.path === state.selectedInspectorReferencePath ? "active" : "";
+        return `<button class="file-chip ${active}" type="button" data-inspector-reference="${escapeHtml(file.path)}">${escapeHtml(file.name)}</button>`;
       }).join("");
     }
     const activeReference = references.find(function (file) { return file.path === state.selectedInspectorReferencePath; });
-    if (el.inspectorReferenceContent) {
-      el.inspectorReferenceContent.textContent = activeReference ? activeReference.content : "";
-    }
+    setEditorValue(el.inspectorReferenceContent, activeReference ? activeReference.content : "");
+    setSaveButtonState(el.inspectorReferenceSaveBtn, Boolean(activeReference && activeReference.path));
   }
 
   function renderWorkspacePicker() {
@@ -1925,6 +2005,32 @@
     if (el.refreshBtn) el.refreshBtn.addEventListener("click", function () { postAction("/api/activity/refresh").catch(handleError); });
     if (el.backupBtn) el.backupBtn.addEventListener("click", function () { postAction("/api/backups/skills-agents").then(function () { showToast("백업 완료", "success"); }).catch(handleError); });
     if (el.restoreBtn) el.restoreBtn.addEventListener("click", function () { postAction("/api/backups/skills-agents/restore").then(function () { showToast("리스토어 완료", "success"); }).catch(handleError); });
+    if (el.inspectorSkillSaveBtn) {
+      el.inspectorSkillSaveBtn.addEventListener("click", function () {
+        const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;
+        saveInspectorFile(data ? data.skill_markdown : null, el.inspectorSkillContent, "SKILL.md").catch(handleError);
+      });
+    }
+    if (el.inspectorAgentConfigSaveBtn) {
+      el.inspectorAgentConfigSaveBtn.addEventListener("click", function () {
+        const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;
+        saveInspectorFile(getInspectorConfigFile(data), el.inspectorAgentTomlContent, "에이전트 설정").catch(handleError);
+      });
+    }
+    if (el.inspectorScriptSaveBtn) {
+      el.inspectorScriptSaveBtn.addEventListener("click", function () {
+        const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;
+        const file = data ? (data.scripts || []).find(function (item) { return item.path === state.selectedInspectorScriptPath; }) : null;
+        saveInspectorFile(file, el.inspectorScriptContent, "스크립트").catch(handleError);
+      });
+    }
+    if (el.inspectorReferenceSaveBtn) {
+      el.inspectorReferenceSaveBtn.addEventListener("click", function () {
+        const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;
+        const file = data ? (data.references || []).find(function (item) { return item.path === state.selectedInspectorReferencePath; }) : null;
+        saveInspectorFile(file, el.inspectorReferenceContent, "레퍼런스").catch(handleError);
+      });
+    }
 
     if (el.runAgentSelect) el.runAgentSelect.addEventListener("change", function () { state.selectedAgentName = el.runAgentSelect.value || ""; });
     if (el.runWorkspaceInput) el.runWorkspaceInput.addEventListener("change", function () {
@@ -2181,6 +2287,24 @@
     document.addEventListener("input", function (event) {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (target === el.inspectorSkillContent && target instanceof HTMLTextAreaElement) {
+        const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;
+        updateInspectorCachedContent(data && data.skill_markdown ? data.skill_markdown.path : "", target.value || "");
+        return;
+      }
+      if (target === el.inspectorAgentTomlContent && target instanceof HTMLTextAreaElement) {
+        const file = getInspectorConfigFile(state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null);
+        updateInspectorCachedContent(file ? file.path : "", target.value || "");
+        return;
+      }
+      if (target === el.inspectorScriptContent && target instanceof HTMLTextAreaElement) {
+        updateInspectorCachedContent(state.selectedInspectorScriptPath, target.value || "");
+        return;
+      }
+      if (target === el.inspectorReferenceContent && target instanceof HTMLTextAreaElement) {
+        updateInspectorCachedContent(state.selectedInspectorReferencePath, target.value || "");
+        return;
+      }
       const promptEditor = target.closest("[data-workflow-step-prompt]");
       if (!promptEditor || !(promptEditor instanceof HTMLTextAreaElement)) return;
       const index = Number(promptEditor.getAttribute("data-workflow-step-prompt"));

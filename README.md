@@ -277,6 +277,7 @@ short_description = "Spring Boot 보안 검토"
 
 - `POST /api/scan`
 - `POST /api/activity/refresh`
+- `POST /api/agents/{agent_name}/inspector/files`
 - `POST /api/backups/skills-agents`
 - `POST /api/backups/skills-agents/restore`
 - `POST /api/runs`

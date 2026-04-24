@@ -215,6 +215,16 @@ class AgentInspectorResponse(BaseModel):
     scripts: list[AgentInspectorFileModel]
 
 
+class AgentInspectorFileSaveRequest(BaseModel):
+    path: str
+    content: str
+
+
+class AgentInspectorFileSaveResponse(BaseModel):
+    status: str
+    file: AgentInspectorFileModel
+
+
 class SkillAgentBackupResponse(BaseModel):
     backup_path: str
     backup_file_name: str

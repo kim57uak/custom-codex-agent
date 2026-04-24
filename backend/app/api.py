@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import tarfile
 from datetime import datetime, timezone
@@ -11,6 +12,8 @@ from fastapi.responses import StreamingResponse
 
 from app.models import (
     AgentInspectorFileModel,
+    AgentInspectorFileSaveRequest,
+    AgentInspectorFileSaveResponse,
     AgentInspectorResponse,
     DirectoryBrowseResponse,
     DirectoryItemModel,
@@ -153,6 +156,42 @@ def build_api_router(
             truncated=truncated,
         )
 
+    def _find_agent_or_404(agent_name: str):
+        inventory = service.build_inventory()
+        target = next((agent for agent in inventory.agents if agent.name == agent_name), None)
+        if target is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent not found")
+        return target
+
+    def _inspector_paths_for_agent(agent_name: str, skill_path_value: str | None) -> dict[Path, str]:
+        editable_paths: dict[Path, str] = {}
+        agent_dir = settings.agents_root / agent_name
+        agent_toml_path = agent_dir / "agent.toml"
+        agent_json_path = agent_dir / "config.json"
+        skill_path = Path(skill_path_value).expanduser() if skill_path_value else None
+        skill_dir = skill_path.parent if skill_path else None
+
+        def add_file(path: Path, kind: str) -> None:
+            if path.exists() and path.is_file() and _is_within_codex_home(path):
+                editable_paths[path.resolve()] = kind
+
+        if skill_path:
+            add_file(skill_path, "skill-md")
+        add_file(agent_toml_path, "agent-toml")
+        add_file(agent_json_path, "agent-json")
+
+        if skill_dir and skill_dir.exists() and _is_within_codex_home(skill_dir):
+            refs_dir = skill_dir / "references"
+            if refs_dir.exists() and refs_dir.is_dir():
+                for file_path in sorted(refs_dir.rglob("*")):
+                    add_file(file_path, "reference")
+            scripts_dir = skill_dir / "scripts"
+            if scripts_dir.exists() and scripts_dir.is_dir():
+                for file_path in sorted(scripts_dir.rglob("*")):
+                    add_file(file_path, "script")
+
+        return editable_paths
+
     def _create_skill_agent_backup_archive() -> tuple[Path, list[str]]:
         skills_root = settings.skills_root
         agents_root = settings.agents_root
@@ -259,10 +298,7 @@ def build_api_router(
 
     @router.get("/agents/{agent_name}/inspector", response_model=AgentInspectorResponse)
     def get_agent_inspector(agent_name: str) -> AgentInspectorResponse:
-        inventory = service.build_inventory()
-        target = next((agent for agent in inventory.agents if agent.name == agent_name), None)
-        if target is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent not found")
+        target = _find_agent_or_404(agent_name)
 
         agent_dir = settings.agents_root / agent_name
         agent_toml_path = agent_dir / "agent.toml"
@@ -313,6 +349,42 @@ def build_api_router(
             references=references,
             scripts=scripts,
         )
+
+    @router.post("/agents/{agent_name}/inspector/files", response_model=AgentInspectorFileSaveResponse)
+    def save_agent_inspector_file(
+        agent_name: str,
+        payload: AgentInspectorFileSaveRequest,
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> AgentInspectorFileSaveResponse:
+        verify_write_token(x_api_token)
+        target = _find_agent_or_404(agent_name)
+        try:
+            requested_path = Path(payload.path).expanduser().resolve()
+        except OSError as err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"invalid path: {err}") from err
+
+        editable_paths = _inspector_paths_for_agent(agent_name, target.skill_path)
+        file_kind = editable_paths.get(requested_path)
+        if file_kind is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="file is not editable from this inspector")
+
+        if len(payload.content) > 1000000:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file content is too large")
+
+        if file_kind == "agent-json" or requested_path.suffix.lower() == ".json":
+            try:
+                json.loads(payload.content)
+            except json.JSONDecodeError as err:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"invalid json: {err.msg}") from err
+
+        try:
+            tmp_path = requested_path.with_name(f".{requested_path.name}.tmp")
+            tmp_path.write_text(payload.content, encoding="utf-8")
+            tmp_path.replace(requested_path)
+        except OSError as err:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"save failed: {err}") from err
+
+        return AgentInspectorFileSaveResponse(status="ok", file=_to_file_model(requested_path, file_kind))
 
     @router.get("/run-config", response_model=RunConfigResponse)
     def get_run_config() -> RunConfigResponse:
