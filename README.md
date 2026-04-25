@@ -148,7 +148,7 @@ cp .env.example .env
 | 변수 | 기본값 | 설명 |
 | --- | --- | --- |
 | `CUSTOM_CODEX_AGENT_ALLOWED_ORIGINS` | `http://127.0.0.1:8000,http://localhost:8000` | CORS 허용 Origin 목록 |
-| `CUSTOM_CODEX_AGENT_WRITE_API_TOKEN` | `custom-codex-agent-local-token` | 쓰기 API용 `X-API-Token` |
+| `CUSTOM_CODEX_AGENT_WRITE_API_TOKEN` | 비어 있음(기본 비활성) | 쓰기 API용 `X-API-Token` |
 | `CUSTOM_CODEX_AGENT_FOUNDER_NAME` | `대표이사` | 조직도 대표 이름 |
 | `CUSTOM_CODEX_AGENT_CODEX_HOME` | `~/.codex` | Codex 설정 루트 |
 | `CUSTOM_CODEX_AGENT_RUN_DB_NAME` | `custom_codex_agent_runs.sqlite` | 실행 이력 DB 파일명 |
@@ -160,7 +160,7 @@ cp .env.example .env
 | `CUSTOM_CODEX_AGENT_WORKSPACE_ROOT` | 프로젝트 루트 추론값 | 실행 콘솔 기본 작업 폴더 |
 | `CUSTOM_CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS` | `6` | 추천 워크플로 최대 에이전트 수 |
 
-`.env.example`에는 운영에 필요한 기본 예시 값이 들어 있습니다. 실제 실행 스크립트에서는 `CUSTOM_CODEX_AGENT_CODEX_CLI_SUBCOMMAND=exec,--sandbox,danger-full-access`를 기본 주입합니다.
+`.env.example`에는 운영에 필요한 기본 예시 값이 들어 있습니다. `CUSTOM_CODEX_AGENT_WRITE_API_TOKEN`을 설정하지 않으면 쓰기 API는 비활성화되고 UI는 읽기 전용으로 동작합니다. 실제 실행 스크립트에서는 `CUSTOM_CODEX_AGENT_CODEX_CLI_SUBCOMMAND=exec,--sandbox,danger-full-access`를 기본 주입합니다.
 
 ## UI 사용법
 

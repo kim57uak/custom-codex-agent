@@ -1,5 +1,4 @@
 (function () {
-  const DEFAULT_WRITE_API_TOKEN = "custom-codex-agent-local-token";
   const WRITE_API_TOKEN_KEY = "custom-codex-agent-write-token";
   const WORKSPACE_ROOT_KEY = "custom-codex-agent-workspace-root";
   const SANDBOX_MODE_KEY = "custom-codex-agent-sandbox-mode";
@@ -54,11 +53,14 @@
   let lastWorkflowDragEndedAt = 0;
   let workflowSceneRenderQueued = false;
   let deferredInteractiveRender = false;
+  let writeTokenPromptResolver = null;
 
   const state = {
     tab: "org",
     theme: "cyber_fusion",
     defaultWorkspaceRoot: "",
+    defaultWriteApiToken: "",
+    writeApiEnabled: true,
     overview: null,
     org: null,
     dashboard: null,
@@ -93,13 +95,13 @@
     orgHudExpanded: false,
     workflowConversationStepIndex: 0,
     workflowConversationText: "",
-    workflowLogView: "timeline",
+    workflowLogView: "codex",
     drawer: {
       open: false,
       kicker: "UNIT_PROFILE",
       title: "Target",
       subtitle: "",
-      body: "",
+      bodyHtml: "",
     },
     workspacePicker: {
       open: false,
@@ -108,8 +110,14 @@
       parentPath: null,
       directories: [],
     },
+    writeTokenModal: {
+      open: false,
+      description: "쓰기 작업을 진행하려면 토큰이 필요합니다.",
+      draft: "",
+    },
     liveText: "초기화 중...",
     hasError: false,
+    errorMessage: "",
     workflowProgressVisible: false,
     workflowProgressText: "Analyzing Strategic Objectives...",
     workflowNodePositions: {},
@@ -178,9 +186,9 @@
     workflowRecommendationMeta: document.getElementById("workflow-recommendation-meta"),
     workflowRunList: document.getElementById("workflow-run-list"),
     workflowMeta: document.getElementById("workflow-meta"),
-    workflowLogViewTimelineBtn: document.getElementById("workflow-log-view-timeline"),
+    workflowLogViewCodexBtn: document.getElementById("workflow-log-view-codex"),
     workflowLogViewRawBtn: document.getElementById("workflow-log-view-raw"),
-    workflowLogFeed: document.getElementById("workflow-log-feed"),
+    workflowCodexLogFeed: document.getElementById("workflow-codex-log-feed"),
     workflowLog: document.getElementById("workflow-log"),
     workflowConversationStatus: document.getElementById("workflow-conversation-status"),
     workflowConversationHint: document.getElementById("workflow-conversation-hint"),
@@ -220,6 +228,12 @@
     workspacePickerUp: document.getElementById("workspace-picker-up"),
     workspacePickerChoose: document.getElementById("workspace-picker-choose"),
     workspacePickerList: document.getElementById("workspace-picker-list"),
+    writeTokenModal: document.getElementById("write-token-modal"),
+    writeTokenClose: document.getElementById("write-token-close"),
+    writeTokenDescription: document.getElementById("write-token-description"),
+    writeTokenInput: document.getElementById("write-token-input"),
+    writeTokenDefault: document.getElementById("write-token-default"),
+    writeTokenSave: document.getElementById("write-token-save"),
     toastContainer: document.getElementById("toast-container"),
   };
 
@@ -276,6 +290,15 @@
     return `--org-accent-color:${solid};--org-accent-soft:${soft};--org-accent-glow:${glow};`;
   }
 
+  function getDepartmentAccentStyle(departmentLabel) {
+    const label = String(departmentLabel || "").trim() || "관리지원";
+    const departmentNode = ((state.org && state.org.nodes) || []).find(function (node) {
+      return node && node.type === "department" && String(node.label || "").trim() === label;
+    });
+    const departmentKey = departmentNode ? departmentNode.id : `dept:${label}`;
+    return getOrgAccentStyle(getDepartmentAccent(departmentKey), false);
+  }
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -316,45 +339,133 @@
   }
 
   function getWriteToken() {
-    return window.localStorage.getItem(WRITE_API_TOKEN_KEY) || DEFAULT_WRITE_API_TOKEN;
+    return normalizeWriteToken(window.localStorage.getItem(WRITE_API_TOKEN_KEY) || state.defaultWriteApiToken || "");
+  }
+
+  function normalizeWriteToken(token) {
+    return String(token || "")
+      .replace(/[\u0000-\u001f\u007f]/g, "")
+      .trim();
+  }
+
+  function isSafeHeaderToken(token) {
+    return /^[\x21-\x7e]+$/.test(token);
   }
 
   function setWriteToken(token) {
-    window.localStorage.setItem(WRITE_API_TOKEN_KEY, token);
+    const normalized = normalizeWriteToken(token);
+    if (!normalized) {
+      window.localStorage.removeItem(WRITE_API_TOKEN_KEY);
+      return;
+    }
+    window.localStorage.setItem(WRITE_API_TOKEN_KEY, normalized);
   }
 
-  async function fetchJson(url) {
-    const response = await fetch(url);
+  function renderWriteTokenModal() {
+    if (!el.writeTokenModal || !el.writeTokenDescription || !el.writeTokenInput || !el.writeTokenDefault) return;
+    el.writeTokenModal.classList.toggle("hidden", !state.writeTokenModal.open);
+    el.writeTokenDescription.textContent = state.writeTokenModal.description || "쓰기 작업을 진행하려면 토큰이 필요합니다.";
+    if (el.writeTokenInput.value !== state.writeTokenModal.draft) {
+      el.writeTokenInput.value = state.writeTokenModal.draft || "";
+    }
+    el.writeTokenDefault.disabled = !state.defaultWriteApiToken;
+    if (state.writeTokenModal.open) {
+      window.setTimeout(function () {
+        if (!el.writeTokenInput) return;
+        el.writeTokenInput.focus();
+        el.writeTokenInput.select();
+      }, 0);
+    }
+  }
+
+  function closeWriteTokenModal(result, cancelled) {
+    state.writeTokenModal.open = false;
+    renderWriteTokenModal();
+    const resolver = writeTokenPromptResolver;
+    writeTokenPromptResolver = null;
+    if (!resolver) return;
+    resolver({ token: result, cancelled: Boolean(cancelled) });
+  }
+
+  async function requestWriteToken(description, initialToken) {
+    if (!el.writeTokenModal || !el.writeTokenInput) {
+      return { token: normalizeWriteToken(initialToken || state.defaultWriteApiToken), cancelled: false };
+    }
+    state.writeTokenModal.open = true;
+    state.writeTokenModal.description = description || "쓰기 작업을 진행하려면 토큰이 필요합니다.";
+    state.writeTokenModal.draft = normalizeWriteToken(initialToken || state.defaultWriteApiToken);
+    renderWriteTokenModal();
+    return new Promise(function (resolve) {
+      writeTokenPromptResolver = resolve;
+    });
+  }
+
+  async function fetchJson(url, label) {
+    const target = label || url;
+    let response;
+    try {
+      response = await fetch(url);
+    } catch (err) {
+      const detail = err && err.message ? String(err.message) : "네트워크 연결 실패";
+      throw new Error(`${target} 요청 중 네트워크 오류: ${detail}`);
+    }
     if (!response.ok) {
-      throw new Error(`request failed: ${response.status}`);
+      throw new Error(`${target} 요청 실패 (${response.status})`);
     }
     return response.json();
   }
 
   async function postJsonWithAuth(url, body) {
-    let token = getWriteToken();
-    const request = async (targetToken) =>
-      fetch(url, {
-        method: "POST",
-        headers: {
+    let token = normalizeWriteToken(getWriteToken());
+    if (token && !isSafeHeaderToken(token)) {
+      setWriteToken("");
+      throw new Error("저장된 쓰기 API 토큰 형식이 잘못되었습니다. 토큰을 다시 입력하세요.");
+    }
+    const request = async (targetToken) => {
+      try {
+        const headers = {
           "Content-Type": "application/json",
-          "X-API-Token": targetToken,
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      });
+        };
+        if (targetToken) {
+          headers["X-API-Token"] = targetToken;
+        }
+        return await fetch(url, {
+          method: "POST",
+          headers: headers,
+          body: body ? JSON.stringify(body) : undefined,
+        });
+      } catch (err) {
+        const detail = err && err.message ? String(err.message) : "네트워크 연결 실패";
+        throw new Error(`${url} POST 중 네트워크 오류: ${detail}`);
+      }
+    };
 
     let response = await request(token);
+    if (response.status === 503) {
+      throw new Error("write api disabled");
+    }
     if (response.status === 401) {
-      const nextToken = window.prompt("쓰기 API 토큰을 입력하세요", token || "");
-      if (!nextToken || !nextToken.trim()) {
+      const promptResult = await requestWriteToken("쓰기 API 토큰이 필요합니다. 비워두면 서버 기본값을 사용합니다.", token);
+      const normalized = normalizeWriteToken(promptResult && promptResult.token);
+      if (promptResult && promptResult.cancelled) {
         throw new Error("write token required");
       }
-      token = nextToken.trim();
+      if (!normalized) {
+        if (!state.defaultWriteApiToken) {
+          throw new Error("write token required");
+        }
+        token = state.defaultWriteApiToken;
+      } else {
+        if (!isSafeHeaderToken(normalized)) {
+          throw new Error("쓰기 API 토큰에는 줄바꿈이나 특수 제어문자를 사용할 수 없습니다.");
+        }
+        token = normalized;
+      }
       setWriteToken(token);
       response = await request(token);
     }
     if (!response.ok) {
-      throw new Error(`request failed: ${response.status}`);
+      throw new Error(`${url} 요청 실패 (${response.status})`);
     }
     return response.json();
   }
@@ -442,17 +553,17 @@
     }
     if (el.errorBanner) {
       el.errorBanner.classList.toggle("hidden", !state.hasError);
-      el.errorBanner.textContent = state.hasError ? "API 연결에 실패했습니다. 서버 상태를 확인하세요." : "";
+      el.errorBanner.textContent = state.hasError ? (state.errorMessage || "API 연결에 실패했습니다. 서버 상태를 확인하세요.") : "";
     }
   }
 
-  function openDrawer(config) {
+  function openDrawerHtml(config) {
     state.drawer = {
       open: true,
       kicker: config.kicker || "UNIT_PROFILE",
       title: config.title || "Target",
       subtitle: config.subtitle || "",
-      body: config.body || "",
+      bodyHtml: config.bodyHtml || "",
     };
     renderDrawer();
   }
@@ -472,7 +583,7 @@
     if (el.drawerKicker) el.drawerKicker.textContent = state.drawer.kicker || "UNIT_PROFILE";
     if (el.drawerTitle) el.drawerTitle.textContent = state.drawer.title || "Target";
     if (el.drawerSubtitle) el.drawerSubtitle.textContent = state.drawer.subtitle || "";
-    el.drawerBody.innerHTML = state.drawer.body || "";
+    el.drawerBody.innerHTML = state.drawer.bodyHtml || "";
   }
 
   function renderOverviewHud() {
@@ -603,11 +714,11 @@
           : ""
       }
     `;
-    openDrawer({
+    openDrawerHtml({
       kicker: (node.type || "NODE").toUpperCase(),
       title: node.label || node.id,
       subtitle: node.sublabel || "",
-      body: body,
+      bodyHtml: body,
     });
   }
 
@@ -731,11 +842,11 @@
   }
 
   function openDrawerForHud(title, value) {
-    openDrawer({
+    openDrawerHtml({
       kicker: "LIVE_METRIC",
       title: title,
       subtitle: `Current value: ${value}`,
-      body: `<section class="drawer-section"><div class="section-kicker">METRIC_VALUE</div><div class="dashboard-value">${escapeHtml(value)}</div></section>`,
+      bodyHtml: `<section class="drawer-section"><div class="section-kicker">METRIC_VALUE</div><div class="dashboard-value">${escapeHtml(value)}</div></section>`,
     });
   }
 
@@ -1174,6 +1285,103 @@
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  function parseJsonLine(text) {
+    try {
+      return JSON.parse(text);
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  function isCodexNoiseLine(text) {
+    const trimmed = String(text || "").trim();
+    if (!trimmed) return true;
+    if (/^\d[\d,]*$/.test(trimmed)) return true;
+    if (/^tokens used$/i.test(trimmed)) return true;
+    if (/^\d{4}-\d{2}-\d{2}T.*\b(WARN|INFO|ERROR|DEBUG)\b/.test(trimmed)) return true;
+    const parsed = parseJsonLine(trimmed);
+    return Boolean(parsed && (parsed.kind === "shape" || parsed.kind === "textbox"));
+  }
+
+  function toCodexSignal(event) {
+    if (!event || event.source !== "run") return null;
+    const eventType = String(event.event_type || "");
+    const message = String(event.message || "").trim();
+    if (!message || isCodexNoiseLine(message)) return null;
+    if (eventType === "run:stdout") {
+      return { kind: "answer", label: "Answer", event: event, message: message };
+    }
+    if (eventType === "run:stderr") {
+      return { kind: "reasoning", label: "Reasoning", event: event, message: message };
+    }
+    return null;
+  }
+
+  function buildCodexTranscript(signals) {
+    const groups = [];
+    let current = null;
+    signals.forEach(function (signal) {
+      const event = signal.event;
+      const stepIndex = Number.isInteger(event.step_index) ? event.step_index : -1;
+      const agentName = event.agent_name || "Codex";
+      const key = `${stepIndex}:${agentName}`;
+      if (!current || current.key !== key) {
+        current = {
+          key: key,
+          step_index: event.step_index,
+          agent_name: agentName,
+          created_at: event.created_at,
+          reasoning: [],
+          answers: [],
+        };
+        groups.push(current);
+      }
+      current.created_at = event.created_at || current.created_at;
+      if (signal.kind === "answer") {
+        current.answers.push(signal);
+      } else {
+        current.reasoning.push(signal);
+      }
+    });
+    return groups;
+  }
+
+  function renderCodexTranscript(signals) {
+    const groups = buildCodexTranscript(signals);
+    if (groups.length === 0) {
+      return `<div class="workflow-log-empty">Codex answer 로그가 아직 없습니다. reasoning은 답변이 생기면 접힌 형태로 함께 표시됩니다.</div>`;
+    }
+    return groups.slice().reverse().map(function (group) {
+      const stepLabel = Number.isInteger(group.step_index) ? `STEP ${String(group.step_index + 1).padStart(2, "0")}` : "GLOBAL";
+      const reasoningText = group.reasoning.map(function (signal) { return signal.message; }).join("\n\n");
+      const answerText = group.answers.map(function (signal) { return signal.message; }).join("\n\n");
+      const reasoningBlock = reasoningText
+        ? `
+          <details class="workflow-codex-reasoning">
+            <summary>Reasoning · ${escapeHtml(String(group.reasoning.length))} log${group.reasoning.length === 1 ? "" : "s"}</summary>
+            <div class="workflow-codex-reasoning-body">${escapeHtml(reasoningText)}</div>
+          </details>
+        `
+        : "";
+      const answerBlock = answerText
+        ? `<div class="workflow-codex-answer">${escapeHtml(answerText)}</div>`
+        : `<div class="workflow-codex-answer workflow-codex-answer-empty">아직 answer 출력이 없습니다.</div>`;
+      return `
+        <article class="workflow-log-entry workflow-codex-entry">
+          <div class="workflow-log-entry-head">
+            <div>
+              <div class="workflow-log-entry-type">Answer</div>
+              <div class="workflow-log-entry-meta">${escapeHtml(stepLabel)} · ${escapeHtml(group.agent_name)}</div>
+            </div>
+            <div class="workflow-log-entry-time">${escapeHtml(fmtDate(group.created_at))}</div>
+          </div>
+          ${reasoningBlock}
+          ${answerBlock}
+        </article>
+      `;
+    }).join("");
+  }
+
   function renderWorkflowRunList() {
     if (!el.workflowRunList) return;
     const runs = state.workflowRuns || [];
@@ -1194,11 +1402,11 @@
   }
 
   function renderWorkflowLog() {
-    if (!el.workflowMeta || !el.workflowLog || !el.workflowLogFeed) return;
+    if (!el.workflowMeta || !el.workflowLog || !el.workflowCodexLogFeed) return;
     if (!state.selectedWorkflowRunId) {
       el.workflowMeta.textContent = "선택된 워크플로 없음";
       el.workflowLog.textContent = "";
-      el.workflowLogFeed.innerHTML = `<div class="workflow-log-empty">실행 이력을 선택하면 읽기 쉬운 타임라인이 여기 표시됩니다.</div>`;
+      el.workflowCodexLogFeed.innerHTML = `<div class="workflow-log-empty">실행 이력을 선택하면 Codex reasoning과 answer만 여기 표시됩니다.</div>`;
       return;
     }
     const run = state.workflowRuns.find(function (item) { return item.workflow_run_id === state.selectedWorkflowRunId; });
@@ -1240,39 +1448,25 @@
       const sourceLabel = event.source === "run" ? " run" : "";
       return `[${fmtDate(event.created_at)}] ${event.event_type}${sourceLabel}${stepLabel}${agentLabel} ${event.message}`;
     }).join("\n") : "> Workflow telemetry idle...";
-    el.workflowLogFeed.innerHTML = mergedEvents.length > 0
-      ? mergedEvents.slice().reverse().map(function (event) {
-          const stepLabel = Number.isInteger(event.step_index) ? `STEP ${String(event.step_index + 1).padStart(2, "0")}` : "GLOBAL";
-          const agentLabel = event.agent_name || (event.source === "run" ? "Run Stream" : "Workflow");
-          return `
-            <article class="workflow-log-entry" data-workflow-log-source="${escapeHtml(event.source)}">
-              <div class="workflow-log-entry-head">
-                <div>
-                  <div class="workflow-log-entry-type">${escapeHtml(event.event_type)}</div>
-                  <div class="workflow-log-entry-meta">${escapeHtml(stepLabel)} · ${escapeHtml(agentLabel)}</div>
-                </div>
-                <div class="workflow-log-entry-time">${escapeHtml(fmtDate(event.created_at))}</div>
-              </div>
-              <div class="workflow-log-entry-body">${escapeHtml(event.message)}</div>
-            </article>
-          `;
-        }).join("")
-      : `<div class="workflow-log-empty">아직 표시할 실행 로그가 없습니다.</div>`;
+    const codexSignals = mergedEvents
+      .map(toCodexSignal)
+      .filter(Boolean);
+    el.workflowCodexLogFeed.innerHTML = renderCodexTranscript(codexSignals);
     el.workflowLog.scrollTop = el.workflowLog.scrollHeight;
   }
 
   function renderWorkflowLogView() {
     const showRaw = state.workflowLogView === "raw";
-    if (el.workflowLogFeed) {
-      el.workflowLogFeed.classList.toggle("hidden", showRaw);
+    if (el.workflowCodexLogFeed) {
+      el.workflowCodexLogFeed.classList.toggle("hidden", showRaw);
     }
     if (el.workflowLog) {
       el.workflowLog.classList.toggle("hidden", !showRaw);
     }
-    if (el.workflowLogViewTimelineBtn) {
+    if (el.workflowLogViewCodexBtn) {
       const active = !showRaw;
-      el.workflowLogViewTimelineBtn.classList.toggle("active", active);
-      el.workflowLogViewTimelineBtn.setAttribute("aria-pressed", active ? "true" : "false");
+      el.workflowLogViewCodexBtn.classList.toggle("active", active);
+      el.workflowLogViewCodexBtn.setAttribute("aria-pressed", active ? "true" : "false");
     }
     if (el.workflowLogViewRawBtn) {
       const active = showRaw;
@@ -1344,7 +1538,7 @@
       el.workflowStageDock.classList.toggle("hidden", !hasWorkflowSteps);
     }
     if (el.workflowRecommendBtn) {
-      el.workflowRecommendBtn.disabled = state.workflowProgressVisible;
+      el.workflowRecommendBtn.disabled = state.workflowProgressVisible || !state.writeApiEnabled;
       el.workflowRecommendBtn.classList.toggle("is-busy", state.workflowProgressVisible);
       el.workflowRecommendBtn.textContent = state.workflowProgressVisible ? "ANALYZING..." : "RECOMMEND";
       el.workflowRecommendBtn.setAttribute("aria-busy", state.workflowProgressVisible ? "true" : "false");
@@ -1369,7 +1563,7 @@
     if (state.inspectorCache.has(agentName)) {
       return state.inspectorCache.get(agentName);
     }
-    const data = await fetchJson(`/api/agents/${encodeURIComponent(agentName)}/inspector`);
+    const data = await fetchJson(`/api/agents/${encodeURIComponent(agentName)}/inspector`, `인스펙터 ${agentName}`);
     state.inspectorCache.set(agentName, data);
     return data;
   }
@@ -1389,7 +1583,7 @@
 
   function setSaveButtonState(button, enabled) {
     if (!button) return;
-    button.disabled = !enabled;
+    button.disabled = !enabled || !state.writeApiEnabled;
   }
 
   function replaceInspectorFileInCache(agentName, file) {
@@ -1448,8 +1642,14 @@
     el.inspectorAgentList.innerHTML = (state.executableAgents || [])
       .map(function (agent) {
         const active = state.selectedInspectorAgentName === agent.name ? "active" : "";
+        const accentStyle = getDepartmentAccentStyle(agent.department_label_ko);
         return `
-          <button class="agent-directory-card ${active}" type="button" data-inspector-agent="${escapeHtml(agent.name)}">
+          <button
+            class="agent-directory-card ${active}"
+            type="button"
+            data-inspector-agent="${escapeHtml(agent.name)}"
+            style="${accentStyle}"
+          >
             <div class="feed-title">${escapeHtml(agent.name)}</div>
             <div class="run-chip-meta">${escapeHtml(agent.department_label_ko)} / ${escapeHtml(agent.role_label_ko)}</div>
             <div class="run-chip-meta">${escapeHtml(agent.short_description || "")}</div>
@@ -1538,6 +1738,7 @@
     renderWorkflow();
     renderInspector();
     renderWorkspacePicker();
+    renderWriteTokenModal();
   }
 
   async function loadWorkspaceDirectories(path) {
@@ -1605,14 +1806,14 @@
   async function refreshAll() {
     try {
       const [overview, org, dashboard, executableAgentsData, runsData, runConfig, workflowUiConfig, workflowRunsData] = await Promise.all([
-        fetchJson("/api/overview"),
-        fetchJson("/api/graph/org"),
-        fetchJson("/api/dashboard"),
-        fetchJson("/api/agents/executable"),
-        fetchJson("/api/runs?limit=40"),
-        fetchJson("/api/run-config"),
-        fetchJson("/api/workflows/ui-config"),
-        fetchJson("/api/workflow-runs?limit=40"),
+        fetchJson("/api/overview", "개요 데이터"),
+        fetchJson("/api/graph/org", "조직도 데이터"),
+        fetchJson("/api/dashboard", "대시보드 데이터"),
+        fetchJson("/api/agents/executable", "실행 가능 에이전트"),
+        fetchJson("/api/runs?limit=40", "실행 이력"),
+        fetchJson("/api/run-config", "실행 설정"),
+        fetchJson("/api/workflows/ui-config", "워크플로 UI 설정"),
+        fetchJson("/api/workflow-runs?limit=40", "워크플로 실행 이력"),
       ]);
       state.overview = overview;
       state.org = org;
@@ -1622,6 +1823,8 @@
       state.workflowUiConfig = workflowUiConfig;
       state.workflowRuns = workflowRunsData.runs || [];
       state.defaultWorkspaceRoot = runConfig.default_workspace_root || "";
+      state.defaultWriteApiToken = normalizeWriteToken(runConfig.default_write_api_token || "");
+      state.writeApiEnabled = runConfig.write_api_enabled !== false;
       const storedWorkspace = window.localStorage.getItem(WORKSPACE_ROOT_KEY) || "";
       const storedSandbox = window.localStorage.getItem(SANDBOX_MODE_KEY) || "";
       const storedApproval = window.localStorage.getItem(APPROVAL_POLICY_KEY) || "";
@@ -1650,11 +1853,18 @@
         state.selectedInspectorAgentName = state.executableAgents[0].name;
         await loadInspector(state.selectedInspectorAgentName);
       }
+      if (el.scanBtn) el.scanBtn.disabled = !state.writeApiEnabled;
+      if (el.refreshBtn) el.refreshBtn.disabled = !state.writeApiEnabled;
+      if (el.backupBtn) el.backupBtn.disabled = !state.writeApiEnabled;
+      if (el.restoreBtn) el.restoreBtn.disabled = !state.writeApiEnabled;
+      if (el.runSubmitBtn) el.runSubmitBtn.disabled = !state.writeApiEnabled;
       state.hasError = false;
+      state.errorMessage = "";
       state.liveText = `마지막 갱신: ${fmtDate(overview.last_scanned_at)}`;
     } catch (err) {
       state.hasError = true;
-      state.liveText = `오류: ${String(err.message || err)}`;
+      state.errorMessage = String(err.message || err);
+      state.liveText = `오류: ${state.errorMessage}`;
     }
     renderWithInteractionGuard();
   }
@@ -1839,7 +2049,7 @@
         <ul class="drawer-list">${(events || []).slice(-8).map(function (event) { return `<li>${escapeHtml(event.event_type)}<div class="drawer-subtitle">${escapeHtml(event.message)}</div></li>`; }).join("") || "<li>이벤트 없음</li>"}</ul>
       </section>
     `;
-    openDrawer({ kicker: "RUN_DETAIL", title: run.agent_name, subtitle: run.run_id, body: body });
+    openDrawerHtml({ kicker: "RUN_DETAIL", title: run.agent_name, subtitle: run.run_id, bodyHtml: body });
   }
 
   async function openRunDrawer(runId) {
@@ -1869,17 +2079,17 @@
         <ul class="drawer-list">${(detail && detail.steps ? detail.steps : []).map(function (step) { return `<li><strong>${escapeHtml(step.agent_name)}</strong><div class="drawer-subtitle">${escapeHtml(step.status)} · ${escapeHtml(step.summary || step.last_event_message || "")}</div></li>`; }).join("") || "<li>단계 없음</li>"}</ul>
       </section>
     `;
-    openDrawer({ kicker: "WORKFLOW_RUN", title: run.status, subtitle: run.workflow_run_id, body: body });
+    openDrawerHtml({ kicker: "WORKFLOW_RUN", title: run.status, subtitle: run.workflow_run_id, bodyHtml: body });
   }
 
   function openWorkflowStepDrawer(index) {
     const step = (state.workflowDraft.steps || [])[index];
     if (!step) return;
-    openDrawer({
+    openDrawerHtml({
       kicker: "WORKFLOW_STEP",
       title: step.agentName,
       subtitle: `${step.departmentLabel || ""} / ${step.roleLabel || ""} · STEP ${String(index + 1).padStart(2, "0")}`,
-      body: `
+      bodyHtml: `
         <section class="drawer-section">
           <div class="section-kicker">STATUS</div>
           <div class="drawer-subtitle">${escapeHtml(step.status || "ready")}</div>
@@ -1899,11 +2109,11 @@
   async function openInspectorDrawer(agentName) {
     const data = await loadInspector(agentName);
     if (!data) return;
-    openDrawer({
+    openDrawerHtml({
       kicker: "AGENT_PROFILE",
       title: data.agent_name,
       subtitle: `${data.department_label_ko || ""} / ${data.role_label_ko || ""}`,
-      body: `
+      bodyHtml: `
         <section class="drawer-section">
           <div class="section-kicker">DESCRIPTION</div>
           <div class="drawer-subtitle">${escapeHtml(data.description || data.short_description || "")}</div>
@@ -1940,7 +2150,8 @@
     state.selectedWorkflowSandboxMode = state.selectedSandboxMode;
     state.selectedWorkflowApprovalPolicy = state.selectedApprovalPolicy;
     state.orgHudExpanded = window.localStorage.getItem(ORG_HUD_EXPANDED_KEY) === "true";
-    state.workflowLogView = window.localStorage.getItem(WORKFLOW_LOG_VIEW_KEY) === "raw" ? "raw" : "timeline";
+    const savedWorkflowLogView = window.localStorage.getItem(WORKFLOW_LOG_VIEW_KEY);
+    state.workflowLogView = ["codex", "raw"].includes(savedWorkflowLogView) ? savedWorkflowLogView : "codex";
   }
 
   function setupEvents() {
@@ -1986,9 +2197,9 @@
         renderOverviewHud();
       });
     }
-    if (el.workflowLogViewTimelineBtn) {
-      el.workflowLogViewTimelineBtn.addEventListener("click", function () {
-        state.workflowLogView = "timeline";
+    if (el.workflowLogViewCodexBtn) {
+      el.workflowLogViewCodexBtn.addEventListener("click", function () {
+        state.workflowLogView = "codex";
         window.localStorage.setItem(WORKFLOW_LOG_VIEW_KEY, state.workflowLogView);
         renderWorkflowLogView();
       });
@@ -1998,6 +2209,39 @@
         state.workflowLogView = "raw";
         window.localStorage.setItem(WORKFLOW_LOG_VIEW_KEY, state.workflowLogView);
         renderWorkflowLogView();
+      });
+    }
+    if (el.writeTokenInput) {
+      el.writeTokenInput.addEventListener("input", function () {
+        state.writeTokenModal.draft = normalizeWriteToken(el.writeTokenInput.value || "");
+      });
+      el.writeTokenInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          closeWriteTokenModal(normalizeWriteToken(el.writeTokenInput.value || "") || state.defaultWriteApiToken, false);
+        }
+      });
+    }
+    if (el.writeTokenDefault) {
+      el.writeTokenDefault.addEventListener("click", function () {
+        closeWriteTokenModal(state.defaultWriteApiToken, false);
+      });
+    }
+    if (el.writeTokenSave) {
+      el.writeTokenSave.addEventListener("click", function () {
+        closeWriteTokenModal(normalizeWriteToken(el.writeTokenInput ? el.writeTokenInput.value : "") || state.defaultWriteApiToken, false);
+      });
+    }
+    if (el.writeTokenClose) {
+      el.writeTokenClose.addEventListener("click", function () {
+        closeWriteTokenModal("", true);
+      });
+    }
+    if (el.writeTokenModal) {
+      el.writeTokenModal.addEventListener("click", function (event) {
+        if (event.target === el.writeTokenModal) {
+          closeWriteTokenModal("", true);
+        }
       });
     }
 
@@ -2141,7 +2385,7 @@
         const list = (((state.dashboard || {})[kind]) || []);
         const item = list[index];
         if (item) {
-          openDrawer({ kicker: kind.toUpperCase(), title: item.title || "-", subtitle: item.subtitle || "", body: `<section class="drawer-section"><div class="section-kicker">TIMESTAMP</div><div class="drawer-subtitle">${escapeHtml(fmtDate(item.timestamp))}</div></section>` });
+          openDrawerHtml({ kicker: kind.toUpperCase(), title: item.title || "-", subtitle: item.subtitle || "", bodyHtml: `<section class="drawer-section"><div class="section-kicker">TIMESTAMP</div><div class="drawer-subtitle">${escapeHtml(fmtDate(item.timestamp))}</div></section>` });
         }
         return;
       }
@@ -2353,7 +2597,10 @@
 
   function handleError(err) {
     state.hasError = true;
-    state.liveText = `오류: ${String(err.message || err)}`;
+    state.errorMessage = err && String(err.message || err) === "write api disabled"
+      ? "쓰기 API가 비활성화되어 있습니다. 서버에 CUSTOM_CODEX_AGENT_WRITE_API_TOKEN을 설정하세요."
+      : String(err.message || err);
+    state.liveText = `오류: ${state.errorMessage}`;
     render();
   }
 

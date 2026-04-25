@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from uuid import uuid4
 
@@ -22,21 +23,24 @@ from app.services.workflow_store import WorkflowRunRecord, WorkflowStore
 
 
 WORKFLOW_RECOMMENDATION_PROMPT_TEMPLATE = """
-You are helping assemble a workflow of Codex agents.
+You are helping assemble a workflow of Codex agents from a live local skill registry.
 Return only valid JSON, with no markdown fences and no explanatory text.
 
 User goal:
 {goal_prompt}
 
-Available agents:
+Available agent catalog JSON:
 {agent_catalog}
 
 Rules:
 - Recommend between 1 and {max_agents} agents.
 - Use only agent names from the available list.
+- Select agents by matching the user goal against skillSummary, skillDescription, agentSummary, role, and department.
+- Reject agents whose skill does not directly contribute to the goal, even if their name sounds broadly useful.
 - Preserve a sensible execution order.
-- Keep each reason concise.
-- Write defaultPrompt in Korean.
+- For multi-step work, choose complementary agents with distinct responsibilities.
+- Keep each reason concise and cite the matched skill capability.
+- Write defaultPrompt in Korean and make it specific to that agent's skill.
 - Output JSON with this exact shape:
 {{
   "recommendedAgents": [
@@ -50,6 +54,11 @@ Rules:
 """.strip()
 
 WORKFLOW_RECOMMENDATION_TIMEOUT_SECONDS = 20
+WORKFLOW_SKILL_SUMMARY_MAX_CHARS = 1200
+WORKFLOW_AGENT_SUMMARY_MAX_CHARS = 900
+WORKFLOW_CATALOG_TEXT_MAX_CHARS = 2200
+WORKFLOW_RECOMMENDATION_MIN_SCORE = 6
+WORKFLOW_RECOMMENDATION_RELATIVE_SCORE_RATIO = 0.5
 
 
 class WorkflowOrchestrator:
@@ -82,14 +91,15 @@ class WorkflowOrchestrator:
         validated_goal = self._run_orchestrator.validate_prompt(goal_prompt)
         bounded_max_agents = self._sanitize_max_agents(max_agents)
         inventory = self._dashboard_service.build_inventory()
-        available_agents = [agent for agent in inventory.agents if agent.status != "broken"]
+        available_agents = [agent for agent in inventory.agents if agent.status != "broken" and agent.skill_name]
         if not available_agents:
             return []
 
-        recommendations = await self._recommend_via_codex(validated_goal, available_agents, bounded_max_agents)
+        agent_profiles = self._build_agent_profiles(available_agents)
+        recommendations = await self._recommend_via_codex(validated_goal, agent_profiles, bounded_max_agents)
         if recommendations:
-            return recommendations
-        return self._recommend_via_heuristics(validated_goal, available_agents, bounded_max_agents)
+            return self._complete_recommendations(validated_goal, recommendations, agent_profiles, bounded_max_agents)
+        return self._recommend_via_heuristics(validated_goal, agent_profiles, bounded_max_agents)
 
     async def create_workflow_run(
         self,
@@ -471,21 +481,50 @@ class WorkflowOrchestrator:
             return DEFAULT_WORKFLOW_RECOMMENDATION_MAX_AGENTS
         return min(value, self._settings.workflow_recommendation_max_agents)
 
-    async def _recommend_via_codex(self, goal_prompt: str, available_agents, max_agents: int) -> list[WorkflowRecommendedAgentModel]:
-        agent_catalog = "\n".join(
-            [
-                json.dumps(
-                    {
+    def _build_agent_profiles(self, available_agents) -> list[dict[str, object]]:
+        profiles: list[dict[str, object]] = []
+        for agent in available_agents:
+            skill_description = self._read_skill_description(agent.skill_path)
+            skill_summary = self._read_skill_summary(agent.skill_path)
+            agent_summary = self._read_agent_summary(agent.name)
+            searchable_text = self._compact_text(
+                " ".join(
+                    [
+                        agent.name,
+                        agent.skill_name or "",
+                        agent.department_label_ko,
+                        agent.role_label_ko,
+                        agent.short_description or "",
+                        agent.description or "",
+                        skill_description,
+                    ]
+                ),
+                WORKFLOW_CATALOG_TEXT_MAX_CHARS,
+            )
+            profiles.append(
+                {
+                    "agent": agent,
+                    "catalog": {
                         "name": agent.name,
                         "skillName": agent.skill_name,
                         "department": agent.department_label_ko,
                         "role": agent.role_label_ko,
-                        "description": agent.short_description or agent.description,
+                        "agentDescription": agent.short_description or agent.description,
+                        "skillDescription": skill_description,
+                        "skillSummary": skill_summary,
+                        "agentSummary": agent_summary,
                     },
-                    ensure_ascii=False,
-                )
-                for agent in available_agents
-            ]
+                    "searchable_text": searchable_text,
+                }
+            )
+        return profiles
+
+    async def _recommend_via_codex(self, goal_prompt: str, agent_profiles: list[dict[str, object]], max_agents: int) -> list[WorkflowRecommendedAgentModel]:
+        catalog_items = [profile["catalog"] for profile in agent_profiles]
+        agent_catalog = json.dumps(
+            catalog_items,
+            ensure_ascii=False,
+            indent=2,
         )
         prompt = WORKFLOW_RECOMMENDATION_PROMPT_TEMPLATE.format(
             goal_prompt=goal_prompt,
@@ -514,15 +553,21 @@ class WorkflowOrchestrator:
         if not isinstance(raw_agents, list):
             return []
 
-        inventory_map = {agent.name: agent for agent in available_agents}
+        profile_map = {profile["agent"].name: profile for profile in agent_profiles}
+        profile_scores = self._score_agent_profiles(goal_prompt, agent_profiles)
         recommendations: list[WorkflowRecommendedAgentModel] = []
+        seen_agent_names: set[str] = set()
         for item in raw_agents:
             if not isinstance(item, dict):
                 continue
             agent_name = str(item.get("agentName") or "").strip()
-            target_agent = inventory_map.get(agent_name)
-            if target_agent is None:
+            profile = profile_map.get(agent_name)
+            if profile is None or agent_name in seen_agent_names:
                 continue
+            target_agent = profile["agent"]
+            if profile_scores.get(agent_name, 0) < WORKFLOW_RECOMMENDATION_MIN_SCORE:
+                continue
+            seen_agent_names.add(agent_name)
             recommendations.append(
                 WorkflowRecommendedAgentModel(
                     agent_name=target_agent.name,
@@ -540,15 +585,40 @@ class WorkflowOrchestrator:
                 break
         return recommendations
 
-    def _recommend_via_heuristics(self, goal_prompt: str, available_agents, max_agents: int) -> list[WorkflowRecommendedAgentModel]:
-        ranked_agents = sorted(
-            available_agents,
-            key=lambda agent: self._score_agent(goal_prompt, agent.name, agent.skill_name, agent.role_label_ko, agent.description),
+    def _complete_recommendations(
+        self,
+        goal_prompt: str,
+        recommendations: list[WorkflowRecommendedAgentModel],
+        agent_profiles: list[dict[str, object]],
+        max_agents: int,
+    ) -> list[WorkflowRecommendedAgentModel]:
+        if len(recommendations) >= max_agents:
+            return recommendations[:max_agents]
+
+        seen_agent_names = {item.agent_name for item in recommendations}
+        supplements = [
+            item
+            for item in self._recommend_via_heuristics(goal_prompt, agent_profiles, max_agents)
+            if item.agent_name not in seen_agent_names
+        ]
+        return (recommendations + supplements)[:max_agents]
+
+    def _recommend_via_heuristics(self, goal_prompt: str, agent_profiles: list[dict[str, object]], max_agents: int) -> list[WorkflowRecommendedAgentModel]:
+        profile_scores = self._score_agent_profiles(goal_prompt, agent_profiles)
+        ranked_profiles = sorted(
+            agent_profiles,
+            key=lambda profile: profile_scores.get(profile["agent"].name, 0),
             reverse=True,
         )
-        selected = [agent for agent in ranked_agents[:max_agents] if self._score_agent(goal_prompt, agent.name, agent.skill_name, agent.role_label_ko, agent.description) > 0]
+        top_score = profile_scores.get(ranked_profiles[0]["agent"].name, 0) if ranked_profiles else 0
+        cutoff_score = max(WORKFLOW_RECOMMENDATION_MIN_SCORE, int(top_score * WORKFLOW_RECOMMENDATION_RELATIVE_SCORE_RATIO))
+        selected = [
+            profile
+            for profile in ranked_profiles
+            if profile_scores.get(profile["agent"].name, 0) >= cutoff_score
+        ][:max_agents]
         if not selected:
-            selected = ranked_agents[: min(3, len(ranked_agents))]
+            selected = ranked_profiles[: min(3, len(ranked_profiles))]
         return [
             WorkflowRecommendedAgentModel(
                 agent_name=agent.name,
@@ -556,12 +626,142 @@ class WorkflowOrchestrator:
                 role_label_ko=agent.role_label_ko,
                 department_label_ko=agent.department_label_ko,
                 icon_key=resolve_workflow_icon_key(agent.skill_name, agent.name, agent.description),
-                reason="목표 문장과 에이전트 설명/역할의 키워드 유사도가 높습니다.",
+                reason=self._build_heuristic_reason(goal_prompt, profile),
                 default_prompt=self._build_default_prompt(goal_prompt, agent.role_label_ko),
                 short_description=agent.short_description,
             )
-            for agent in selected
+            for profile in selected
+            for agent in [profile["agent"]]
         ]
+
+    def _read_skill_summary(self, skill_path: str | None) -> str:
+        if not skill_path:
+            return ""
+        path = Path(skill_path).expanduser()
+        if not path.exists() or not path.is_file():
+            return ""
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        frontmatter_description = self._extract_frontmatter_description(text)
+        body = self._strip_frontmatter(text)
+        headings_and_intro = self._extract_headings_and_intro(body)
+        return self._compact_text(" ".join([frontmatter_description, headings_and_intro]), WORKFLOW_SKILL_SUMMARY_MAX_CHARS)
+
+    def _read_skill_description(self, skill_path: str | None) -> str:
+        if not skill_path:
+            return ""
+        path = Path(skill_path).expanduser()
+        if not path.exists() or not path.is_file():
+            return ""
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        return self._extract_frontmatter_description(text)
+
+    def _read_agent_summary(self, agent_name: str) -> str:
+        path = self._settings.agents_root / agent_name / "agent.md"
+        if not path.exists() or not path.is_file():
+            return ""
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        return self._compact_text(text, WORKFLOW_AGENT_SUMMARY_MAX_CHARS)
+
+    @staticmethod
+    def _extract_frontmatter_description(text: str) -> str:
+        match = re.match(r"^---\s*\n(.*?)\n---\s*", text, re.DOTALL)
+        if not match:
+            return ""
+        frontmatter = match.group(1)
+        description_match = re.search(r"^description:\s*(.+)$", frontmatter, re.MULTILINE)
+        if not description_match:
+            return ""
+        return description_match.group(1).strip().strip('"').strip("'")
+
+    @staticmethod
+    def _strip_frontmatter(text: str) -> str:
+        without_frontmatter = re.sub(r"^---\s*\n.*?\n---\s*", "", text, count=1, flags=re.DOTALL)
+        return re.split(r"\n##\s+파일 입력 유효성 체크\b", without_frontmatter, maxsplit=1)[0]
+
+    @classmethod
+    def _extract_headings_and_intro(cls, text: str) -> str:
+        lines = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith("#") or line.startswith("- ") or line.startswith("1. "):
+                lines.append(line)
+            elif len(lines) < 8:
+                lines.append(line)
+            if len(" ".join(lines)) >= WORKFLOW_SKILL_SUMMARY_MAX_CHARS:
+                break
+        return cls._compact_text(" ".join(lines), WORKFLOW_SKILL_SUMMARY_MAX_CHARS)
+
+    @staticmethod
+    def _compact_text(text: str, max_chars: int) -> str:
+        compact = re.sub(r"\s+", " ", str(text or "")).strip()
+        if len(compact) <= max_chars:
+            return compact
+        return f"{compact[: max_chars - 3].rstrip()}..."
+
+    def _build_heuristic_reason(self, goal_prompt: str, profile: dict[str, object]) -> str:
+        catalog = profile["catalog"]
+        skill_name = str(catalog.get("skillName") or "")
+        score = self._score_agent(goal_prompt, str(profile["searchable_text"]))
+        if score > 0 and skill_name:
+            return f"목표 문장과 `{skill_name}` 스킬 설명의 관련도가 높습니다."
+        return "목표 문장과 에이전트 역할/스킬 설명을 기준으로 보조 후보로 선택했습니다."
+
+    @classmethod
+    def _score_agent_profiles(cls, goal_prompt: str, agent_profiles: list[dict[str, object]]) -> dict[str, int]:
+        goal_tokens = cls._text_tokens(goal_prompt)
+        if not goal_tokens:
+            return {profile["agent"].name: 0 for profile in agent_profiles}
+
+        profile_token_sets: dict[str, set[str]] = {}
+        document_frequency: Counter[str] = Counter()
+        for profile in agent_profiles:
+            agent_name = profile["agent"].name
+            tokens = set(cls._text_tokens(str(profile["searchable_text"])))
+            profile_token_sets[agent_name] = tokens
+            document_frequency.update(tokens)
+
+        total_profiles = max(1, len(agent_profiles))
+        phrases = cls._goal_phrases(goal_tokens)
+        scores: dict[str, int] = {}
+        for profile in agent_profiles:
+            agent = profile["agent"]
+            agent_name = agent.name
+            haystack = str(profile["searchable_text"]).lower()
+            token_set = profile_token_sets.get(agent_name, set())
+            score = 0
+            for token in goal_tokens:
+                df = max(1, document_frequency.get(token, 1))
+                if df > max(3, int(total_profiles * 0.35)):
+                    continue
+                if token not in token_set:
+                    continue
+                rarity_weight = max(2, min(12, int((total_profiles / df) * 2)))
+                score += rarity_weight
+            for token in goal_tokens:
+                if len(token) < 3:
+                    continue
+                if any(item != token and (item.startswith(token) or token.startswith(item)) for item in token_set):
+                    score += 8
+            for phrase in phrases:
+                if phrase in haystack:
+                    score += 5
+            skill_name = str(agent.skill_name or "").lower()
+            if skill_name:
+                skill_tokens = set(cls._text_tokens(skill_name.replace("-", " ")))
+                score += 3 * len(skill_tokens.intersection(goal_tokens))
+            scores[agent_name] = score
+        return scores
 
     @staticmethod
     def _extract_json_object(text: str) -> dict[str, object] | None:
@@ -582,16 +782,30 @@ class WorkflowOrchestrator:
 
     @staticmethod
     def _score_agent(goal_prompt: str, *values: str | None) -> int:
-        goal_tokens = [token for token in re.split(r"[^0-9A-Za-z가-힣_-]+", goal_prompt.lower()) if token]
+        goal_tokens = WorkflowOrchestrator._text_tokens(goal_prompt)
         haystack = " ".join(str(value or "").lower() for value in values)
         score = 0
         for token in goal_tokens:
             if len(token) >= 2 and token in haystack:
                 score += 3
-        for token in ("workflow", "보안", "security", "문서", "docs", "테스트", "test", "ui", "api"):
-            if token in goal_prompt.lower() and token in haystack:
-                score += 4
+        for phrase in WorkflowOrchestrator._goal_phrases(goal_tokens):
+            if phrase in haystack:
+                score += 5
         return score
+
+    @staticmethod
+    def _text_tokens(text: str) -> list[str]:
+        return [token for token in re.split(r"[^0-9A-Za-z가-힣_-]+", str(text or "").lower()) if len(token) >= 2]
+
+    @staticmethod
+    def _goal_phrases(tokens: list[str]) -> list[str]:
+        phrases: list[str] = []
+        for size in (3, 2):
+            if len(tokens) < size:
+                continue
+            for index in range(0, len(tokens) - size + 1):
+                phrases.append(" ".join(tokens[index : index + size]))
+        return phrases
 
     @staticmethod
     def _build_default_prompt(goal_prompt: str, role_label_ko: str) -> str:

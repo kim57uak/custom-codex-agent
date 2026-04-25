@@ -174,6 +174,8 @@ class RunEventsResponse(BaseModel):
 
 class RunConfigResponse(BaseModel):
     default_workspace_root: str
+    write_api_enabled: bool
+    default_write_api_token: str | None = None
 
 
 class DirectoryItemModel(BaseModel):

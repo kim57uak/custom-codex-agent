@@ -59,6 +59,8 @@ class DashboardService:
         ]
         skill_name_set = {skill.name for skill in skills}
         skill_path_set = {skill.path for skill in skills}
+        skill_by_name = {skill.name: skill for skill in skills}
+        skill_by_path = {skill.path: skill for skill in skills}
 
         agents = []
         for agent in agents_raw:
@@ -66,12 +68,20 @@ class DashboardService:
             description = str(agent.get("description", ""))
             short_description = self._to_optional_str(agent.get("short_description")) or self._short_description(description)
             one_click_prompt = self._to_optional_str(agent.get("one_click_prompt"))
-            skill_name = self._to_optional_str(agent.get("skill_name"))
-            skill_path = self._to_optional_str(agent.get("skill_path"))
+            raw_skill_name = self._to_optional_str(agent.get("skill_name"))
+            raw_skill_path = self._to_optional_str(agent.get("skill_path"))
+            skill_name, skill_path, mapping_note = self._resolve_skill_mapping(
+                raw_skill_name,
+                raw_skill_path,
+                skill_by_name,
+                skill_by_path,
+            )
             department_label_ko = self._to_optional_str(agent.get("department")) or DEFAULT_DEPARTMENT_LABEL_KO
             role_label_ko = self._to_optional_str(agent.get("role_label")) or DEFAULT_ROLE_LABEL_KO
             is_routed = agent_name in routed_agent_names
             status, reason = self._resolve_agent_status(skill_name, skill_path, skill_name_set, skill_path_set, is_routed)
+            if mapping_note:
+                reason = f"{reason} {mapping_note}"
             agents.append(
                 AgentModel(
                     name=agent_name,
@@ -316,6 +326,29 @@ class DashboardService:
         if not is_routed:
             return "passive", "라우터에 연결되지 않은 에이전트입니다."
         return "healthy", "정상 연결 상태입니다."
+
+    @staticmethod
+    def _resolve_skill_mapping(
+        raw_skill_name: str | None,
+        raw_skill_path: str | None,
+        skill_by_name: dict[str, SkillModel],
+        skill_by_path: dict[str, SkillModel],
+    ) -> tuple[str | None, str | None, str | None]:
+        if raw_skill_name and raw_skill_name in skill_by_name:
+            installed_skill = skill_by_name[raw_skill_name]
+            note = None
+            if raw_skill_path and raw_skill_path != installed_skill.path:
+                note = "설정 skill_path가 설치 경로와 달라 실제 설치 경로로 표시합니다."
+            return installed_skill.name, installed_skill.path, note
+
+        if raw_skill_path and raw_skill_path in skill_by_path:
+            installed_skill = skill_by_path[raw_skill_path]
+            note = None
+            if raw_skill_name and raw_skill_name != installed_skill.name:
+                note = "설정 skill_name이 설치 스킬명과 달라 실제 설치명으로 표시합니다."
+            return installed_skill.name, installed_skill.path, note
+
+        return raw_skill_name, raw_skill_path, None
 
     def _guess_active_agents(self, inventory: InventoryResponse, recent_threads: list[dict[str, object]]) -> list[ActivityItemModel]:
         agent_counter: Counter[str] = Counter()

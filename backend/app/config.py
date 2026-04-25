@@ -29,7 +29,7 @@ class AppSettings(BaseModel):
             "http://localhost:8000",
         )
     )
-    write_api_token: str = Field(default="custom-codex-agent-local-token")
+    write_api_token: str | None = Field(default=None)
     run_db_name: str = Field(default="custom_codex_agent_runs.sqlite")
     run_max_concurrency: int = Field(default=2)
     run_timeout_seconds: int = Field(default=1800)
@@ -92,17 +92,39 @@ def _parse_path(raw: str | None, default: Path) -> Path:
     return Path(raw.strip()).expanduser()
 
 
+def _parse_optional_token(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    token = raw.strip()
+    return token or None
+
+
+def _parse_int_env(raw: str | None, default: int, min_value: int | None = None, max_value: int | None = None) -> int:
+    if raw is None or not raw.strip():
+        value = default
+    else:
+        try:
+            value = int(raw.strip())
+        except ValueError:
+            value = default
+    if min_value is not None:
+        value = max(min_value, value)
+    if max_value is not None:
+        value = min(max_value, value)
+    return value
+
+
 SETTINGS = AppSettings(
     codex_home=_parse_path(os.getenv("CUSTOM_CODEX_AGENT_CODEX_HOME"), DEFAULT_CODEX_HOME),
     allowed_origins=_parse_allowed_origins(os.getenv("CUSTOM_CODEX_AGENT_ALLOWED_ORIGINS")),
-    write_api_token=os.getenv("CUSTOM_CODEX_AGENT_WRITE_API_TOKEN", "custom-codex-agent-local-token"),
+    write_api_token=_parse_optional_token(os.getenv("CUSTOM_CODEX_AGENT_WRITE_API_TOKEN")),
     run_db_name=os.getenv("CUSTOM_CODEX_AGENT_RUN_DB_NAME", "custom_codex_agent_runs.sqlite"),
-    run_max_concurrency=int(os.getenv("CUSTOM_CODEX_AGENT_RUN_MAX_CONCURRENCY", "2")),
-    run_timeout_seconds=int(os.getenv("CUSTOM_CODEX_AGENT_RUN_TIMEOUT_SECONDS", "1800")),
-    run_prompt_max_length=int(os.getenv("CUSTOM_CODEX_AGENT_RUN_PROMPT_MAX_LENGTH", "12000")),
+    run_max_concurrency=_parse_int_env(os.getenv("CUSTOM_CODEX_AGENT_RUN_MAX_CONCURRENCY"), 2, min_value=1, max_value=16),
+    run_timeout_seconds=_parse_int_env(os.getenv("CUSTOM_CODEX_AGENT_RUN_TIMEOUT_SECONDS"), 1800, min_value=30, max_value=86400),
+    run_prompt_max_length=_parse_int_env(os.getenv("CUSTOM_CODEX_AGENT_RUN_PROMPT_MAX_LENGTH"), 12000, min_value=100, max_value=100000),
     codex_cli_executable=os.getenv("CUSTOM_CODEX_AGENT_CODEX_CLI_EXECUTABLE", "codex"),
     codex_cli_subcommand=_parse_codex_subcommand(os.getenv("CUSTOM_CODEX_AGENT_CODEX_CLI_SUBCOMMAND")),
     workspace_root=_parse_path(os.getenv("CUSTOM_CODEX_AGENT_WORKSPACE_ROOT"), DEFAULT_PROJECT_ROOT),
     founder_name=os.getenv("CUSTOM_CODEX_AGENT_FOUNDER_NAME", "대표이사"),
-    workflow_recommendation_max_agents=int(os.getenv("CUSTOM_CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS", "6")),
+    workflow_recommendation_max_agents=_parse_int_env(os.getenv("CUSTOM_CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS"), 6, min_value=1, max_value=12),
 )
