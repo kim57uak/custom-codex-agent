@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+EngineType = Literal["codex", "gemini"]
 
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_CODEX_HOME = Path.home() / ".codex"
+DEFAULT_GEMINI_HOME = Path.home() / ".gemini" / "antigravity"
 
 
 class AppSettings(BaseModel):
@@ -36,6 +41,9 @@ class AppSettings(BaseModel):
     run_prompt_max_length: int = Field(default=12000)
     codex_cli_executable: str = Field(default="codex")
     codex_cli_subcommand: tuple[str, ...] = Field(default=("exec",))
+    gemini_cli_executable: str = Field(default="gemini")
+    gemini_home: Path = Field(default=DEFAULT_GEMINI_HOME)
+    default_engine: EngineType = Field(default="codex")
     workspace_root: Path = Field(default=DEFAULT_PROJECT_ROOT)
     founder_name: str = Field(default="대표이사")
     workflow_recommendation_max_agents: int = Field(default=6)
@@ -59,6 +67,16 @@ class AppSettings(BaseModel):
     @property
     def agents_root(self) -> Path:
         return self.codex_home / "agents"
+
+    @property
+    def gemini_skills_root(self) -> Path:
+        """summary: Gemini 엔진용 스킬 디렉토리 경로를 반환한다."""
+        return self.gemini_home / "skills"
+
+    @property
+    def gemini_agents_root(self) -> Path:
+        """summary: Gemini 엔진용 에이전트 디렉토리 경로를 반환한다."""
+        return self.gemini_home / "agents"
 
     @property
     def config_toml_path(self) -> Path:
@@ -114,6 +132,13 @@ def _parse_int_env(raw: str | None, default: int, min_value: int | None = None, 
     return value
 
 
+def _parse_engine(raw: str | None) -> EngineType:
+    """summary: 환경변수에서 엔진 타입을 파싱하고 유효하지 않으면 기본값 codex를 반환한다."""
+    if raw and raw.strip().lower() in ("codex", "gemini"):
+        return raw.strip().lower()  # type: ignore[return-value]
+    return "codex"
+
+
 SETTINGS = AppSettings(
     codex_home=_parse_path(os.getenv("CUSTOM_CODEX_AGENT_CODEX_HOME"), DEFAULT_CODEX_HOME),
     allowed_origins=_parse_allowed_origins(os.getenv("CUSTOM_CODEX_AGENT_ALLOWED_ORIGINS")),
@@ -124,6 +149,9 @@ SETTINGS = AppSettings(
     run_prompt_max_length=_parse_int_env(os.getenv("CUSTOM_CODEX_AGENT_RUN_PROMPT_MAX_LENGTH"), 12000, min_value=100, max_value=100000),
     codex_cli_executable=os.getenv("CUSTOM_CODEX_AGENT_CODEX_CLI_EXECUTABLE", "codex"),
     codex_cli_subcommand=_parse_codex_subcommand(os.getenv("CUSTOM_CODEX_AGENT_CODEX_CLI_SUBCOMMAND")),
+    gemini_cli_executable=os.getenv("CUSTOM_CODEX_AGENT_GEMINI_CLI_EXECUTABLE", "gemini"),
+    gemini_home=_parse_path(os.getenv("CUSTOM_CODEX_AGENT_GEMINI_HOME"), DEFAULT_GEMINI_HOME),
+    default_engine=_parse_engine(os.getenv("CUSTOM_CODEX_AGENT_DEFAULT_ENGINE")),
     workspace_root=_parse_path(os.getenv("CUSTOM_CODEX_AGENT_WORKSPACE_ROOT"), DEFAULT_PROJECT_ROOT),
     founder_name=os.getenv("CUSTOM_CODEX_AGENT_FOUNDER_NAME", "대표이사"),
     workflow_recommendation_max_agents=_parse_int_env(os.getenv("CUSTOM_CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS"), 6, min_value=1, max_value=12),

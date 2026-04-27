@@ -34,6 +34,7 @@ class RunRecord:
     workspace_root: str
     prompt: str
     status: str
+    engine: str
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
@@ -110,16 +111,21 @@ class RunStore:
             except sqlite3.OperationalError:
                 # 이미 컬럼이 존재하는 경우는 마이그레이션 성공으로 간주한다.
                 pass
+            try:
+                connection.execute("alter table runs add column engine text not null default 'codex'")
+            except sqlite3.OperationalError:
+                # engine 컬럼이 이미 존재하면 무시한다.
+                pass
 
-    def create_run(self, run_id: str, agent_name: str, workspace_root: str, prompt: str) -> RunRecord:
+    def create_run(self, run_id: str, agent_name: str, workspace_root: str, prompt: str, engine: str = "codex") -> RunRecord:
         now = _utc_now()
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into runs (run_id, agent_name, workspace_root, prompt, status, created_at)
-                values (?, ?, ?, ?, ?, ?)
+                insert into runs (run_id, agent_name, workspace_root, prompt, status, engine, created_at)
+                values (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, agent_name, workspace_root, prompt, "queued", _to_unix_seconds(now)),
+                (run_id, agent_name, workspace_root, prompt, "queued", engine, _to_unix_seconds(now)),
             )
         return self.get_run(run_id)
 
@@ -166,7 +172,7 @@ class RunStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select run_id, agent_name, workspace_root, prompt, status, created_at, started_at, completed_at, exit_code, error_message
+                select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
                 from runs
                 where run_id = ?
                 """,
@@ -181,7 +187,7 @@ class RunStore:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                select run_id, agent_name, workspace_root, prompt, status, created_at, started_at, completed_at, exit_code, error_message
+                select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
                 from runs
                 order by created_at desc
                 limit ?
@@ -209,12 +215,18 @@ class RunStore:
 
     @staticmethod
     def _row_to_run_record(row: sqlite3.Row) -> RunRecord:
+        # engine 컬럼은 마이그레이션 전 레코드에서 누락될 수 있으므로 안전하게 조회한다.
+        try:
+            engine_value = str(row["engine"])
+        except (IndexError, KeyError):
+            engine_value = "codex"
         return RunRecord(
             run_id=str(row["run_id"]),
             agent_name=str(row["agent_name"]),
             workspace_root=str(row["workspace_root"] or ""),
             prompt=str(row["prompt"]),
             status=str(row["status"]),
+            engine=engine_value,
             created_at=_from_unix_seconds(row["created_at"]) or _utc_now(),
             started_at=_from_unix_seconds(row["started_at"]),
             completed_at=_from_unix_seconds(row["completed_at"]),

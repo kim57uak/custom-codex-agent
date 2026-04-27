@@ -158,6 +158,7 @@ def _to_run_detail_model(record) -> RunDetailModel:
         workspace_root=record.workspace_root,
         prompt=record.prompt,
         status=_to_run_status(record.status),
+        engine=record.engine,
         created_at=record.created_at,
         started_at=record.started_at,
         completed_at=record.completed_at,
@@ -343,6 +344,8 @@ def register_config_routes(ctx: ApiContext) -> None:
             default_workspace_root=str(ctx.run_orchestrator.default_workspace_root),
             write_api_enabled=bool(ctx.write_api_token),
             default_write_api_token=ctx.write_api_token,
+            available_engines=["codex", "gemini"],
+            default_engine=ctx.settings.default_engine,
         )
 
     @ctx.router.get("/workflows/ui-config", response_model=WorkflowUiConfigResponse)
@@ -453,6 +456,7 @@ def register_run_routes(ctx: ApiContext) -> None:
                     workspace_root=run.workspace_root,
                     status=_to_run_status(run.status),
                     prompt_preview=ctx.run_orchestrator.to_prompt_preview(run.prompt),
+                    engine=run.engine,
                     created_at=run.created_at,
                     started_at=run.started_at,
                     completed_at=run.completed_at,
@@ -517,6 +521,7 @@ def register_run_routes(ctx: ApiContext) -> None:
             workspace_root=workspace_root,
             sandbox_mode=sandbox_mode,
             approval_policy=approval_policy,
+            engine=request.engine or ctx.settings.default_engine,
         )
         return _to_run_detail_model(created.record)
 

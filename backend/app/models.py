@@ -11,6 +11,7 @@ HealthStatus = Literal["healthy", "partial", "broken", "passive"]
 RunStatus = Literal["queued", "running", "completed", "failed", "canceled"]
 SandboxMode = Literal["read-only", "workspace-write", "danger-full-access"]
 ApprovalPolicy = Literal["untrusted", "on-request", "never"]
+EngineType = Literal["codex", "gemini"]
 WorkflowRunStatus = Literal["draft", "queued", "running", "completed", "failed", "canceled"]
 WorkflowStepStatus = Literal["recommended", "ready", "queued", "running", "approval_required", "completed", "failed", "canceled", "skipped"]
 
@@ -128,6 +129,7 @@ class RunCreateRequest(BaseModel):
     workspace_root: str | None = None
     sandbox_mode: SandboxMode | None = None
     approval_policy: ApprovalPolicy | None = None
+    engine: EngineType | None = None
 
 
 class RunSummaryModel(BaseModel):
@@ -136,6 +138,7 @@ class RunSummaryModel(BaseModel):
     workspace_root: str
     status: RunStatus
     prompt_preview: str
+    engine: str = "codex"
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -149,6 +152,7 @@ class RunDetailModel(BaseModel):
     workspace_root: str
     prompt: str
     status: RunStatus
+    engine: str = "codex"
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -176,6 +180,8 @@ class RunConfigResponse(BaseModel):
     default_workspace_root: str
     write_api_enabled: bool
     default_write_api_token: str | None = None
+    available_engines: list[str] = Field(default_factory=lambda: ["codex", "gemini"])
+    default_engine: str = "codex"
 
 
 class DirectoryItemModel(BaseModel):

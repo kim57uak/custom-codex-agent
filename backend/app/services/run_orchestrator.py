@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.config import AppSettings
+from app.services.engine_adapters import EngineAdapterFactory
 from app.services.event_stream import EventBroker
 from app.services.run_store import RunEventRecord, RunRecord, RunStore
 
@@ -32,6 +33,7 @@ class RunOrchestrator:
         self._settings = settings
         self._broker = broker
         self._store = store
+        self._engine_factory = EngineAdapterFactory(settings)
         self._semaphore = asyncio.Semaphore(max(1, settings.run_max_concurrency))
         self._run_tasks: dict[str, asyncio.Task[None]] = {}
         self._active_processes: dict[str, Process] = {}
@@ -47,6 +49,7 @@ class RunOrchestrator:
         workspace_root: Path,
         sandbox_mode: str | None = None,
         approval_policy: str | None = None,
+        engine: str = "codex",
     ) -> RunCreateResult:
         run_id = uuid4().hex
         record = self._store.create_run(
@@ -54,8 +57,9 @@ class RunOrchestrator:
             agent_name=agent_name,
             workspace_root=str(workspace_root),
             prompt=prompt,
+            engine=engine,
         )
-        await self._publish_run_event(run_id, "run:queued", f"run queued for agent={agent_name}")
+        await self._publish_run_event(run_id, "run:queued", f"run queued for agent={agent_name} engine={engine}")
         task = asyncio.create_task(
             self._execute_run(
                 run_id=run_id,
@@ -64,6 +68,7 @@ class RunOrchestrator:
                 workspace_root=workspace_root,
                 sandbox_mode=sandbox_mode,
                 approval_policy=approval_policy,
+                engine=engine,
             )
         )
         self._run_tasks[run_id] = task
@@ -135,18 +140,28 @@ class RunOrchestrator:
         purpose/context: 워크플로 추천처럼 run 저장이 필요 없는 메타 작업에서 동일한 CLI 실행 규칙을 재사용한다.
         input: prompt, 선택적 작업 폴더, 샌드박스/승인 정책을 받는다.
         output: `(return_code, stdout_text, stderr_text)` 튜플을 반환한다.
-        rules/constraints: 실행 커맨드 구성은 일반 run과 동일한 규칙을 사용한다.
+        rules/constraints: 실행 커맨드 구성은 일반 run과 동일한 규칙을 사용한다. 항상 codex 엔진을 사용한다.
         failure behavior: 실행 파일이 없으면 `FileNotFoundError`를 그대로 올려 호출자가 진단 메시지를 만든다.
         """
 
+        adapter = self._engine_factory.get_adapter("codex")
+        command = adapter.build_command(
+            sandbox_mode=sandbox_mode,
+            approval_policy=approval_policy,
+            prompt=prompt,
+        )
+
         process = await asyncio.create_subprocess_exec(
-            *self._build_command(sandbox_mode=sandbox_mode, approval_policy=approval_policy),
+            *command,
             cwd=str(workspace_root or self.default_workspace_root),
-            stdin=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE if adapter.uses_stdin_for_prompt else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        await self._write_prompt(process, prompt)
+        
+        if adapter.uses_stdin_for_prompt:
+            await self._write_prompt(process, prompt)
+
         stdout_bytes, stderr_bytes = await process.communicate()
         stdout_text = stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
         stderr_text = stderr_bytes.decode("utf-8", errors="replace") if stderr_bytes else ""
@@ -160,6 +175,7 @@ class RunOrchestrator:
         workspace_root: Path,
         sandbox_mode: str | None = None,
         approval_policy: str | None = None,
+        engine: str = "codex",
     ) -> None:
         process: Process | None = None
         try:
@@ -167,21 +183,37 @@ class RunOrchestrator:
                 updated = self._store.mark_running(run_id)
                 if updated is None:
                     return
-                await self._publish_run_event(run_id, "run:started", "run started")
+                await self._publish_run_event(run_id, "run:started", f"run started (engine={engine})")
 
-                command = self._build_command(
+                effective_prompt = self._build_effective_prompt(agent_name=agent_name, prompt=prompt)
+
+                adapter = self._engine_factory.get_adapter(engine)
+                
+                command = adapter.build_command(
                     sandbox_mode=sandbox_mode,
                     approval_policy=approval_policy,
+                    prompt=effective_prompt,
                 )
-                process = await asyncio.create_subprocess_exec(
-                    *command,
-                    cwd=str(workspace_root),
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
+
+                if adapter.uses_stdin_for_prompt:
+                    process = await asyncio.create_subprocess_exec(
+                        *command,
+                        cwd=str(workspace_root),
+                        stdin=asyncio.subprocess.PIPE,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    await self._write_prompt(process, effective_prompt)
+                else:
+                    process = await asyncio.create_subprocess_exec(
+                        *command,
+                        cwd=str(workspace_root),
+                        stdin=asyncio.subprocess.DEVNULL,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+
                 self._active_processes[run_id] = process
-                await self._write_prompt(process, self._build_effective_prompt(agent_name=agent_name, prompt=prompt))
 
                 stdout_task = asyncio.create_task(self._consume_stream(run_id, process.stdout, "run:stdout"))
                 stderr_task = asyncio.create_task(self._consume_stream(run_id, process.stderr, "run:stderr"))
@@ -205,17 +237,18 @@ class RunOrchestrator:
                         run_id,
                         status="failed",
                         exit_code=return_code,
-                        error_message=f"codex exited with non-zero code: {return_code}",
+                        error_message=f"{engine} exited with non-zero code: {return_code}",
                     )
-                    await self._publish_run_event(run_id, "run:failed", f"codex exited with code={return_code}")
+                    await self._publish_run_event(run_id, "run:failed", f"{engine} exited with code={return_code}")
         except FileNotFoundError:
+            adapter = self._engine_factory.get_adapter(engine)
             self._store.finish_run(
                 run_id,
                 status="failed",
                 exit_code=None,
-                error_message=f"codex cli not found: {self._settings.codex_cli_executable}",
+                error_message=f"{engine} cli not found: {adapter.executable_path}",
             )
-            await self._publish_run_event(run_id, "run:failed", "codex cli executable not found")
+            await self._publish_run_event(run_id, "run:failed", f"{engine} cli executable not found")
         except asyncio.CancelledError:
             self._store.finish_run(run_id, status="canceled", exit_code=None, error_message="canceled by user")
             await self._publish_run_event(run_id, "run:canceled", "run canceled")
@@ -255,15 +288,6 @@ class RunOrchestrator:
         await self._broker.publish(event_type, payload)
 
     @staticmethod
-    async def _write_prompt(process: Process, prompt: str) -> None:
-        if process.stdin is None:
-            return
-        process.stdin.write(prompt.encode("utf-8"))
-        process.stdin.write(b"\n")
-        await process.stdin.drain()
-        process.stdin.close()
-
-    @staticmethod
     def _build_effective_prompt(agent_name: str, prompt: str) -> str:
         return (
             "You are running from Custom Codex Agent Execution Console.\n"
@@ -273,6 +297,15 @@ class RunOrchestrator:
             "do not proceed with file operations. First ask the user to provide the exact file path and file name.\n\n"
             f"{prompt}"
         )
+
+    @staticmethod
+    async def _write_prompt(process: Process, prompt: str) -> None:
+        if process.stdin is None:
+            return
+        process.stdin.write(prompt.encode("utf-8"))
+        process.stdin.write(b"\n")
+        await process.stdin.drain()
+        process.stdin.close()
 
     def list_runs(self, limit: int = 30) -> list[RunRecord]:
         return self._store.list_runs(limit=limit)
@@ -335,41 +368,3 @@ class RunOrchestrator:
         if cleaned not in allowed:
             raise ValueError("invalid approval_policy")
         return cleaned
-
-    def _build_command(self, sandbox_mode: str | None, approval_policy: str | None) -> list[str]:
-        base_args = list(self._settings.codex_cli_subcommand)
-        sanitized_args: list[str] = []
-        skip_next = False
-        for index, token in enumerate(base_args):
-            if skip_next:
-                skip_next = False
-                continue
-            if token in {"--sandbox", "-s", "--ask-for-approval", "-a"}:
-                # 구버전/기본 인자를 제거하고 UI 선택값으로 덮어쓴다.
-                if index + 1 < len(base_args):
-                    skip_next = True
-                continue
-            if token in {"--search"}:
-                # 최신 Codex CLI에서는 제거된 플래그이므로 무시한다.
-                continue
-            sanitized_args.append(token)
-
-        command = [self._settings.codex_cli_executable, *sanitized_args]
-        force_no_approval = False
-        if approval_policy == "never":
-            # 최신 Codex CLI에는 --ask-for-approval 옵션이 없어 동등한 옵션으로 매핑한다.
-            if sandbox_mode == "workspace-write":
-                command.append("--full-auto")
-                sandbox_mode = None
-            elif sandbox_mode == "danger-full-access":
-                command.append("--dangerously-bypass-approvals-and-sandbox")
-                sandbox_mode = None
-            elif sandbox_mode is None:
-                force_no_approval = True
-
-        if sandbox_mode:
-            command.extend(["--sandbox", sandbox_mode])
-        if force_no_approval:
-            command.append("--dangerously-bypass-approvals-and-sandbox")
-        command.append("-")
-        return command

@@ -3,6 +3,7 @@
   const WORKSPACE_ROOT_KEY = "custom-codex-agent-workspace-root";
   const SANDBOX_MODE_KEY = "custom-codex-agent-sandbox-mode";
   const APPROVAL_POLICY_KEY = "custom-codex-agent-approval-policy";
+  const ENGINE_KEY = "custom-codex-agent-engine";
   const UI_THEME_KEY = "custom-codex-agent-ui-theme";
   const ORG_HUD_EXPANDED_KEY = "custom-codex-agent-org-hud-expanded";
   const WORKFLOW_LOG_VIEW_KEY = "custom-codex-agent-workflow-log-view";
@@ -85,6 +86,8 @@
     selectedWorkspaceRoot: "",
     selectedSandboxMode: "workspace-write",
     selectedApprovalPolicy: "on-request",
+    selectedEngine: "codex",
+    availableEngines: ["codex"],
     selectedAgentName: "",
     workflowAgentFilter: "",
     selectedWorkflowAgentName: "",
@@ -129,6 +132,7 @@
     liveState: document.getElementById("live-state"),
     errorBanner: document.getElementById("error-banner"),
     themeSwitcher: document.getElementById("theme-switcher"),
+    globalEngineSelect: document.getElementById("global-engine-select"),
     themeQuickButtons: Array.from(document.querySelectorAll("[data-theme-value]")),
     tabOrg: document.getElementById("tab-org"),
     tabDashboard: document.getElementById("tab-dashboard"),
@@ -947,7 +951,7 @@
         const active = state.selectedRunId === run.run_id ? "active" : "";
         return `
           <button class="run-chip ${active}" type="button" data-run-id="${escapeHtml(run.run_id)}">
-            <div class="feed-title">${escapeHtml(run.agent_name)}</div>
+            <div class="feed-title">${escapeHtml(run.agent_name)} <span style="font-size: 0.75em; opacity: 0.7;">[${escapeHtml(run.engine || "codex")}]</span></div>
             <div class="run-chip-meta">${escapeHtml(run.status)} · ${escapeHtml(fmtDate(run.created_at))}</div>
             <div class="run-chip-meta">${escapeHtml(run.prompt_preview || "")}</div>
           </button>
@@ -972,6 +976,16 @@
     el.runLog.scrollTop = el.runLog.scrollHeight;
   }
 
+  function renderOptions(selectEl, items, selectedValue) {
+    if (!selectEl) return;
+    selectEl.innerHTML = (items || [])
+      .map(function (item) {
+        const selected = item.value === selectedValue ? "selected" : "";
+        return `<option value="${escapeHtml(item.value)}" ${selected}>${escapeHtml(item.label)}</option>`;
+      })
+      .join("");
+  }
+
   function renderConsole() {
     if (el.runWorkspaceInput && el.runWorkspaceInput.value !== state.selectedWorkspaceRoot) {
       el.runWorkspaceInput.value = state.selectedWorkspaceRoot || "";
@@ -989,15 +1003,6 @@
 
   function renderWorkflowOptions() {
     const config = state.workflowUiConfig || {};
-    const renderOptions = function (selectEl, items, selectedValue) {
-      if (!selectEl) return;
-      selectEl.innerHTML = (items || [])
-        .map(function (item) {
-          const selected = item.value === selectedValue ? "selected" : "";
-          return `<option value="${escapeHtml(item.value)}" ${selected}>${escapeHtml(item.label)}</option>`;
-        })
-        .join("");
-    };
     renderOptions(el.workflowSandboxSelect, config.sandbox_modes || [], state.selectedWorkflowSandboxMode);
     renderOptions(el.workflowApprovalSelect, config.approval_policies || [], state.selectedWorkflowApprovalPolicy);
   }
@@ -1734,6 +1739,9 @@
     renderDrawer();
     renderOrg();
     renderDashboard();
+    const engineOptions = state.availableEngines.map(function(e) { return { value: e, label: e }; });
+    renderOptions(el.globalEngineSelect, engineOptions, state.selectedEngine);
+
     renderConsole();
     renderWorkflow();
     renderInspector();
@@ -1825,12 +1833,18 @@
       state.defaultWorkspaceRoot = runConfig.default_workspace_root || "";
       state.defaultWriteApiToken = normalizeWriteToken(runConfig.default_write_api_token || "");
       state.writeApiEnabled = runConfig.write_api_enabled !== false;
+      state.availableEngines = runConfig.available_engines || ["codex"];
+      
       const storedWorkspace = window.localStorage.getItem(WORKSPACE_ROOT_KEY) || "";
       const storedSandbox = window.localStorage.getItem(SANDBOX_MODE_KEY) || "";
       const storedApproval = window.localStorage.getItem(APPROVAL_POLICY_KEY) || "";
+      const storedEngine = window.localStorage.getItem(ENGINE_KEY) || "";
+      
       state.selectedWorkspaceRoot = storedWorkspace || state.selectedWorkspaceRoot || state.defaultWorkspaceRoot || "";
       state.selectedSandboxMode = storedSandbox || state.selectedSandboxMode || "workspace-write";
       state.selectedApprovalPolicy = storedApproval || state.selectedApprovalPolicy || "on-request";
+      state.selectedEngine = storedEngine || state.selectedEngine || runConfig.default_engine || "codex";
+      
       state.selectedWorkflowWorkspaceRoot = state.selectedWorkflowWorkspaceRoot || state.selectedWorkspaceRoot;
       state.selectedWorkflowSandboxMode = state.selectedWorkflowSandboxMode || state.selectedSandboxMode;
       state.selectedWorkflowApprovalPolicy = state.selectedWorkflowApprovalPolicy || state.selectedApprovalPolicy;
@@ -1889,6 +1903,7 @@
         workspace_root: state.selectedWorkspaceRoot || null,
         sandbox_mode: state.selectedSandboxMode || null,
         approval_policy: state.selectedApprovalPolicy || null,
+        engine: state.selectedEngine || null,
       });
       state.selectedRunId = created.run_id;
       state.liveText = `실행 생성: ${created.run_id}`;
@@ -1967,6 +1982,7 @@
       workspace_root: state.selectedWorkflowWorkspaceRoot || null,
       sandbox_mode: state.selectedWorkflowSandboxMode || null,
       approval_policy: state.selectedWorkflowApprovalPolicy || null,
+      engine: state.selectedEngine || null,
       steps: state.workflowDraft.steps.map(function (step) {
         return {
           agent_name: step.agentName,
@@ -2037,6 +2053,7 @@
         <ul class="drawer-list">
           <li><strong>Agent</strong><div class="drawer-subtitle">${escapeHtml(run.agent_name)}</div></li>
           <li><strong>Status</strong><div class="drawer-subtitle">${escapeHtml(run.status)}</div></li>
+          <li><strong>Engine</strong><div class="drawer-subtitle">${escapeHtml(run.engine || "codex")}</div></li>
           <li><strong>Workspace</strong><div class="drawer-subtitle">${escapeHtml(run.workspace_root || "")}</div></li>
         </ul>
       </section>
@@ -2146,6 +2163,7 @@
     state.selectedWorkspaceRoot = window.localStorage.getItem(WORKSPACE_ROOT_KEY) || "";
     state.selectedSandboxMode = window.localStorage.getItem(SANDBOX_MODE_KEY) || "workspace-write";
     state.selectedApprovalPolicy = window.localStorage.getItem(APPROVAL_POLICY_KEY) || "on-request";
+    state.selectedEngine = window.localStorage.getItem(ENGINE_KEY) || "codex";
     state.selectedWorkflowWorkspaceRoot = state.selectedWorkspaceRoot;
     state.selectedWorkflowSandboxMode = state.selectedSandboxMode;
     state.selectedWorkflowApprovalPolicy = state.selectedApprovalPolicy;
@@ -2273,6 +2291,13 @@
         const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;
         const file = data ? (data.references || []).find(function (item) { return item.path === state.selectedInspectorReferencePath; }) : null;
         saveInspectorFile(file, el.inspectorReferenceContent, "레퍼런스").catch(handleError);
+      });
+    }
+
+    if (el.globalEngineSelect) {
+      el.globalEngineSelect.addEventListener("change", function () {
+        state.selectedEngine = el.globalEngineSelect.value || "codex";
+        window.localStorage.setItem(ENGINE_KEY, state.selectedEngine);
       });
     }
 

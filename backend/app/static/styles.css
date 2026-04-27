@@ -318,13 +318,21 @@ body[data-theme="cyber-fusion"] .rail-bottom {
 }
 
 body[data-theme="cyber-fusion"] .rail-bottom .field-label {
-  text-align: center;
-  font-size: 0.58rem;
-  letter-spacing: 0.18em;
+  text-align: left;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin-bottom: 6px;
+  display: block;
 }
 
 body[data-theme="cyber-fusion"] .theme-select {
-  display: none;
+  display: block;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(0, 255, 136, 0.05);
 }
 
 body[data-theme="cyber-fusion"] .theme-quick-switch {
