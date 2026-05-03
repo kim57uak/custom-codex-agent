@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from app.services.run_orchestrator import RunOrchestrator
     from app.services.workflow_orchestrator import WorkflowOrchestrator
     from app.services.skill_agent_backup_service import SkillAgentBackupService
+    from app.services.inspector_service import AgentInspectorService
 
 
 logger = logging.getLogger(__name__)
@@ -83,6 +84,7 @@ class ApiContext:
     write_api_token: str | None
     settings: AppSettings
     backup_service: SkillAgentBackupService
+    inspector_service: AgentInspectorService
 
 
 def _to_run_status(raw_status: str) -> str:
@@ -102,50 +104,6 @@ def _verify_write_token(write_api_token: str | None, x_api_token: str | None) ->
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid write api token")
 
 
-def _safe_read_text(path: Path, max_chars: int | None = None) -> tuple[str, bool]:
-    """
-    Safely reads text from a file up to a specified maximum character limit.
-    This prevents memory exhaustion and excessive token usage when reading large files.
-    """
-    limit = max_chars if max_chars is not None else SETTINGS.safe_read_text_max_chars
-    text = path.read_text(encoding="utf-8", errors="replace")
-    if len(text) <= limit:
-        return text, False
-    return text[:limit], True
-
-
-def _is_within_root(path: Path, root: Path) -> bool:
-    """
-    Checks if a given path is strictly within a root directory.
-    This is a security measure to prevent path traversal attacks (e.g., using '../../').
-    """
-    try:
-        path.resolve().relative_to(root.resolve())
-        return True
-    except ValueError:
-        return False
-
-
-def _to_file_model(path: Path, kind: str) -> AgentInspectorFileModel:
-    content, truncated = _safe_read_text(path)
-    try:
-        stat = path.stat()
-        modified_at = datetime.fromtimestamp(stat.st_mtime)
-        size_bytes = stat.st_size
-    except OSError:
-        modified_at = None
-        size_bytes = 0
-    return AgentInspectorFileModel(
-        name=path.name,
-        path=str(path),
-        kind=kind,
-        size_bytes=size_bytes,
-        modified_at=modified_at,
-        content=content,
-        truncated=truncated,
-    )
-
-
 def _find_agent_or_404(ctx: ApiContext, agent_name: str, engine: str | None = None):
     # 엔진 선택에 따라 에이전트 목록이 달라질 수 있으므로 engine 파라미터를 명시적으로 전달함
     inventory = ctx.service.build_inventory(engine=engine)
@@ -153,37 +111,6 @@ def _find_agent_or_404(ctx: ApiContext, agent_name: str, engine: str | None = No
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent not found")
     return target
-
-
-def _inspector_paths_for_agent(ctx: ApiContext, agent_name: str, skill_path_value: str | None, engine: str | None = None) -> dict[Path, str]:
-    """
-    Determines which files associated with a specific agent are safe to be inspected or edited.
-    It builds a whitelist of editable paths to ensure users cannot modify arbitrary system files.
-    """
-    editable_paths: dict[Path, str] = {}
-    # 엔진별 홈 디렉토리와 에이전트 루트를 사용하여 경로 검증을 수행함
-    engine_home = ctx.settings.get_home(engine)
-    agents_root = ctx.settings.get_agents_root(engine)
-    agent_dir = agents_root / agent_name
-    skill_path = Path(skill_path_value).expanduser() if skill_path_value else None
-    skill_dir = skill_path.parent if skill_path else None
-
-    def add_file(path: Path, kind: str) -> None:
-        if path.exists() and path.is_file() and _is_within_root(path, engine_home):
-            editable_paths[path.resolve()] = kind
-
-    add_file(agent_dir / "agent.toml", "agent-toml")
-    add_file(agent_dir / "config.json", "agent-json")
-    if skill_path:
-        add_file(skill_path, "skill-md")
-    if skill_dir and skill_dir.exists() and _is_within_root(skill_dir, engine_home):
-        for subdir_name, kind in (("references", "reference"), ("scripts", "script")):
-            subdir = skill_dir / subdir_name
-            if not subdir.exists() or not subdir.is_dir():
-                continue
-            for file_path in sorted(subdir.rglob("*")):
-                add_file(file_path, kind)
-    return editable_paths
 
 
 def _to_run_detail_model(record) -> RunDetailModel:
@@ -292,57 +219,7 @@ def register_inspector_routes(ctx: ApiContext) -> None:
     def get_agent_inspector(agent_name: str, engine: str | None = Query(default=None)) -> AgentInspectorResponse:
         # 에이전트 인스펙터 진입 시에도 선택된 엔진의 홈 디렉토리에서 파일을 찾도록 engine 파라미터 추가
         target = _find_agent_or_404(ctx, agent_name, engine=engine)
-        engine_home = ctx.settings.get_home(engine)
-        agents_root = ctx.settings.get_agents_root(engine)
-        agent_dir = agents_root / agent_name
-        agent_toml_path = agent_dir / "agent.toml"
-        agent_json_path = agent_dir / "config.json"
-        skill_path = Path(target.skill_path).expanduser() if target.skill_path else None
-        skill_dir = skill_path.parent if skill_path else None
-
-        skill_markdown = None
-        if skill_path and skill_path.exists() and skill_path.is_file() and _is_within_root(skill_path, engine_home):
-            skill_markdown = _to_file_model(skill_path, "skill-md")
-
-        agent_toml = None
-        if agent_toml_path.exists() and agent_toml_path.is_file() and _is_within_root(agent_toml_path, engine_home):
-            agent_toml = _to_file_model(agent_toml_path, "agent-toml")
-
-        agent_json = None
-        if agent_json_path.exists() and agent_json_path.is_file() and _is_within_root(agent_json_path, engine_home):
-            agent_json = _to_file_model(agent_json_path, "agent-json")
-
-        references: list[AgentInspectorFileModel] = []
-        scripts: list[AgentInspectorFileModel] = []
-        if skill_dir and skill_dir.exists() and _is_within_root(skill_dir, engine_home):
-            for subdir_name, collection, kind in (
-                ("references", references, "reference"),
-                ("scripts", scripts, "script"),
-            ):
-                subdir = skill_dir / subdir_name
-                if not subdir.exists() or not subdir.is_dir():
-                    continue
-                for file_path in sorted(subdir.rglob("*")):
-                    if file_path.is_file():
-                        collection.append(_to_file_model(file_path, kind))
-
-        return AgentInspectorResponse(
-            agent_name=target.name,
-            role_label_ko=target.role_label_ko,
-            department_label_ko=target.department_label_ko,
-            description=target.description,
-            short_description=target.short_description,
-            one_click_prompt=target.one_click_prompt,
-            skill_name=target.skill_name,
-            skill_path=target.skill_path,
-            agent_toml_path=str(agent_toml_path) if agent_toml_path.exists() else None,
-            agent_json_path=str(agent_json_path) if agent_json_path.exists() else None,
-            skill_markdown=skill_markdown,
-            agent_toml=agent_toml,
-            agent_json=agent_json,
-            references=references,
-            scripts=scripts,
-        )
+        return ctx.inspector_service.build_inspector_response(target, engine=engine)
 
     @ctx.router.post("/agents/{agent_name}/inspector/files", response_model=AgentInspectorFileSaveResponse)
     def save_agent_inspector_file(
@@ -351,32 +228,36 @@ def register_inspector_routes(ctx: ApiContext) -> None:
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> AgentInspectorFileSaveResponse:
         _verify_write_token(ctx.write_api_token, x_api_token)
-        target = _find_agent_or_404(ctx, agent_name, engine=payload.engine if hasattr(payload, "engine") else None)
-        try:
-            requested_path = Path(payload.path).expanduser().resolve()
-        except OSError as err:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"invalid path: {err}") from err
-
-        editable_paths = _inspector_paths_for_agent(ctx, agent_name, target.skill_path, engine=payload.engine if hasattr(payload, "engine") else None)
-        file_kind = editable_paths.get(requested_path)
-        if file_kind is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="file is not editable from this inspector")
         if len(payload.content) > ctx.settings.safe_read_text_max_chars * 10:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file content is too large")
-        if file_kind == "agent-json" or requested_path.suffix.lower() == ".json":
+
+        engine = payload.engine if hasattr(payload, "engine") else None
+        
+        # JSON 유효성 검사 (설정 파일인 경우)
+        if payload.path.lower().endswith(".json"):
             try:
                 json.loads(payload.content)
             except json.JSONDecodeError as err:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"invalid json: {err.msg}") from err
 
         try:
-            tmp_path = requested_path.with_name(f".{requested_path.name}.tmp")
-            tmp_path.write_text(payload.content, encoding="utf-8")
-            tmp_path.replace(requested_path)
-        except OSError as err:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"save failed: {err}") from err
-
-        return AgentInspectorFileSaveResponse(status="ok", file=_to_file_model(requested_path, file_kind))
+            saved_path = ctx.inspector_service.save_file(
+                agent_name=agent_name,
+                file_path_str=payload.path,
+                content=payload.content,
+                engine=engine
+            )
+            # 성공 시 갱신된 파일 정보를 반환하기 위해 서비스 헬퍼 사용
+            # kind는 저장 시점에 정확히 알기 어려우므로 general하게 처리하거나 서비스에서 반환받아야 함
+            # 여기서는 간단히 저장된 경로만 반환하거나 서비스에서 모델을 생성하도록 유도
+            return AgentInspectorFileSaveResponse(
+                status="ok", 
+                file=ctx.inspector_service.build_file_model(saved_path, kind="updated")
+            )
+        except (PermissionError, FileNotFoundError) as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"save failed: {e}")
 
 
 def register_config_routes(ctx: ApiContext) -> None:

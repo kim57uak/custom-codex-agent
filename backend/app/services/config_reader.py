@@ -144,32 +144,35 @@ class CodexConfigReader:
         history_path = self._settings.get_history_file_path(engine)
         if not history_path.exists():
             return []
-        lines = history_path.read_text(encoding="utf-8").splitlines()[-limit:]
         items: list[dict[str, object]] = []
-        for line in lines:
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            record["timestamp"] = datetime.fromtimestamp(record.get("ts", 0), tz=timezone.utc)
-            items.append(record)
-        return list(reversed(items))
+        with history_path.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                    record["timestamp"] = datetime.fromtimestamp(record.get("ts", 0), tz=timezone.utc)
+                    items.append(record)
+                    if len(items) > limit * 2:
+                         items = items[-limit:]
+                except json.JSONDecodeError:
+                    continue
+        return list(reversed(items[-limit:]))
 
     def read_history_since(self, unix_ts: int, engine: str | None = None) -> list[dict[str, object]]:
         history_path = self._settings.get_history_file_path(engine)
         if not history_path.exists():
             return []
         items: list[dict[str, object]] = []
-        for line in history_path.read_text(encoding="utf-8").splitlines():
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            ts = int(record.get("ts") or 0)
-            if ts < unix_ts:
-                continue
-            record["timestamp"] = datetime.fromtimestamp(ts, tz=timezone.utc)
-            items.append(record)
+        with history_path.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                    ts = int(record.get("ts") or 0)
+                    if ts < unix_ts:
+                        continue
+                    record["timestamp"] = datetime.fromtimestamp(ts, tz=timezone.utc)
+                    items.append(record)
+                except json.JSONDecodeError:
+                    continue
         return items
 
     def read_history(self, engine: str | None = None) -> list[dict[str, object]]:
@@ -177,13 +180,14 @@ class CodexConfigReader:
         if not history_path.exists():
             return []
         items: list[dict[str, object]] = []
-        for line in history_path.read_text(encoding="utf-8").splitlines():
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            record["timestamp"] = datetime.fromtimestamp(record.get("ts", 0), tz=timezone.utc)
-            items.append(record)
+        with history_path.open("r", encoding="utf-8", errors="replace") as f:
+            for line in f:
+                try:
+                    record = json.loads(line)
+                    record["timestamp"] = datetime.fromtimestamp(record.get("ts", 0), tz=timezone.utc)
+                    items.append(record)
+                except json.JSONDecodeError:
+                    continue
         return items
 
     def get_scan_timestamp(self) -> datetime:

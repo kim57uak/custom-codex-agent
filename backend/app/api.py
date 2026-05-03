@@ -18,6 +18,7 @@ from app.services.event_stream import EventBroker
 from app.services.run_orchestrator import RunOrchestrator
 from app.services.skill_agent_backup_service import SkillAgentBackupService
 from app.services.workflow_orchestrator import WorkflowOrchestrator
+from app.services.inspector_service import AgentInspectorService
 
 
 def build_api_router(
@@ -47,6 +48,7 @@ def build_api_router(
         settings=settings,
         write_api_token=write_api_token,
         backup_service=SkillAgentBackupService(settings),
+        inspector_service=AgentInspectorService(settings),
     )
     register_read_routes(ctx)
     register_inspector_routes(ctx)

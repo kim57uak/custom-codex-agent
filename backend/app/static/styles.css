@@ -28,17 +28,17 @@ body[data-theme="glass-enterprise"] {
   --panel-soft: rgba(255, 255, 255, 0.75);
   --accent: #4f46e5;
   --accent-glow: rgba(79, 70, 229, 0.18);
-  --border: #e2e8f0;
+  --border: #cbd5e1;
   --text: #0f172a;
-  --text-m: #475569;
+  --text-m: #334155;
   --accent-contrast: #ffffff;
-  --button-bg: rgba(255, 255, 255, 0.96);
-  --button-bg-hover: rgba(238, 242, 255, 1);
+  --button-bg: rgba(255, 255, 255, 0.98);
+  --button-bg-hover: #f1f5f9;
   --button-primary-bg: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
-  --warn: #f59e0b;
-  --danger: #ef4444;
-  --ok: #10b981;
-  --grid: rgba(148, 163, 184, 0.14);
+  --warn: #d97706;
+  --danger: #dc2626;
+  --ok: #059669;
+  --grid: rgba(71, 85, 105, 0.08);
   --font-display: "Outfit", "Inter", sans-serif;
   --font-body: "Outfit", "Inter", sans-serif;
 }
@@ -50,17 +50,17 @@ body[data-theme="minimal-pro"] {
   --panel-soft: rgba(0, 0, 0, 0.92);
   --accent: #ffffff;
   --accent-glow: rgba(255, 255, 255, 0.12);
-  --border: #222222;
+  --border: #333333;
   --text: #ffffff;
-  --text-m: #b3b3b3;
+  --text-m: #d1d1d1;
   --accent-contrast: #000000;
-  --button-bg: rgba(10, 10, 10, 0.96);
-  --button-bg-hover: rgba(22, 22, 22, 1);
-  --button-primary-bg: linear-gradient(135deg, #ffffff 0%, #d6d6d6 100%);
-  --warn: #facc15;
-  --danger: #ff4444;
+  --button-bg: #111111;
+  --button-bg-hover: #1a1a1a;
+  --button-primary-bg: linear-gradient(135deg, #ffffff 0%, #eeeeee 100%);
+  --warn: #fde047;
+  --danger: #ff5555;
   --ok: #ffffff;
-  --grid: rgba(255, 255, 255, 0.05);
+  --grid: rgba(255, 255, 255, 0.06);
   --font-display: "Inter", sans-serif;
   --font-body: "Inter", sans-serif;
 }
@@ -384,7 +384,7 @@ body[data-theme="cyber-fusion"] .rail-tab span {
 .theme-picker-group,
 .engine-picker-group {
   display: flex;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--panel-soft);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 3px;
@@ -613,7 +613,7 @@ body[data-theme="minimal-pro"] .engine-picker-btn.active {
 .theme-select,
 .proto-input {
   width: 100%;
-  background: #000;
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
@@ -820,6 +820,7 @@ body[data-theme="glass-enterprise"] .action-btn {
 }
 
 body[data-theme="glass-enterprise"] .action-btn-primary {
+  background: var(--button-primary-bg);
   color: var(--accent-contrast);
 }
 
@@ -1408,12 +1409,15 @@ body[data-theme="minimal-pro"] .workflow-recommendation-pill-remove {
 body[data-theme="glass-enterprise"] .workflow-log-entry,
 body[data-theme="glass-enterprise"] .workflow-log-empty,
 body[data-theme="glass-enterprise"] .workflow-conversation-status {
-  background: rgba(255, 255, 255, 0.72);
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
 body[data-theme="minimal-pro"] .workflow-log-entry,
 body[data-theme="minimal-pro"] .workflow-log-empty,
 body[data-theme="minimal-pro"] .workflow-conversation-status {
+  background: #111111;
   border-radius: 0;
 }
 
@@ -1529,8 +1533,10 @@ body[data-theme="minimal-pro"] .modal-panel {
 }
 
 body[data-theme="glass-enterprise"] .hud-card {
-  background: rgba(255, 255, 255, 0.72);
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
   border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
 }
 
 body[data-theme="minimal-pro"] .hud-card {
@@ -2134,9 +2140,8 @@ body[data-theme="minimal-pro"] .recommendation-chip {
 }
 
 body[data-theme="glass-enterprise"] #inspector-view .agent-directory-card {
-  background:
-    linear-gradient(180deg, var(--org-accent-soft, transparent), transparent),
-    rgba(255, 255, 255, 0.82);
+  background: #ffffff;
+  border-color: #cbd5e1;
 }
 
 body[data-theme="minimal-pro"] #inspector-view .agent-directory-card {
@@ -2472,7 +2477,7 @@ body[data-theme="minimal-pro"] .workflow-command-card {
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 18px;
-  background: color-mix(in srgb, var(--panel) 92%, white 8%);
+  background: var(--panel);
   display: flex;
   flex-direction: column;
   min-height: 420px;
@@ -2480,7 +2485,7 @@ body[data-theme="minimal-pro"] .workflow-command-card {
   max-height: 680px;
   gap: 12px;
   overflow: hidden;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
 }
 
 .file-card-head {
