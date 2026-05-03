@@ -1,6 +1,6 @@
-@/Users/dolpaks/.codex/RTK.md
+@/Users/dolpaks/.gemini/antigravity/RTK.md
 
-# Custom Codex Agent Project Instructions
+# Custom Gemini Agent Project Instructions
 
 ## RTK Shell Rule
 
@@ -19,20 +19,20 @@ Use `rtk proxy <cmd>` only when `rtk` does not support a command shape directly,
 
 RTK reference:
 
-- `/Users/dolpaks/.codex/RTK.md`
+- `/Users/dolpaks/.gemini/antigravity/RTK.md`
 
 ## Project Map
 
 - Web app root: `/Users/dolpaks/Downloads/project/custom-codex-agent`
 - Backend: `backend/app`
 - Static UI: `backend/app/static`
-- User skills root: `/Users/dolpaks/.codex/skills`
-- User agents root: `/Users/dolpaks/.codex/agents`
-- Agent-to-skill index: `/Users/dolpaks/.codex/agents/README.md`
+- User skills root: `/Users/dolpaks/.gemini/antigravity/skills`
+- User agents root: `/Users/dolpaks/.gemini/antigravity/agents`
+- Agent-to-skill index: `/Users/dolpaks/.gemini/antigravity/agents/README.md`
 
 ## Skill Discovery Summary
 
-Codex should treat `/Users/dolpaks/.codex/skills/*/SKILL.md` as the source of truth for installed user skills. Agent configs in `/Users/dolpaks/.codex/agents/*/config.json` map runnable agents to those skills.
+Gemini should treat `/Users/dolpaks/.gemini/antigravity/skills/*/SKILL.md` as the source of truth for installed user skills. Agent configs in `/Users/dolpaks/.gemini/antigravity/agents/*/config.json` map runnable agents to those skills.
 
 Current notable skill groups:
 
@@ -48,7 +48,7 @@ Important rename:
 
 - `java-agent-harness-engineering` was renamed to `agent-harness-engineering`.
 - The matching agent is now `agent-harness-engineering-agent`.
-- The current skill file is `/Users/dolpaks/.codex/skills/agent-harness-engineering/SKILL.md`.
+- The current skill file is `/Users/dolpaks/.gemini/antigravity/skills/agent-harness-engineering/SKILL.md`.
 
 ## Dashboard Behavior Notes
 
@@ -59,7 +59,7 @@ Important rename:
 ## Verification Shortcuts
 
 ```bash
-rtk rg -n "old-skill-name|new-skill-name" /Users/dolpaks/.codex/skills /Users/dolpaks/.codex/agents backend
+rtk rg -n "old-skill-name|new-skill-name" /Users/dolpaks/.gemini/antigravity/skills /Users/dolpaks/.gemini/antigravity/agents backend
 rtk python3 -m compileall -q backend/app
 rtk node --check backend/app/static/app.js
 ```

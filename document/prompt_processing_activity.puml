@@ -1,0 +1,32 @@
+@startuml
+title Prompt Processing & Execution Activity
+
+start
+:Receive Run Request;
+if (Engine specified?) then (yes)
+  :Use Specified Engine;
+else (no)
+  :Use AppSettings Default (Gemini);
+endif
+
+:Create Run Record (Status: Queued);
+:Resolve Workspace Root;
+
+partition "Execution Loop" {
+  :Initialize Engine Adapter;
+  :Fetch Required Skills/Agents;
+  :Build Full Prompt Context;
+  :Execute CLI (Subprocess);
+  
+  if (CLI Execution Success?) then (yes)
+    :Parse CLI Output;
+    :Mark Run Completed;
+  else (no)
+    :Capture Error Message;
+    :Mark Run Failed;
+  endif
+}
+
+:Publish Event to UI;
+stop
+@enduml

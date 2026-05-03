@@ -1,0 +1,24 @@
+@startuml
+title Run Lifecycle State Machine
+
+[*] --> Queued : create_run()
+
+state Queued {
+}
+
+Queued --> Running : _execute_run()
+Running --> Completed : exit_code == 0
+Running --> Failed : exit_code != 0
+Running --> Canceled : cancel_run()
+
+Completed --> [*]
+Failed --> [*]
+Canceled --> [*]
+
+state Running {
+  [*] --> Initializing
+  Initializing --> ExecutingCLI : get_adapter()
+  ExecutingCLI --> ProcessingOutput
+  ProcessingOutput --> [*]
+}
+@enduml

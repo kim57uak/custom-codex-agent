@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
+from app.config import SETTINGS
+
 
 def _utc_now() -> datetime:
     return datetime.now(tz=timezone.utc)
@@ -117,7 +119,8 @@ class RunStore:
                 # engine 컬럼이 이미 존재하면 무시한다.
                 pass
 
-    def create_run(self, run_id: str, agent_name: str, workspace_root: str, prompt: str, engine: str = "codex") -> RunRecord:
+    def create_run(self, run_id: str, agent_name: str, workspace_root: str, prompt: str, engine: str | None = None) -> RunRecord:
+        effective_engine = engine or SETTINGS.default_engine
         now = _utc_now()
         with self._connect() as connection:
             connection.execute(
@@ -125,7 +128,7 @@ class RunStore:
                 insert into runs (run_id, agent_name, workspace_root, prompt, status, engine, created_at)
                 values (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, agent_name, workspace_root, prompt, "queued", engine, _to_unix_seconds(now)),
+                (run_id, agent_name, workspace_root, prompt, "queued", effective_engine, _to_unix_seconds(now)),
             )
         return self.get_run(run_id)
 
@@ -182,22 +185,40 @@ class RunStore:
             return None
         return self._row_to_run_record(row)
 
-    def list_runs(self, limit: int = 30) -> list[RunRecord]:
-        bounded_limit = max(1, min(limit, 200))
+    def list_runs(self, limit: int | None = None, engine: str | None = None) -> list[RunRecord]:
+        """
+        summary: 저장된 실행 이력을 최신순으로 조회한다.
+        rationale: 엔진별로 실행 이력을 필터링하여 UI에서 현재 선택된 엔진의 활동만 볼 수 있도록 개선함.
+        """
+        actual_limit = limit if limit is not None else SETTINGS.run_list_limit_default
+        bounded_limit = max(1, min(actual_limit, SETTINGS.run_list_limit_max))
         with self._connect() as connection:
-            rows = connection.execute(
-                """
-                select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
-                from runs
-                order by created_at desc
-                limit ?
-                """,
-                (bounded_limit,),
-            ).fetchall()
+            if engine:
+                rows = connection.execute(
+                    """
+                    select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
+                    from runs
+                    where engine = ?
+                    order by created_at desc
+                    limit ?
+                    """,
+                    (engine, bounded_limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
+                    from runs
+                    order by created_at desc
+                    limit ?
+                    """,
+                    (bounded_limit,),
+                ).fetchall()
         return [self._row_to_run_record(row) for row in rows]
 
-    def list_run_events(self, run_id: str, limit: int = 500) -> list[RunEventRecord]:
-        bounded_limit = max(1, min(limit, 2000))
+    def list_run_events(self, run_id: str, limit: int | None = None) -> list[RunEventRecord]:
+        actual_limit = limit if limit is not None else SETTINGS.run_event_list_limit_default
+        bounded_limit = max(1, min(actual_limit, SETTINGS.run_event_list_limit_max))
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -219,7 +240,7 @@ class RunStore:
         try:
             engine_value = str(row["engine"])
         except (IndexError, KeyError):
-            engine_value = "codex"
+            engine_value = SETTINGS.default_engine
         return RunRecord(
             run_id=str(row["run_id"]),
             agent_name=str(row["agent_name"]),

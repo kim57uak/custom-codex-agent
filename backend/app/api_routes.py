@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Body, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
-from app.config import AppSettings
+from app.config import SETTINGS
 from app.models import (
     AgentInspectorFileModel,
     AgentInspectorFileSaveRequest,
@@ -47,28 +49,39 @@ from app.models import (
     WorkflowStepRunModel,
     WorkflowUiConfigResponse,
 )
-from app.services.dashboard_service import DashboardService
-from app.services.event_stream import EventBroker
-from app.services.run_orchestrator import RunOrchestrator
-from app.services.skill_agent_backup_service import SkillAgentBackupService
 from app.services.workflow_catalog import (
     WORKFLOW_APPROVAL_OPTIONS,
     WORKFLOW_ICON_RULES,
     WORKFLOW_SANDBOX_OPTIONS,
     WORKFLOW_STEP_STATUS_OPTIONS,
 )
-from app.services.workflow_orchestrator import WorkflowOrchestrator
+
+if TYPE_CHECKING:
+    from app.config import AppSettings
+    from app.services.dashboard_service import DashboardService
+    from app.services.event_stream import EventBroker
+    from app.services.run_orchestrator import RunOrchestrator
+    from app.services.workflow_orchestrator import WorkflowOrchestrator
+    from app.services.skill_agent_backup_service import SkillAgentBackupService
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class ApiContext:
+    """
+    Context object passed to route registration functions to provide access
+    to shared services, configuration, and state. Using a context object
+    simplifies dependency injection for FastAPI routes.
+    """
     router: APIRouter
     service: DashboardService
     broker: EventBroker
     run_orchestrator: RunOrchestrator
     workflow_orchestrator: WorkflowOrchestrator
-    settings: AppSettings
     write_api_token: str | None
+    settings: AppSettings
     backup_service: SkillAgentBackupService
 
 
@@ -78,20 +91,34 @@ def _to_run_status(raw_status: str) -> str:
 
 
 def _verify_write_token(write_api_token: str | None, x_api_token: str | None) -> None:
+    """
+    Verifies if the provided API token matches the expected write token.
+    This ensures that state-modifying endpoints (POST/PUT/DELETE) are protected
+    from unauthorized access.
+    """
     if not write_api_token:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="write api disabled")
     if x_api_token != write_api_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid write api token")
 
 
-def _safe_read_text(path: Path, max_chars: int = 160000) -> tuple[str, bool]:
+def _safe_read_text(path: Path, max_chars: int | None = None) -> tuple[str, bool]:
+    """
+    Safely reads text from a file up to a specified maximum character limit.
+    This prevents memory exhaustion and excessive token usage when reading large files.
+    """
+    limit = max_chars if max_chars is not None else SETTINGS.safe_read_text_max_chars
     text = path.read_text(encoding="utf-8", errors="replace")
-    if len(text) <= max_chars:
+    if len(text) <= limit:
         return text, False
-    return text[:max_chars], True
+    return text[:limit], True
 
 
 def _is_within_root(path: Path, root: Path) -> bool:
+    """
+    Checks if a given path is strictly within a root directory.
+    This is a security measure to prevent path traversal attacks (e.g., using '../../').
+    """
     try:
         path.resolve().relative_to(root.resolve())
         return True
@@ -119,29 +146,37 @@ def _to_file_model(path: Path, kind: str) -> AgentInspectorFileModel:
     )
 
 
-def _find_agent_or_404(ctx: ApiContext, agent_name: str):
-    inventory = ctx.service.build_inventory()
+def _find_agent_or_404(ctx: ApiContext, agent_name: str, engine: str | None = None):
+    # 엔진 선택에 따라 에이전트 목록이 달라질 수 있으므로 engine 파라미터를 명시적으로 전달함
+    inventory = ctx.service.build_inventory(engine=engine)
     target = next((agent for agent in inventory.agents if agent.name == agent_name), None)
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent not found")
     return target
 
 
-def _inspector_paths_for_agent(ctx: ApiContext, agent_name: str, skill_path_value: str | None) -> dict[Path, str]:
+def _inspector_paths_for_agent(ctx: ApiContext, agent_name: str, skill_path_value: str | None, engine: str | None = None) -> dict[Path, str]:
+    """
+    Determines which files associated with a specific agent are safe to be inspected or edited.
+    It builds a whitelist of editable paths to ensure users cannot modify arbitrary system files.
+    """
     editable_paths: dict[Path, str] = {}
-    agent_dir = ctx.settings.agents_root / agent_name
+    # 엔진별 홈 디렉토리와 에이전트 루트를 사용하여 경로 검증을 수행함
+    engine_home = ctx.settings.get_home(engine)
+    agents_root = ctx.settings.get_agents_root(engine)
+    agent_dir = agents_root / agent_name
     skill_path = Path(skill_path_value).expanduser() if skill_path_value else None
     skill_dir = skill_path.parent if skill_path else None
 
     def add_file(path: Path, kind: str) -> None:
-        if path.exists() and path.is_file() and _is_within_root(path, ctx.settings.codex_home):
+        if path.exists() and path.is_file() and _is_within_root(path, engine_home):
             editable_paths[path.resolve()] = kind
 
     add_file(agent_dir / "agent.toml", "agent-toml")
     add_file(agent_dir / "config.json", "agent-json")
     if skill_path:
         add_file(skill_path, "skill-md")
-    if skill_dir and skill_dir.exists() and _is_within_root(skill_dir, ctx.settings.codex_home):
+    if skill_dir and skill_dir.exists() and _is_within_root(skill_dir, engine_home):
         for subdir_name, kind in (("references", "reference"), ("scripts", "script")):
             subdir = skill_dir / subdir_name
             if not subdir.exists() or not subdir.is_dir():
@@ -210,28 +245,32 @@ def _get_workflow_run_detail_or_404(ctx: ApiContext, workflow_run_id: str) -> Wo
 
 def register_read_routes(ctx: ApiContext) -> None:
     @ctx.router.get("/overview", response_model=OverviewModel)
-    def get_overview() -> OverviewModel:
-        return ctx.service.build_overview()
+    def get_overview(engine: str | None = Query(default=None)) -> OverviewModel:
+        # 선택된 엔진에 맞는 개요 데이터를 로드하도록 파라미터 추가
+        return ctx.service.build_overview(engine=engine)
 
     @ctx.router.get("/graph/router", response_model=RouterGraphResponse)
-    def get_router_graph() -> RouterGraphResponse:
-        return ctx.service.build_router_graph()
+    def get_router_graph(engine: str | None = Query(default=None)) -> RouterGraphResponse:
+        # 엔진별 라우터 구성이 다를 수 있으므로 engine 파라미터 반영
+        return ctx.service.build_router_graph(engine=engine)
 
     @ctx.router.get("/graph/org", response_model=OrganizationChartResponse)
-    def get_org_chart() -> OrganizationChartResponse:
-        return ctx.service.build_org_chart()
+    def get_org_chart(engine: str | None = Query(default=None)) -> OrganizationChartResponse:
+        # 엔진별 에이전트 소속이 다를 수 있으므로 실시간 조직도 생성 시 engine 파라미터 사용
+        return ctx.service.build_org_chart(engine=engine)
 
     @ctx.router.get("/dashboard", response_model=DashboardResponse)
-    def get_dashboard() -> DashboardResponse:
-        return ctx.service.build_dashboard()
+    def get_dashboard(engine: str | None = Query(default=None)) -> DashboardResponse:
+        return ctx.service.build_dashboard(engine=engine)
 
     @ctx.router.get("/inventory", response_model=InventoryResponse)
-    def get_inventory() -> InventoryResponse:
-        return ctx.service.build_inventory()
+    def get_inventory(engine: str | None = Query(default=None)) -> InventoryResponse:
+        # 인벤토리 조회 시에도 엔진 파라미터를 넘겨서 Gemini/Codex 전용 목록을 가져옴
+        return ctx.service.build_inventory(engine=engine)
 
     @ctx.router.get("/agents/executable", response_model=ExecutableAgentsResponse)
-    def get_executable_agents() -> ExecutableAgentsResponse:
-        inventory = ctx.service.build_inventory()
+    def get_executable_agents(engine: str | None = Query(default=None)) -> ExecutableAgentsResponse:
+        inventory = ctx.service.build_inventory(engine=engine)
         agents = [
             ExecutableAgentModel(
                 name=agent.name,
@@ -250,29 +289,32 @@ def register_read_routes(ctx: ApiContext) -> None:
 
 def register_inspector_routes(ctx: ApiContext) -> None:
     @ctx.router.get("/agents/{agent_name}/inspector", response_model=AgentInspectorResponse)
-    def get_agent_inspector(agent_name: str) -> AgentInspectorResponse:
-        target = _find_agent_or_404(ctx, agent_name)
-        agent_dir = ctx.settings.agents_root / agent_name
+    def get_agent_inspector(agent_name: str, engine: str | None = Query(default=None)) -> AgentInspectorResponse:
+        # 에이전트 인스펙터 진입 시에도 선택된 엔진의 홈 디렉토리에서 파일을 찾도록 engine 파라미터 추가
+        target = _find_agent_or_404(ctx, agent_name, engine=engine)
+        engine_home = ctx.settings.get_home(engine)
+        agents_root = ctx.settings.get_agents_root(engine)
+        agent_dir = agents_root / agent_name
         agent_toml_path = agent_dir / "agent.toml"
         agent_json_path = agent_dir / "config.json"
         skill_path = Path(target.skill_path).expanduser() if target.skill_path else None
         skill_dir = skill_path.parent if skill_path else None
 
         skill_markdown = None
-        if skill_path and skill_path.exists() and skill_path.is_file() and _is_within_root(skill_path, ctx.settings.codex_home):
+        if skill_path and skill_path.exists() and skill_path.is_file() and _is_within_root(skill_path, engine_home):
             skill_markdown = _to_file_model(skill_path, "skill-md")
 
         agent_toml = None
-        if agent_toml_path.exists() and agent_toml_path.is_file() and _is_within_root(agent_toml_path, ctx.settings.codex_home):
+        if agent_toml_path.exists() and agent_toml_path.is_file() and _is_within_root(agent_toml_path, engine_home):
             agent_toml = _to_file_model(agent_toml_path, "agent-toml")
 
         agent_json = None
-        if agent_json_path.exists() and agent_json_path.is_file() and _is_within_root(agent_json_path, ctx.settings.codex_home):
+        if agent_json_path.exists() and agent_json_path.is_file() and _is_within_root(agent_json_path, engine_home):
             agent_json = _to_file_model(agent_json_path, "agent-json")
 
         references: list[AgentInspectorFileModel] = []
         scripts: list[AgentInspectorFileModel] = []
-        if skill_dir and skill_dir.exists() and _is_within_root(skill_dir, ctx.settings.codex_home):
+        if skill_dir and skill_dir.exists() and _is_within_root(skill_dir, engine_home):
             for subdir_name, collection, kind in (
                 ("references", references, "reference"),
                 ("scripts", scripts, "script"),
@@ -309,17 +351,17 @@ def register_inspector_routes(ctx: ApiContext) -> None:
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> AgentInspectorFileSaveResponse:
         _verify_write_token(ctx.write_api_token, x_api_token)
-        target = _find_agent_or_404(ctx, agent_name)
+        target = _find_agent_or_404(ctx, agent_name, engine=payload.engine if hasattr(payload, "engine") else None)
         try:
             requested_path = Path(payload.path).expanduser().resolve()
         except OSError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"invalid path: {err}") from err
 
-        editable_paths = _inspector_paths_for_agent(ctx, agent_name, target.skill_path)
+        editable_paths = _inspector_paths_for_agent(ctx, agent_name, target.skill_path, engine=payload.engine if hasattr(payload, "engine") else None)
         file_kind = editable_paths.get(requested_path)
         if file_kind is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="file is not editable from this inspector")
-        if len(payload.content) > 1000000:
+        if len(payload.content) > ctx.settings.safe_read_text_max_chars * 10:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file content is too large")
         if file_kind == "agent-json" or requested_path.suffix.lower() == ".json":
             try:
@@ -344,7 +386,7 @@ def register_config_routes(ctx: ApiContext) -> None:
             default_workspace_root=str(ctx.run_orchestrator.default_workspace_root),
             write_api_enabled=bool(ctx.write_api_token),
             default_write_api_token=ctx.write_api_token,
-            available_engines=["codex", "gemini"],
+            available_engines=["gemini", "codex"],
             default_engine=ctx.settings.default_engine,
         )
 
@@ -381,7 +423,7 @@ def register_config_routes(ctx: ApiContext) -> None:
         except OSError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="failed to read directory")
 
-        directories = [DirectoryItemModel(name=item.name, path=str(item)) for item in items[:500]]
+        directories = [DirectoryItemModel(name=item.name, path=str(item)) for item in items[:ctx.settings.directory_list_limit]]
         parent_path = str(resolved.parent) if resolved.parent != resolved else None
         return DirectoryBrowseResponse(current_path=str(resolved), parent_path=parent_path, directories=directories)
 
@@ -403,12 +445,13 @@ def register_maintenance_routes(ctx: ApiContext) -> None:
 
     @ctx.router.post("/backups/skills-agents", response_model=SkillAgentBackupResponse)
     async def backup_skills_agents(
+        engine: str | None = Query(default=None),
         purge_after_backup: bool = Query(default=False),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> SkillAgentBackupResponse:
         _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            backup_result = ctx.backup_service.backup(purge_after_backup=purge_after_backup)
+            backup_result = ctx.backup_service.backup(engine=engine, purge_after_backup=purge_after_backup)
         except FileNotFoundError as err:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
         except OSError as err:
@@ -425,11 +468,12 @@ def register_maintenance_routes(ctx: ApiContext) -> None:
 
     @ctx.router.post("/backups/skills-agents/restore", response_model=SkillAgentRestoreResponse)
     async def restore_skills_agents(
+        engine: str | None = Query(default=None),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> SkillAgentRestoreResponse:
         _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            restore_result = ctx.backup_service.restore_latest()
+            restore_result = ctx.backup_service.restore_latest(engine=engine)
         except (FileNotFoundError, ValueError) as err:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
         except OSError as err:
@@ -446,8 +490,12 @@ def register_maintenance_routes(ctx: ApiContext) -> None:
 
 def register_run_routes(ctx: ApiContext) -> None:
     @ctx.router.get("/runs", response_model=RunsResponse)
-    def list_runs(limit: int = Query(default=30, ge=1, le=200)) -> RunsResponse:
-        runs = ctx.run_orchestrator.list_runs(limit=limit)
+    def list_runs(
+        limit: int = Query(default=ctx.settings.run_list_limit_default, ge=1, le=ctx.settings.run_list_limit_max),
+        engine: str | None = Query(default=None),
+    ) -> RunsResponse:
+        # 콘솔 탭에서 현재 엔진에 해당하는 실행 이력만 볼 수 있도록 engine 파라미터 추가
+        runs = ctx.run_orchestrator.list_runs(limit=limit, engine=engine)
         return RunsResponse(
             runs=[
                 RunSummaryModel(
@@ -474,8 +522,12 @@ def register_run_routes(ctx: ApiContext) -> None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _to_run_detail_model(run)
 
+
     @ctx.router.get("/runs/{run_id}/events", response_model=RunEventsResponse)
-    def get_run_events(run_id: str, limit: int = Query(default=300, ge=1, le=2000)) -> RunEventsResponse:
+    def get_run_events(
+        run_id: str,
+        limit: int = Query(default=ctx.settings.run_event_list_limit_default, ge=1, le=ctx.settings.run_event_list_limit_max)
+    ) -> RunEventsResponse:
         run = ctx.run_orchestrator.get_run(run_id)
         if run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
@@ -539,10 +591,11 @@ def register_run_routes(ctx: ApiContext) -> None:
     @ctx.router.post("/runs/{run_id}/retry", response_model=RunDetailModel)
     async def retry_run(
         run_id: str,
+        engine: str | None = Body(None, embed=True),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> RunDetailModel:
         _verify_write_token(ctx.write_api_token, x_api_token)
-        retried = await ctx.run_orchestrator.retry_run(run_id)
+        retried = await ctx.run_orchestrator.retry_run(run_id, engine=engine)
         if retried is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _to_run_detail_model(retried.record)
@@ -551,22 +604,29 @@ def register_run_routes(ctx: ApiContext) -> None:
 def register_workflow_routes(ctx: ApiContext) -> None:
     @ctx.router.post("/workflows/recommend", response_model=WorkflowRecommendResponse)
     async def recommend_workflow_agents(
-        request: WorkflowRecommendRequest,
+        payload: WorkflowRecommendRequest,
+        engine: str | None = Query(default=None),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> WorkflowRecommendResponse:
         _verify_write_token(ctx.write_api_token, x_api_token)
+        # 워크플로 추천 시에도 현재 선택된 엔진에 등록된 에이전트 중에서 고르도록 engine 파라미터 반영
         try:
             recommendations = await ctx.workflow_orchestrator.recommend_agents(
-                request.goal_prompt,
-                max_agents=request.max_agents,
+                goal_prompt=payload.goal_prompt,
+                max_agents=payload.max_agents,
+                engine=engine,
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
-        return WorkflowRecommendResponse(goal=request.goal_prompt.strip(), recommended_agents=recommendations)
+        return WorkflowRecommendResponse(goal=payload.goal_prompt.strip(), recommended_agents=recommendations)
 
     @ctx.router.get("/workflow-runs", response_model=WorkflowRunsResponse)
-    def list_workflow_runs(limit: int = Query(default=30, ge=1, le=200)) -> WorkflowRunsResponse:
-        runs = ctx.workflow_orchestrator.list_workflow_runs(limit=limit)
+    def list_workflow_runs(
+        limit: int = Query(default=ctx.settings.run_list_limit_default, ge=1, le=ctx.settings.run_list_limit_max),
+        engine: str | None = Query(default=None),
+    ) -> WorkflowRunsResponse:
+        # 워크플로 실행 이력 조회 시 현재 엔진에 해당하는 것만 필터링하도록 파라미터 추가
+        runs = ctx.workflow_orchestrator.list_workflow_runs(limit=limit, engine=engine)
         return WorkflowRunsResponse(
             runs=[
                 WorkflowRunSummaryModel(
@@ -592,7 +652,7 @@ def register_workflow_routes(ctx: ApiContext) -> None:
     @ctx.router.get("/workflow-runs/{workflow_run_id}/events", response_model=WorkflowEventsResponse)
     def get_workflow_events(
         workflow_run_id: str,
-        limit: int = Query(default=500, ge=1, le=4000),
+        limit: int = Query(default=ctx.settings.workflow_event_list_limit_default, ge=1, le=ctx.settings.workflow_event_list_limit_max),
     ) -> WorkflowEventsResponse:
         run = ctx.workflow_orchestrator.get_workflow_run(workflow_run_id)
         if run is None:
@@ -614,17 +674,20 @@ def register_workflow_routes(ctx: ApiContext) -> None:
 
     @ctx.router.post("/workflow-runs", response_model=WorkflowRunDetailModel)
     async def create_workflow_run(
-        request: WorkflowRunCreateRequest,
+        payload: WorkflowRunCreateRequest,
+        engine: str | None = Query(default=None),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> WorkflowRunDetailModel:
         _verify_write_token(ctx.write_api_token, x_api_token)
+        # 워크플로 생성 시에도 engine 파라미터를 넘겨서 올바른 설정으로 실행되도록 함
         try:
             created = await ctx.workflow_orchestrator.create_workflow_run(
-                goal_prompt=request.goal_prompt,
-                steps=request.steps,
-                workspace_root=request.workspace_root,
-                sandbox_mode=request.sandbox_mode,
-                approval_policy=request.approval_policy,
+                goal_prompt=payload.goal_prompt,
+                steps=payload.steps,
+                workspace_root=payload.workspace_root,
+                sandbox_mode=payload.sandbox_mode,
+                approval_policy=payload.approval_policy,
+                engine=engine,
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
@@ -644,32 +707,34 @@ def register_workflow_routes(ctx: ApiContext) -> None:
     @ctx.router.post("/workflow-runs/{workflow_run_id}/retry", response_model=WorkflowRunDetailModel)
     async def retry_workflow_run(
         workflow_run_id: str,
+        engine: str | None = Body(None, embed=True),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> WorkflowRunDetailModel:
         _verify_write_token(ctx.write_api_token, x_api_token)
-        created = await ctx.workflow_orchestrator.retry_workflow_run(workflow_run_id)
-        if created is None:
+        retried = await ctx.workflow_orchestrator.retry_workflow_run(workflow_run_id, engine=engine)
+        if retried is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-        return _get_workflow_run_detail_or_404(ctx, created.workflow_run_id)
+        return _get_workflow_run_detail_or_404(ctx, retried.workflow_run_id)
 
     @ctx.router.post("/workflow-runs/{workflow_run_id}/retry-from-step", response_model=WorkflowRunDetailModel)
     async def retry_workflow_run_from_step(
         workflow_run_id: str,
-        request: WorkflowStepActionRequest,
+        request: WorkflowStepActionRequest = Body(None),
         x_api_token: str | None = Header(default=None, alias="X-API-Token"),
     ) -> WorkflowRunDetailModel:
         _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            created = await ctx.workflow_orchestrator.retry_workflow_run_from_step(
+            retried = await ctx.workflow_orchestrator.retry_workflow_run_from_step(
                 workflow_run_id,
-                request.step_index,
-                request.follow_up_note,
+                step_index=request.step_index,
+                follow_up_note=request.follow_up_note,
+                engine=request.engine if hasattr(request, "engine") else None,
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
-        if created is None:
+        if retried is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-        return _get_workflow_run_detail_or_404(ctx, created.workflow_run_id)
+        return _get_workflow_run_detail_or_404(ctx, retried.workflow_run_id)
 
     @ctx.router.post("/workflow-runs/{workflow_run_id}/skip-step", response_model=WorkflowRunDetailModel)
     async def skip_workflow_step(
@@ -682,6 +747,7 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             created = await ctx.workflow_orchestrator.skip_workflow_step_and_continue(
                 workflow_run_id,
                 request.step_index,
+                engine=request.engine if hasattr(request, "engine") else None,
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err

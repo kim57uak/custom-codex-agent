@@ -1,0 +1,45 @@
+@startuml
+title Custom Codex Agent - Engine Selection & Retry Flow
+
+actor User
+participant "Frontend (app.js)" as UI
+participant "API Routes (api_routes.py)" as API
+participant "Run Orchestrator" as RunOrc
+participant "Workflow Orchestrator" as WorkOrc
+participant "Run Store (SQLite)" as Store
+participant "Engine Factory" as Factory
+participant "Engine Adapter (Gemini/Codex)" as Adapter
+
+== Engine Selection (New Run) ==
+User -> UI: Select Engine (Gemini/Codex)
+User -> UI: Input Prompt & Execute
+UI -> API: POST /api/runs { engine, prompt, ... }
+API -> RunOrc: create_run(..., engine)
+RunOrc -> Store: create_run(..., engine)
+RunOrc -> Factory: get_adapter(engine)
+Factory -> Adapter: Initialize
+RunOrc -> Adapter: execute_run(prompt)
+Adapter --> User: Output Results
+
+== Engine-Aware Retry Flow ==
+User -> UI: Click Retry (Current UI Engine: Gemini)
+UI -> API: POST /api/runs/{id}/retry { engine: "gemini" }
+API -> RunOrc: retry_run(id, engine="gemini")
+RunOrc -> Store: get_run(id)
+Store --> RunOrc: Original Record (e.g., engine="codex")
+RunOrc -> RunOrc: create_run(..., engine="gemini")
+note right: UI의 현재 선택이\n기존 기록보다 우선함
+RunOrc -> Store: create_run(new_id, ..., engine="gemini")
+RunOrc -> Factory: get_adapter("gemini")
+RunOrc -> Adapter: execute_run(prompt)
+
+== Workflow Step Retry ==
+User -> UI: Click Retry from Step (UI Engine: Gemini)
+UI -> API: POST /api/workflow-runs/{id}/retry-from-step { engine: "gemini", ... }
+API -> WorkOrc: retry_workflow_run_from_step(..., engine="gemini")
+WorkOrc -> WorkOrc: _restart_workflow_from_existing_run(..., engine="gemini")
+WorkOrc -> WorkOrc: create_workflow_run(..., engine="gemini")
+WorkOrc -> RunOrc: create_run(..., engine="gemini")
+RunOrc -> Adapter: execute_step_run()
+
+@enduml

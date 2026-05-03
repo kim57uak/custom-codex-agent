@@ -22,17 +22,17 @@ from app.services.workflow_store import WorkflowStore
 
 
 reader = CodexConfigReader(SETTINGS)
-service = DashboardService(reader, SETTINGS.founder_name)
+service = DashboardService(reader, SETTINGS)
 broker = EventBroker()
 try:
     run_store = RunStore(SETTINGS.run_db_path)
 except sqlite3.OperationalError:
-    run_store = RunStore(Path("/tmp/custom_codex_agent_runs.sqlite"))
+    run_store = RunStore(SETTINGS.fallback_run_db_path)
 run_orchestrator = RunOrchestrator(SETTINGS, broker, run_store)
 try:
     workflow_store = WorkflowStore(SETTINGS.run_db_path)
 except sqlite3.OperationalError:
-    workflow_store = WorkflowStore(Path("/tmp/custom_codex_agent_runs.sqlite"))
+    workflow_store = WorkflowStore(SETTINGS.fallback_run_db_path)
 workflow_orchestrator = WorkflowOrchestrator(SETTINGS, service, broker, run_orchestrator, workflow_store)
 watcher: CodexFileWatcher | None = None
 
@@ -57,12 +57,19 @@ app.include_router(
 
 
 class NoCacheStaticFiles(StaticFiles):
+    """
+    Custom StaticFiles implementation that forces the browser to always fetch
+    the latest version of static assets. This is critical for local development
+    and single-user tools where front-end updates should be immediate without
+    manual cache clearing.
+    """
     def file_response(self, *args, **kwargs):  # type: ignore[override]
         response = super().file_response(*args, **kwargs)
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
         return response
+
 
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", NoCacheStaticFiles(directory=static_dir), name="static")
@@ -73,6 +80,8 @@ async def startup_event() -> None:
     """
     summary: SSE 브로커와 파일 감시기를 초기화한다.
     purpose/context: 로컬 Codex 설정 변화가 프런트엔드에 자동 반영되게 한다.
+    rationale: Codex CLI는 파일 기반 설정을 사용하므로, 외부 편집기에서 파일이 변경될 경우
+               서버가 이를 실시간으로 감지하여 UI를 갱신할 수 있도록 워처를 가동한다.
     input: 애플리케이션 startup 생명주기에서 호출된다.
     output: watchdog observer 시작 및 초기 이벤트 발행.
     rules/constraints: 존재하는 Codex 경로만 감시한다.
@@ -84,7 +93,7 @@ async def startup_event() -> None:
     watcher = CodexFileWatcher(
         loop=loop,
         broker=broker,
-        roots=[SETTINGS.codex_home],
+        roots=[SETTINGS.codex_home, SETTINGS.gemini_home],
     )
     try:
         watcher.start()

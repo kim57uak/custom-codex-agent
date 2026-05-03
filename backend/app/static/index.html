@@ -24,20 +24,35 @@
         <button id="tab-inspector" class="rail-tab" type="button"><span>i</span></button>
       </nav>
       <div class="rail-bottom">
-        <label class="field-label" for="theme-switcher">Theme</label>
-        <select id="theme-switcher" class="theme-select">
-          <option value="cyber_fusion">Cyber Fusion</option>
-          <option value="glass_enterprise">Glass Enterprise</option>
-          <option value="minimal_pro">Minimal Pro</option>
-        </select>
-        <div class="theme-quick-switch" aria-label="Theme Quick Switch">
-          <button class="theme-quick-btn" type="button" data-theme-value="cyber_fusion" title="Cyber Fusion">CYB</button>
-          <button class="theme-quick-btn" type="button" data-theme-value="glass_enterprise" title="Glass Enterprise">GLS</button>
-          <button class="theme-quick-btn" type="button" data-theme-value="minimal_pro" title="Minimal Pro">MIN</button>
+        <div class="selection-box">
+          <label class="field-label">INTERFACE_THEME</label>
+          <div class="theme-picker-group">
+            <button class="theme-picker-btn" type="button" data-theme-value="cyber_fusion" title="Cyber Fusion">
+              <span class="theme-icon">⚡</span>
+              <span class="theme-label">CYB</span>
+            </button>
+            <button class="theme-picker-btn" type="button" data-theme-value="glass_enterprise" title="Glass Enterprise">
+              <span class="theme-icon">💎</span>
+              <span class="theme-label">GLS</span>
+            </button>
+            <button class="theme-picker-btn" type="button" data-theme-value="minimal_pro" title="Minimal Pro">
+              <span class="theme-icon">🧊</span>
+              <span class="theme-label">MIN</span>
+            </button>
+          </div>
+          <select id="theme-switcher" class="theme-select hidden">
+            <option value="cyber_fusion">Cyber Fusion</option>
+            <option value="glass_enterprise">Glass Enterprise</option>
+            <option value="minimal_pro">Minimal Pro</option>
+          </select>
         </div>
-        <div style="margin-top: 1.5rem;">
-          <label class="field-label" for="global-engine-select">Engine</label>
-          <select id="global-engine-select" class="theme-select"></select>
+
+        <div class="selection-box">
+          <label class="field-label">CORE_ENGINE</label>
+          <div id="engine-picker-group" class="engine-picker-group">
+            <!-- Populated by JS: buttons for each available engine -->
+          </div>
+          <select id="global-engine-select" class="theme-select hidden"></select>
         </div>
       </div>
     </aside>

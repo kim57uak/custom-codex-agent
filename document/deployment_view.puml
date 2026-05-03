@@ -1,0 +1,34 @@
+@startuml
+title Custom Codex Agent - Deployment View
+
+node "User's Local Machine" {
+    node "Web Browser" {
+        component "Frontend (HTML/JS)" as FE
+    }
+    
+    node "Python Runtime (FastAPI)" {
+        component "Backend Server" as BE
+        component "Run Orchestrator" as ORC
+    }
+    
+    node "Storage" {
+        database "SQLite DB" as DB
+        folder "Skills Directory" as SKILLS
+        folder "Agents Directory" as AGENTS
+    }
+    
+    node "CLI Tools" {
+        artifact "Codex CLI" as CODEX
+        artifact "Gemini CLI" as GEMINI
+    }
+}
+
+FE -- BE : HTTP / JSON
+BE -- ORC : Internal Calls
+ORC -- DB : SQL
+ORC -- SKILLS : File Access
+ORC -- AGENTS : File Access
+ORC -- CODEX : Subprocess Exec
+ORC -- GEMINI : Subprocess Exec
+
+@enduml

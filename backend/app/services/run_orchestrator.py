@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
 from asyncio.subprocess import Process
 from dataclasses import dataclass
 from datetime import datetime
@@ -23,6 +25,8 @@ class RunOrchestrator:
     """
     summary: Codex CLI 실행 생명주기를 관리한다.
     purpose/context: API 요청으로 생성된 run을 큐잉하고, 상태 전이/이벤트 발행/취소를 일관되게 수행한다.
+    rationale: LLM 실행은 비용이 높고 시스템 자원을 많이 소모하므로, 세마포어를 통해 동시 실행 수를 제한하고
+               모든 실행 과정을 DB와 SSE 이벤트를 통해 추적 가능하게 관리한다.
     input: 설정(AppSettings), 이벤트 브로커, run 저장소를 주입받아 비동기 subprocess 실행에 사용한다.
     output: run 생성/조회/취소/재시도 기능과 stdout/stderr 스트림 이벤트를 제공한다.
     rules/constraints: 모델/버전 플래그는 주입하지 않고 Codex CLI 기본 선택 상태를 상속한다.
@@ -34,6 +38,7 @@ class RunOrchestrator:
         self._broker = broker
         self._store = store
         self._engine_factory = EngineAdapterFactory(settings)
+        # LLM 실행의 과도한 자원 사용을 막기 위해 Semaphore를 사용하여 동시 실행 수를 제어함
         self._semaphore = asyncio.Semaphore(max(1, settings.run_max_concurrency))
         self._run_tasks: dict[str, asyncio.Task[None]] = {}
         self._active_processes: dict[str, Process] = {}
@@ -49,8 +54,13 @@ class RunOrchestrator:
         workspace_root: Path,
         sandbox_mode: str | None = None,
         approval_policy: str | None = None,
-        engine: str = "codex",
+        engine: str | None = None,
     ) -> RunCreateResult:
+        """
+        새로운 에이전트 실행 작업을 생성하고 비동기적으로 프로세스를 시작한다.
+        실행 전 큐잉 상태를 즉시 반환하여 클라이언트가 대기하지 않도록 설계됨.
+        """
+        engine = engine or self._settings.default_engine
         run_id = uuid4().hex
         record = self._store.create_run(
             run_id=run_id,
@@ -76,6 +86,10 @@ class RunOrchestrator:
         return RunCreateResult(run_id=run_id, record=record)
 
     async def cancel_run(self, run_id: str) -> RunRecord | None:
+        """
+        진행 중인 프로세스를 안전하게 종료(terminate)하고 관련 비동기 task를 취소한다.
+        시스템 자원 릭을 방지하기 위해 프로세스 객체와 task를 모두 정리함.
+        """
         record = self._store.get_run(run_id)
         if record is None:
             return None
@@ -95,12 +109,17 @@ class RunOrchestrator:
         await self._broker.publish("run:canceled", {"runId": run_id, "status": "canceled"})
         return updated
 
-    async def retry_run(self, run_id: str) -> RunCreateResult | None:
+    async def retry_run(self, run_id: str, engine: str | None = None) -> RunCreateResult | None:
         record = self._store.get_run(run_id)
         if record is None:
             return None
         workspace_root = self.validate_workspace_root(record.workspace_root or None)
-        return await self.create_run(agent_name=record.agent_name, prompt=record.prompt, workspace_root=workspace_root)
+        return await self.create_run(
+            agent_name=record.agent_name, 
+            prompt=record.prompt, 
+            workspace_root=workspace_root,
+            engine=engine
+        )
 
     async def wait_for_run(self, run_id: str) -> RunRecord | None:
         """
@@ -144,16 +163,29 @@ class RunOrchestrator:
         failure behavior: 실행 파일이 없으면 `FileNotFoundError`를 그대로 올려 호출자가 진단 메시지를 만든다.
         """
 
-        adapter = self._engine_factory.get_adapter("codex")
+        adapter = self._engine_factory.get_adapter(self._settings.default_engine)
         command = adapter.build_command(
             sandbox_mode=sandbox_mode,
             approval_policy=approval_policy,
             prompt=prompt,
         )
 
+        # 터미널과 동일한 실행 환경을 보장하기 위해 현재 환경 변수와 설정을 병합함
+        env = os.environ.copy()
+        # 맥 표준 경로 추가
+        extra_paths = ["/opt/homebrew/bin", "/usr/local/bin"]
+        current_path = env.get("PATH", "")
+        env["PATH"] = ":".join(extra_paths + ([current_path] if current_path else []))
+
+        if self._settings.gemini_home:
+            env["GEMINI_HOME"] = str(self._settings.gemini_home)
+        if self._settings.codex_home:
+            env["CODEX_HOME"] = str(self._settings.codex_home)
+
         process = await asyncio.create_subprocess_exec(
             *command,
             cwd=str(workspace_root or self.default_workspace_root),
+            env=env,
             stdin=asyncio.subprocess.PIPE if adapter.uses_stdin_for_prompt else asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -173,10 +205,17 @@ class RunOrchestrator:
         agent_name: str,
         prompt: str,
         workspace_root: Path,
+        engine: str,
         sandbox_mode: str | None = None,
         approval_policy: str | None = None,
-        engine: str = "codex",
     ) -> None:
+        """
+        에이전트 실행의 핵심 라이프사이클을 수행한다:
+        1. 스킬 정의 및 에이전트 제약 사항을 포함한 Effective Prompt 생성
+        2. OS 레벨의 서브 프로세스 생성 (격리된 실행 환경)
+        3. 실시간 stdout/stderr 스트림 소비 및 이벤트 발행
+        4. 타임아웃 관리 및 종료 상태 기록
+        """
         process: Process | None = None
         try:
             async with self._semaphore:
@@ -185,7 +224,18 @@ class RunOrchestrator:
                     return
                 await self._publish_run_event(run_id, "run:started", f"run started (engine={engine})")
 
-                effective_prompt = self._build_effective_prompt(agent_name=agent_name, prompt=prompt)
+                # 에이전트에 매핑된 스킬 정보(프롬프트 뼈대)를 로드할 때도 선택된 엔진의 경로를 참조하도록 수정
+                skill_content, skill_path = self._fetch_skill_info(agent_name, engine=engine)
+                effective_prompt = self._build_effective_prompt(
+                    agent_name=agent_name,
+                    prompt=prompt,
+                    skill_content=skill_content,
+                )
+
+                include_dirs: list[str] = []
+                if skill_path:
+                    # 스킬 디렉토리를 포함하여 서브 프로세스에서 스크립트 등에 접근 가능하게 함
+                    include_dirs.append(str(skill_path.parent))
 
                 adapter = self._engine_factory.get_adapter(engine)
                 
@@ -193,12 +243,26 @@ class RunOrchestrator:
                     sandbox_mode=sandbox_mode,
                     approval_policy=approval_policy,
                     prompt=effective_prompt,
+                    include_directories=include_dirs,
                 )
+
+                # 터미널과 동일한 실행 환경을 보장하기 위해 현재 환경 변수와 설정을 병합함
+                env = os.environ.copy()
+                # 맥 표준 경로 추가
+                extra_paths = ["/opt/homebrew/bin", "/usr/local/bin"]
+                current_path = env.get("PATH", "")
+                env["PATH"] = ":".join(extra_paths + ([current_path] if current_path else []))
+
+                if self._settings.gemini_home:
+                    env["GEMINI_HOME"] = str(self._settings.gemini_home)
+                if self._settings.codex_home:
+                    env["CODEX_HOME"] = str(self._settings.codex_home)
 
                 if adapter.uses_stdin_for_prompt:
                     process = await asyncio.create_subprocess_exec(
                         *command,
                         cwd=str(workspace_root),
+                        env=env,
                         stdin=asyncio.subprocess.PIPE,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
@@ -208,6 +272,7 @@ class RunOrchestrator:
                     process = await asyncio.create_subprocess_exec(
                         *command,
                         cwd=str(workspace_root),
+                        env=env,
                         stdin=asyncio.subprocess.DEVNULL,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
@@ -287,16 +352,58 @@ class RunOrchestrator:
         }
         await self._broker.publish(event_type, payload)
 
-    @staticmethod
-    def _build_effective_prompt(agent_name: str, prompt: str) -> str:
-        return (
-            "You are running from Custom Codex Agent Execution Console.\n"
+    def _build_effective_prompt(self, agent_name: str, prompt: str, skill_content: str | None = None) -> str:
+        """
+        사용자의 원본 프롬프트에 에이전트의 역할 정의와 스킬 명세(SKILL.md)를 결합한다.
+        LLM이 에이전트의 정체성과 가이드라인을 유지하면서 작업을 수행하도록 컨텍스트를 주입하는 역할임.
+        """
+        header = (
+            "You are running from Custom Gemini Agent Execution Console.\n"
             f"Selected agent: {agent_name}\n"
             "Follow the selected agent's role and constraints while completing the request.\n\n"
+        )
+        
+        skill_section = ""
+        if skill_content:
+            skill_section = (
+                "## Agent Workflow Definition\n"
+                "Follow these instructions strictly:\n\n"
+                f"{skill_content}\n\n"
+                "---\n\n"
+            )
+
+        file_safety = (
             "If the task requires reading or analyzing a file but the user did not provide an explicit file path and file name, "
             "do not proceed with file operations. First ask the user to provide the exact file path and file name.\n\n"
-            f"{prompt}"
         )
+        
+        return f"{header}{skill_section}{file_safety}{prompt}"
+
+    def _fetch_skill_info(self, agent_name: str, engine: str | None = None) -> tuple[str | None, Path | None]:
+        """
+        summary: 에이전트에 매핑된 스킬 파일 내용과 경로를 읽어온다.
+        rationale: 에이전트의 페르소나는 스킬 파일에 정의되어 있으므로, 실행 시점에 항상 최신 스킬 정의를 로드해야 함.
+        """
+        try:
+            # 엔진별 에이전트 루트를 사용하여 config.json 위치를 동적으로 결정함
+            agents_root = self._settings.get_agents_root(engine)
+            agent_dir = agents_root / agent_name
+            config_file = agent_dir / "config.json"
+            if not config_file.exists():
+                return None, None
+            
+            import json
+            config = json.loads(config_file.read_text(encoding="utf-8"))
+            skill_path_str = config.get("skill_path")
+            if not skill_path_str:
+                return None, None
+            
+            skill_path = Path(skill_path_str).expanduser()
+            if skill_path.exists():
+                return skill_path.read_text(encoding="utf-8"), skill_path
+        except Exception:
+            pass
+        return None, None
 
     @staticmethod
     async def _write_prompt(process: Process, prompt: str) -> None:
@@ -307,14 +414,16 @@ class RunOrchestrator:
         await process.stdin.drain()
         process.stdin.close()
 
-    def list_runs(self, limit: int = 30) -> list[RunRecord]:
-        return self._store.list_runs(limit=limit)
+    def list_runs(self, limit: int | None = None, engine: str | None = None) -> list[RunRecord]:
+        actual_limit = limit if limit is not None else self._settings.run_list_limit_default
+        return self._store.list_runs(limit=actual_limit, engine=engine)
 
     def get_run(self, run_id: str) -> RunRecord | None:
         return self._store.get_run(run_id)
 
-    def list_run_events(self, run_id: str, limit: int = 500) -> list[RunEventRecord]:
-        return self._store.list_run_events(run_id=run_id, limit=limit)
+    def list_run_events(self, run_id: str, limit: int | None = None) -> list[RunEventRecord]:
+        actual_limit = limit if limit is not None else self._settings.run_event_list_limit_default
+        return self._store.list_run_events(run_id=run_id, limit=actual_limit)
 
     def validate_prompt(self, prompt: str) -> str:
         cleaned = prompt.strip()
@@ -336,12 +445,12 @@ class RunOrchestrator:
             raise ValueError("workspace_root must point to an existing directory")
         return path.resolve()
 
-    @staticmethod
-    def to_prompt_preview(prompt: str, max_chars: int = 120) -> str:
+    def to_prompt_preview(self, prompt: str, max_chars: int | None = None) -> str:
+        limit = max_chars if max_chars is not None else self._settings.run_prompt_preview_max_chars
         compact = " ".join(prompt.strip().split())
-        if len(compact) <= max_chars:
+        if len(compact) <= limit:
             return compact
-        return f"{compact[: max_chars - 3]}..."
+        return f"{compact[: limit - 3]}..."
 
     @staticmethod
     def to_iso_or_none(value: datetime | None) -> str | None:

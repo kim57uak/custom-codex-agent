@@ -1,0 +1,60 @@
+@startuml
+title Custom Codex Agent - Class Architecture
+
+package "API Layer" {
+    class api_routes {
+        +retry_run()
+        +retry_workflow_run()
+    }
+}
+
+package "Core Services" {
+    class RunOrchestrator {
+        - _settings: AppSettings
+        - _store: RunStore
+        - _engine_factory: EngineAdapterFactory
+        +create_run(engine)
+        +retry_run(run_id, engine)
+    }
+
+    class WorkflowOrchestrator {
+        - _run_orchestrator: RunOrchestrator
+        +create_workflow_run(engine)
+        +retry_workflow_run(engine)
+    }
+
+    class RunStore {
+        +create_run(engine)
+        +get_run(run_id)
+    }
+}
+
+package "Engine Abstraction" {
+    class EngineAdapterFactory {
+        - _default: EngineType
+        +get_adapter(engine_name)
+    }
+
+    interface EngineAdapter {
+        +execute_run(prompt)
+    }
+
+    class GeminiEngineAdapter implements EngineAdapter
+    class CodexEngineAdapter implements EngineAdapter
+}
+
+package "Configuration" {
+    class AppSettings {
+        +default_engine: EngineType
+    }
+}
+
+api_routes --> RunOrchestrator
+api_routes --> WorkflowOrchestrator
+WorkflowOrchestrator --> RunOrchestrator
+RunOrchestrator --> RunStore
+RunOrchestrator --> EngineAdapterFactory
+EngineAdapterFactory --> EngineAdapter
+RunOrchestrator --> AppSettings
+
+@enduml

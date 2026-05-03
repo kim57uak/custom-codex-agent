@@ -9,8 +9,8 @@ from pydantic import BaseModel, Field
 EngineType = Literal["codex", "gemini"]
 
 DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_CODEX_HOME = Path.home() / ".codex"
 DEFAULT_GEMINI_HOME = Path.home() / ".gemini" / "antigravity"
+DEFAULT_CODEX_HOME = Path.home() / ".codex"
 
 
 class AppSettings(BaseModel):
@@ -43,10 +43,39 @@ class AppSettings(BaseModel):
     codex_cli_subcommand: tuple[str, ...] = Field(default=("exec",))
     gemini_cli_executable: str = Field(default="gemini")
     gemini_home: Path = Field(default=DEFAULT_GEMINI_HOME)
-    default_engine: EngineType = Field(default="codex")
+    default_engine: EngineType = Field(default="gemini")
     workspace_root: Path = Field(default=DEFAULT_PROJECT_ROOT)
     founder_name: str = Field(default="대표이사")
     workflow_recommendation_max_agents: int = Field(default=6)
+    run_list_limit_default: int = Field(default=30)
+    run_list_limit_max: int = Field(default=200)
+    run_event_list_limit_default: int = Field(default=500)
+    run_event_list_limit_max: int = Field(default=2000)
+    workflow_event_list_limit_default: int = Field(default=500)
+    workflow_event_list_limit_max: int = Field(default=4000)
+    safe_read_text_max_chars: int = Field(default=160000)
+    workflow_skill_summary_max_chars: int = Field(default=1200)
+    workflow_agent_summary_max_chars: int = Field(default=900)
+    workflow_catalog_text_max_chars: int = Field(default=2200)
+    workflow_recommendation_timeout_seconds: int = Field(default=20)
+    workflow_recommendation_min_score: int = Field(default=6)
+    workflow_recommendation_relative_score_ratio: float = Field(default=0.5)
+    fallback_run_db_path: Path = Field(default=Path("/tmp/custom_codex_agent_runs.sqlite"))
+    default_workflow_icon_key: str = Field(default="bot")
+    default_workflow_step_title_prefix: str = Field(default="단계")
+    workflow_step_summary_max_chars: int = Field(default=320)
+    workflow_goal_preview_max_chars: int = Field(default=140)
+    run_prompt_preview_max_chars: int = Field(default=120)
+    directory_list_limit: int = Field(default=500)
+    default_department_label_ko: str = Field(default="관리지원")
+    default_role_label_ko: str = Field(default="관리지원 담당")
+    trend_window_days: int = Field(default=7)
+    trend_buckets: int = Field(default=12)
+    dashboard_recent_threads_limit: int = Field(default=10)
+    dashboard_recent_logs_limit: int = Field(default=20)
+    dashboard_recent_history_limit: int = Field(default=20)
+    backups_root: Path = Field(default=DEFAULT_PROJECT_ROOT / "backups")
+    backup_archive_name_suffix: str = Field(default="-skills-agents-backup-")
 
     @property
     def history_file_path(self) -> Path:
@@ -58,6 +87,24 @@ class AppSettings(BaseModel):
 
     @property
     def log_db_path(self) -> Path:
+        return self.codex_home / self.log_db_name
+
+    def get_history_file_path(self, engine: str | None = None) -> Path:
+        target = engine or self.default_engine
+        if target == "gemini":
+            return self.gemini_home / self.history_file_name
+        return self.codex_home / self.history_file_name
+
+    def get_state_db_path(self, engine: str | None = None) -> Path:
+        target = engine or self.default_engine
+        if target == "gemini":
+            return self.gemini_home / self.state_db_name
+        return self.codex_home / self.state_db_name
+
+    def get_log_db_path(self, engine: str | None = None) -> Path:
+        target = engine or self.default_engine
+        if target == "gemini":
+            return self.gemini_home / self.log_db_name
         return self.codex_home / self.log_db_name
 
     @property
@@ -85,6 +132,21 @@ class AppSettings(BaseModel):
     @property
     def run_db_path(self) -> Path:
         return self.codex_home / self.run_db_name
+
+    def get_skills_root(self, engine: str | None = None) -> Path:
+        """summary: 엔진 타입에 따른 스킬 디렉토리 경로를 반환한다."""
+        target = engine or self.default_engine
+        return self.gemini_skills_root if target == "gemini" else self.skills_root
+
+    def get_agents_root(self, engine: str | None = None) -> Path:
+        """summary: 엔진 타입에 따른 에이전트 디렉토리 경로를 반환한다."""
+        target = engine or self.default_engine
+        return self.gemini_agents_root if target == "gemini" else self.agents_root
+
+    def get_home(self, engine: str | None = None) -> Path:
+        """summary: 엔진 타입에 따른 홈 디렉토리 경로를 반환한다."""
+        target = engine or self.default_engine
+        return self.gemini_home if target == "gemini" else self.codex_home
 
 
 def _parse_allowed_origins(raw: str | None) -> tuple[str, ...]:
@@ -133,10 +195,10 @@ def _parse_int_env(raw: str | None, default: int, min_value: int | None = None, 
 
 
 def _parse_engine(raw: str | None) -> EngineType:
-    """summary: 환경변수에서 엔진 타입을 파싱하고 유효하지 않으면 기본값 codex를 반환한다."""
+    """summary: 환경변수에서 엔진 타입을 파싱하고 유효하지 않으면 기본값 gemini를 반환한다."""
     if raw and raw.strip().lower() in ("codex", "gemini"):
         return raw.strip().lower()  # type: ignore[return-value]
-    return "codex"
+    return "gemini"
 
 
 SETTINGS = AppSettings(

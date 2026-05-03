@@ -1,0 +1,54 @@
+# Sheet: Referral Discovery
+Area	Response
+Company Info
+Business Model (B2B, B2C, TMC)	B2C
+Number of Employees 	90(KEEP RECRUTING)
+HQ Location (city)	SEOUL, KOREA
+Website (URL)	https://www.hanatourbiz.com/ (New version is coming up)
+Company founded (year) 	SINCE 1995
+Currency Supported	KOREAN WON
+Other IATA Point of Sale locations available	None
+Other TMC partners /clients/ global networks affiliated with	RADIUS (CONTRACT EXFIRATION)
+Content Source(s)
+Air Content (Domestic, International, NDC and LCC) 	Domestic / International
+Hotel / Lodging Content (OTA, bed-bank and consortia) 	OTA + Direct contraction	I
+Other (Rail/Car)	Rail / Car
+GDSs supported	Supported
+GDS Air and what is allowed
+Allow TA dedicated PCC per customer if required	Basically not allowed (But could go through if  amount of ticketing is over 4M USD(excluded tax) per customer) / 50억
+Ticketing, how much auto-ticketed?	Auto ticketing is not supported
+Ticket ammendments (void/change/cancel)	Supported
+Support Corporate Negotiated Rates (CNR's) for air, hotel, car, etc. Availble online and offline?	Availble online and offline
+Customer Service
+Numbe of agents	1200
+Languages Supported	Korean
+Hours of support	Air(24/7) / Others(8-19 / Weekdays)
+Call/Chat/Email offered for support	Call+ E-mail Supported
+Agent Tools used to support customers	Call / Chat / E-mail Supported
+Services available (pre-booking, post tkt, void, re-issue, etc)	pre-booking, post tkt (under the certain circumstances) void, re-issue
+IT / Tech - Support + Set Up for existing OBTs
+OBT developed in house and owned by TMC?	BTMS(developed in house)
+OBT SSO (does the OBT support single sign on integrations)	SSO is not developing only by ourselves, so it would take a lot of time, but it is possible technically.
+Languages Supported	Korean
+Support hours	24/7
+Call/Chat (Y/N, if 3rd party solution which?) 	N/A (Unavailable Call /  Chat system in the BTMS)
+IT Support Tools used (ie. ticket tracking, etc.)	Issues checking : Jira / Aplications+Infra monitoring : Amazon cloudwatch + Zabix / Configuration management : Github
+Back office platform 	IN HOUSE development by Angula
+Reporting solution 	IN HOUSE development(Grid tool is KENDO grid)
+Technical integration options/capabilities (HRIS, Booking Data)	If it's the issued ticket data, we can get it from Topas on a daily basis and upload it to FTP.
+If you need to link real-time reservation data, we can develop and provide Interface through API.
+Does partner offer content via API	AIR fare contents are offered by Amadeus, Sabre and hotel fare contents are offered from Amadus(post faid), Hanatour(pre faid fares) via API
+Customer Payments + Fees
+Transaction fee model (per transaction or per trip fee)	Per transaction fee model (5~7% for ticketing TASF / 30USD each for Re-issue, Refund)
+Provide a full list of services/fees chargable to customer	Air / Hotels / Visa / Mice / Incentivetrips / Rent cars etc..
+Implementation fees (one-off set up) charged	Air:5-7% / Hotels:10% / Visa : 10-20USD(depends on case)   /  Others(ie, Incentive trips):10-15%
+Payments types accepted (Cash, CC, Amex BTA, Airplus etc.)	Cash + CC + invoice (terms depending on customer)
+Customer Invoice available, if yes terms (ie. 7, 14, 30 day, etc)	YES, 7 or 14 days
+Service Charge (recurring maintenance fees?)	N/A (회원유지수수료)
+Company Contact
+Name	JK, LEE
+Title	Chief Manager
+Email	cuba@hanatour.com
+Phone	(+)82 10-9075-8840
+Company Overview
+Summary

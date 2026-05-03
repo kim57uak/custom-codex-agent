@@ -18,7 +18,7 @@ class EngineAdapter(Protocol):
         """프롬프트를 표준 입력(stdin)으로 전달하는지 여부"""
         ...
 
-    def build_command(self, sandbox_mode: str | None, approval_policy: str | None, prompt: str) -> List[str]:
+    def build_command(self, sandbox_mode: str | None, approval_policy: str | None, prompt: str, include_directories: List[str] | None = None) -> List[str]:
         """최종적으로 subprocess로 실행할 명령어 리스트를 반환"""
         ...
 
@@ -39,7 +39,8 @@ class CodexEngineAdapter:
     def uses_stdin_for_prompt(self) -> bool:
         return True
 
-    def build_command(self, sandbox_mode: str | None, approval_policy: str | None, prompt: str) -> List[str]:
+    def build_command(self, sandbox_mode: str | None, approval_policy: str | None, prompt: str, include_directories: List[str] | None = None) -> List[str]:
+
         base_args = list(self._settings.codex_cli_subcommand)
         sanitized_args: list[str] = []
         skip_next = False
@@ -91,7 +92,8 @@ class GeminiEngineAdapter:
     def uses_stdin_for_prompt(self) -> bool:
         return False
 
-    def build_command(self, sandbox_mode: str | None, approval_policy: str | None, prompt: str) -> List[str]:
+    def build_command(self, sandbox_mode: str | None, approval_policy: str | None, prompt: str, include_directories: List[str] | None = None) -> List[str]:
+
         command = [self.executable_path]
         command.extend(["--output-format", "text"])
 
@@ -105,6 +107,10 @@ class GeminiEngineAdapter:
         else:
             command.extend(["--approval-mode", "default"])
 
+        if include_directories:
+            for d in include_directories:
+                command.extend(["--include-directories", d])
+
         command.extend(["--prompt", prompt])
         return command
 
@@ -115,7 +121,7 @@ class EngineAdapterFactory:
             "codex": CodexEngineAdapter(settings),
             "gemini": GeminiEngineAdapter(settings),
         }
-        self._default = "codex"
+        self._default = settings.default_engine
         
     def get_adapter(self, engine_name: str) -> EngineAdapter:
         return self._adapters.get(engine_name, self._adapters[self._default])

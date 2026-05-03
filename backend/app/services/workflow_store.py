@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
 
+from app.config import SETTINGS
+
 
 def _utc_now() -> datetime:
     return datetime.now(tz=timezone.utc)
@@ -41,6 +43,7 @@ class WorkflowRunRecord:
     started_at: datetime | None
     completed_at: datetime | None
     error_message: str | None
+    engine: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,7 +117,8 @@ class WorkflowStore:
                     created_at integer not null,
                     started_at integer null,
                     completed_at integer null,
-                    error_message text null
+                    error_message text null,
+                    engine text not null default 'gemini'
                 );
 
                 create table if not exists workflow_steps (
@@ -153,6 +157,10 @@ class WorkflowStore:
                 create index if not exists idx_workflow_events_run_created on workflow_events(workflow_run_id, event_id desc);
                 """
             )
+            try:
+                connection.execute("alter table workflow_runs add column engine text not null default 'gemini'")
+            except sqlite3.OperationalError:
+                pass
 
     def create_workflow_run(
         self,
@@ -162,6 +170,7 @@ class WorkflowStore:
         sandbox_mode: str | None,
         approval_policy: str | None,
         steps: list[dict[str, str | None]],
+        engine: str | None = None,
     ) -> WorkflowRunRecord:
         now = _utc_now()
         with self._connect() as connection:
@@ -169,8 +178,8 @@ class WorkflowStore:
                 """
                 insert into workflow_runs (
                     workflow_run_id, goal_prompt, workspace_root, sandbox_mode, approval_policy,
-                    status, current_step_index, total_steps, created_at
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    status, current_step_index, total_steps, engine, created_at
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     workflow_run_id,
@@ -181,6 +190,7 @@ class WorkflowStore:
                     "queued",
                     None,
                     len(steps),
+                    engine or SETTINGS.default_engine,
                     _to_unix_seconds(now),
                 ),
             )
@@ -326,7 +336,7 @@ class WorkflowStore:
             row = connection.execute(
                 """
                 select workflow_run_id, goal_prompt, workspace_root, sandbox_mode, approval_policy, status,
-                       current_step_index, total_steps, created_at, started_at, completed_at, error_message
+                       current_step_index, total_steps, created_at, started_at, completed_at, error_message, engine
                 from workflow_runs
                 where workflow_run_id = ?
                 """,
@@ -336,19 +346,37 @@ class WorkflowStore:
             return None
         return self._row_to_workflow_run(row)
 
-    def list_workflow_runs(self, limit: int = 30) -> list[WorkflowRunRecord]:
-        bounded_limit = max(1, min(limit, 200))
+    def list_workflow_runs(self, limit: int | None = None, engine: str | None = None) -> list[WorkflowRunRecord]:
+        """
+        summary: 저장된 워크플로 실행 이력을 최신순으로 조회한다.
+        rationale: 엔진별로 워크플로 실행 이력을 필터링하여 사용자 경험을 최적화함.
+        """
+        actual_limit = limit if limit is not None else SETTINGS.run_list_limit_default
+        bounded_limit = max(1, min(actual_limit, SETTINGS.run_list_limit_max))
         with self._connect() as connection:
-            rows = connection.execute(
-                """
-                select workflow_run_id, goal_prompt, workspace_root, sandbox_mode, approval_policy, status,
-                       current_step_index, total_steps, created_at, started_at, completed_at, error_message
-                from workflow_runs
-                order by created_at desc
-                limit ?
-                """,
-                (bounded_limit,),
-            ).fetchall()
+            if engine:
+                rows = connection.execute(
+                    """
+                    select workflow_run_id, goal_prompt, workspace_root, sandbox_mode, approval_policy, status,
+                           current_step_index, total_steps, created_at, started_at, completed_at, error_message, engine
+                    from workflow_runs
+                    where engine = ?
+                    order by created_at desc
+                    limit ?
+                    """,
+                    (engine, bounded_limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """
+                    select workflow_run_id, goal_prompt, workspace_root, sandbox_mode, approval_policy, status,
+                           current_step_index, total_steps, created_at, started_at, completed_at, error_message, engine
+                    from workflow_runs
+                    order by created_at desc
+                    limit ?
+                    """,
+                    (bounded_limit,),
+                ).fetchall()
         return [self._row_to_workflow_run(row) for row in rows]
 
     def list_workflow_steps(self, workflow_run_id: str) -> list[WorkflowStepRecord]:
@@ -380,8 +408,9 @@ class WorkflowStore:
             return None
         return self._row_to_workflow_step(row)
 
-    def list_workflow_events(self, workflow_run_id: str, limit: int = 500) -> list[WorkflowEventRecord]:
-        bounded_limit = max(1, min(limit, 4000))
+    def list_workflow_events(self, workflow_run_id: str, limit: int | None = None) -> list[WorkflowEventRecord]:
+        actual_limit = limit if limit is not None else SETTINGS.workflow_event_list_limit_default
+        bounded_limit = max(1, min(actual_limit, SETTINGS.workflow_event_list_limit_max))
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -413,6 +442,7 @@ class WorkflowStore:
             started_at=_from_unix_seconds(row["started_at"]),
             completed_at=_from_unix_seconds(row["completed_at"]),
             error_message=str(row["error_message"]) if row["error_message"] else None,
+            engine=str(row["engine"]) if "engine" in row.keys() else SETTINGS.default_engine,
         )
 
     @staticmethod

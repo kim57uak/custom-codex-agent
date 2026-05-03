@@ -86,8 +86,8 @@
     selectedWorkspaceRoot: "",
     selectedSandboxMode: "workspace-write",
     selectedApprovalPolicy: "on-request",
-    selectedEngine: "codex",
-    availableEngines: ["codex"],
+    selectedEngine: "gemini",
+    availableEngines: ["codex", "gemini"],
     selectedAgentName: "",
     workflowAgentFilter: "",
     selectedWorkflowAgentName: "",
@@ -133,7 +133,8 @@
     errorBanner: document.getElementById("error-banner"),
     themeSwitcher: document.getElementById("theme-switcher"),
     globalEngineSelect: document.getElementById("global-engine-select"),
-    themeQuickButtons: Array.from(document.querySelectorAll("[data-theme-value]")),
+    themePickerButtons: Array.from(document.querySelectorAll(".theme-picker-btn")),
+    enginePickerGroup: document.getElementById("engine-picker-group"),
     tabOrg: document.getElementById("tab-org"),
     tabDashboard: document.getElementById("tab-dashboard"),
     tabConsole: document.getElementById("tab-console"),
@@ -510,8 +511,8 @@
     if (el.themeSwitcher && el.themeSwitcher.value !== state.theme) {
       el.themeSwitcher.value = state.theme;
     }
-    if (el.themeQuickButtons && el.themeQuickButtons.length > 0) {
-      el.themeQuickButtons.forEach(function (button) {
+    if (el.themePickerButtons && el.themePickerButtons.length > 0) {
+      el.themePickerButtons.forEach(function (button) {
         const active = button.getAttribute("data-theme-value") === state.theme;
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
@@ -521,6 +522,21 @@
       el.viewportTitle.textContent = theme.titles[state.tab] || theme.titles.org;
     }
     document.title = `Custom Codex Agent · ${theme.label}`;
+  }
+
+  function renderEnginePicker() {
+    if (!el.enginePickerGroup) return;
+    const engines = state.availableEngines || ["gemini"];
+    el.enginePickerGroup.innerHTML = engines.map(function (engine) {
+      const active = state.selectedEngine === engine ? "active" : "";
+      const icon = engine === "codex" ? "⚙️" : "✨";
+      return `
+        <button class="engine-picker-btn ${active}" type="button" data-engine-value="${escapeHtml(engine)}">
+          <span class="theme-icon">${icon}</span>
+          <span class="engine-label">${escapeHtml(engine.toUpperCase())}</span>
+        </button>
+      `;
+    }).join("");
   }
 
   function renderTabs() {
@@ -951,7 +967,7 @@
         const active = state.selectedRunId === run.run_id ? "active" : "";
         return `
           <button class="run-chip ${active}" type="button" data-run-id="${escapeHtml(run.run_id)}">
-            <div class="feed-title">${escapeHtml(run.agent_name)} <span style="font-size: 0.75em; opacity: 0.7;">[${escapeHtml(run.engine || "codex")}]</span></div>
+            <div class="feed-title">${escapeHtml(run.agent_name)} <span style="font-size: 0.75em; opacity: 0.7;">[${escapeHtml(run.engine || "gemini")}]</span></div>
             <div class="run-chip-meta">${escapeHtml(run.status)} · ${escapeHtml(fmtDate(run.created_at))}</div>
             <div class="run-chip-meta">${escapeHtml(run.prompt_preview || "")}</div>
           </button>
@@ -1568,7 +1584,7 @@
     if (state.inspectorCache.has(agentName)) {
       return state.inspectorCache.get(agentName);
     }
-    const data = await fetchJson(`/api/agents/${encodeURIComponent(agentName)}/inspector`, `인스펙터 ${agentName}`);
+    const data = await fetchJson(`/api/agents/${encodeURIComponent(agentName)}/inspector?engine=${state.selectedEngine}`, `인스펙터 ${agentName}`);
     state.inspectorCache.set(agentName, data);
     return data;
   }
@@ -1636,6 +1652,7 @@
     const result = await postJsonWithAuth(`/api/agents/${encodeURIComponent(state.selectedInspectorAgentName)}/inspector/files`, {
       path: file.path,
       content,
+      engine: state.selectedEngine,
     });
     replaceInspectorFileInCache(state.selectedInspectorAgentName, result.file);
     renderInspector();
@@ -1739,8 +1756,7 @@
     renderDrawer();
     renderOrg();
     renderDashboard();
-    const engineOptions = state.availableEngines.map(function(e) { return { value: e, label: e }; });
-    renderOptions(el.globalEngineSelect, engineOptions, state.selectedEngine);
+    renderEnginePicker();
 
     renderConsole();
     renderWorkflow();
@@ -1811,18 +1827,28 @@
     renderWorkspacePicker();
   }
 
+  let isRefreshing = false;
   async function refreshAll() {
+    if (isRefreshing) return;
+    const engineAtStart = state.selectedEngine;
+    isRefreshing = true;
     try {
       const [overview, org, dashboard, executableAgentsData, runsData, runConfig, workflowUiConfig, workflowRunsData] = await Promise.all([
-        fetchJson("/api/overview", "개요 데이터"),
-        fetchJson("/api/graph/org", "조직도 데이터"),
-        fetchJson("/api/dashboard", "대시보드 데이터"),
-        fetchJson("/api/agents/executable", "실행 가능 에이전트"),
-        fetchJson("/api/runs?limit=40", "실행 이력"),
+        fetchJson(`/api/overview?engine=${engineAtStart}`, "개요 데이터"),
+        fetchJson(`/api/graph/org?engine=${engineAtStart}`, "조직도 데이터"),
+        fetchJson(`/api/dashboard?engine=${engineAtStart}`, "대시보드 데이터"),
+        fetchJson(`/api/agents/executable?engine=${engineAtStart}`, "실행 가능 에이전트"),
+        fetchJson(`/api/runs?limit=40&engine=${engineAtStart}`, "실행 이력"),
         fetchJson("/api/run-config", "실행 설정"),
         fetchJson("/api/workflows/ui-config", "워크플로 UI 설정"),
-        fetchJson("/api/workflow-runs?limit=40", "워크플로 실행 이력"),
+        fetchJson(`/api/workflow-runs?limit=40&engine=${engineAtStart}`, "워크플로 실행 이력"),
       ]);
+
+      if (engineAtStart !== state.selectedEngine) {
+        console.warn("Engine changed during refresh, abandoning results.");
+        return;
+      }
+
       state.overview = overview;
       state.org = org;
       state.dashboard = dashboard;
@@ -1833,7 +1859,7 @@
       state.defaultWorkspaceRoot = runConfig.default_workspace_root || "";
       state.defaultWriteApiToken = normalizeWriteToken(runConfig.default_write_api_token || "");
       state.writeApiEnabled = runConfig.write_api_enabled !== false;
-      state.availableEngines = runConfig.available_engines || ["codex"];
+      state.availableEngines = runConfig.available_engines || ["gemini"];
       
       const storedWorkspace = window.localStorage.getItem(WORKSPACE_ROOT_KEY) || "";
       const storedSandbox = window.localStorage.getItem(SANDBOX_MODE_KEY) || "";
@@ -1843,7 +1869,7 @@
       state.selectedWorkspaceRoot = storedWorkspace || state.selectedWorkspaceRoot || state.defaultWorkspaceRoot || "";
       state.selectedSandboxMode = storedSandbox || state.selectedSandboxMode || "workspace-write";
       state.selectedApprovalPolicy = storedApproval || state.selectedApprovalPolicy || "on-request";
-      state.selectedEngine = storedEngine || state.selectedEngine || runConfig.default_engine || "codex";
+      state.selectedEngine = storedEngine || state.selectedEngine || runConfig.default_engine || "gemini";
       
       state.selectedWorkflowWorkspaceRoot = state.selectedWorkflowWorkspaceRoot || state.selectedWorkspaceRoot;
       state.selectedWorkflowSandboxMode = state.selectedWorkflowSandboxMode || state.selectedSandboxMode;
@@ -1879,6 +1905,8 @@
       state.hasError = true;
       state.errorMessage = String(err.message || err);
       state.liveText = `오류: ${state.errorMessage}`;
+    } finally {
+      isRefreshing = false;
     }
     renderWithInteractionGuard();
   }
@@ -1923,7 +1951,7 @@
 
   async function retrySelectedRun() {
     if (!state.selectedRunId) return;
-    const retried = await postJsonWithAuth(`/api/runs/${encodeURIComponent(state.selectedRunId)}/retry`);
+    const retried = await postJsonWithAuth(`/api/runs/${encodeURIComponent(state.selectedRunId)}/retry`, { engine: state.selectedEngine });
     state.selectedRunId = retried.run_id;
     await refreshAll();
   }
@@ -2004,7 +2032,7 @@
 
   async function retrySelectedWorkflowRun() {
     if (!state.selectedWorkflowRunId) return;
-    const created = await postJsonWithAuth(`/api/workflow-runs/${encodeURIComponent(state.selectedWorkflowRunId)}/retry`);
+    const created = await postJsonWithAuth(`/api/workflow-runs/${encodeURIComponent(state.selectedWorkflowRunId)}/retry`, { engine: state.selectedEngine });
     state.selectedWorkflowRunId = created.workflow_run_id;
     await refreshAll();
   }
@@ -2034,12 +2062,13 @@
       return;
     }
     if (!note) {
-      showToast("Codex에게 전달할 답변을 입력하세요.", "error");
+      showToast("에이전트에게 전달할 답변을 입력하세요.", "error");
       return;
     }
     const created = await postJsonWithAuth(`/api/workflow-runs/${encodeURIComponent(state.selectedWorkflowRunId)}/retry-from-step`, {
       step_index: state.workflowConversationStepIndex,
       follow_up_note: note,
+      engine: state.selectedEngine,
     });
     state.selectedWorkflowRunId = created.workflow_run_id;
     state.workflowConversationText = "";
@@ -2053,7 +2082,7 @@
         <ul class="drawer-list">
           <li><strong>Agent</strong><div class="drawer-subtitle">${escapeHtml(run.agent_name)}</div></li>
           <li><strong>Status</strong><div class="drawer-subtitle">${escapeHtml(run.status)}</div></li>
-          <li><strong>Engine</strong><div class="drawer-subtitle">${escapeHtml(run.engine || "codex")}</div></li>
+          <li><strong>Engine</strong><div class="drawer-subtitle">${escapeHtml(run.engine || "gemini")}</div></li>
           <li><strong>Workspace</strong><div class="drawer-subtitle">${escapeHtml(run.workspace_root || "")}</div></li>
         </ul>
       </section>
@@ -2163,7 +2192,7 @@
     state.selectedWorkspaceRoot = window.localStorage.getItem(WORKSPACE_ROOT_KEY) || "";
     state.selectedSandboxMode = window.localStorage.getItem(SANDBOX_MODE_KEY) || "workspace-write";
     state.selectedApprovalPolicy = window.localStorage.getItem(APPROVAL_POLICY_KEY) || "on-request";
-    state.selectedEngine = window.localStorage.getItem(ENGINE_KEY) || "codex";
+    state.selectedEngine = window.localStorage.getItem(ENGINE_KEY) || "gemini";
     state.selectedWorkflowWorkspaceRoot = state.selectedWorkspaceRoot;
     state.selectedWorkflowSandboxMode = state.selectedSandboxMode;
     state.selectedWorkflowApprovalPolicy = state.selectedApprovalPolicy;
@@ -2198,8 +2227,8 @@
         render();
       });
     }
-    if (el.themeQuickButtons && el.themeQuickButtons.length > 0) {
-      el.themeQuickButtons.forEach(function (button) {
+    if (el.themePickerButtons && el.themePickerButtons.length > 0) {
+      el.themePickerButtons.forEach(function (button) {
         button.addEventListener("click", function () {
           state.theme = normalizeTheme(button.getAttribute("data-theme-value"));
           window.localStorage.setItem(UI_THEME_KEY, state.theme);
@@ -2294,10 +2323,50 @@
       });
     }
 
+    function switchEngine(engine) {
+      if (!engine || engine === state.selectedEngine) return;
+      
+      console.log(`Switching engine to: ${engine}`);
+      state.selectedEngine = engine;
+      window.localStorage.setItem(ENGINE_KEY, engine);
+      
+      // Clear all caches and temporary data to prevent stale data from old engine
+      state.inspectorCache.clear();
+      state.runDetails.clear();
+      state.runEvents.clear();
+      state.workflowRunDetails.clear();
+      state.workflowEvents.clear();
+      state.workflowRecommendations = [];
+      state.workflowDraft.steps = [];
+      
+      // Reset selections so refreshAll can pick valid defaults for the new engine
+      state.selectedAgentName = "";
+      state.selectedRunId = "";
+      state.selectedWorkflowRunId = "";
+      state.selectedInspectorAgentName = "";
+      state.selectedWorkflowAgentName = "";
+      state.workflowAgentFilter = "";
+      state.workflowDraft.goalPrompt = "";
+      
+      // Force allow refreshAll by bypassing the guard
+      isRefreshing = false; 
+      
+      renderEnginePicker();
+      refreshAll().catch(handleError);
+    }
+
     if (el.globalEngineSelect) {
       el.globalEngineSelect.addEventListener("change", function () {
-        state.selectedEngine = el.globalEngineSelect.value || "codex";
-        window.localStorage.setItem(ENGINE_KEY, state.selectedEngine);
+        switchEngine(el.globalEngineSelect.value);
+      });
+    }
+
+    if (el.enginePickerGroup) {
+      el.enginePickerGroup.addEventListener("click", function (event) {
+        const btn = event.target.closest("[data-engine-value]");
+        if (btn) {
+          switchEngine(btn.getAttribute("data-engine-value"));
+        }
       });
     }
 

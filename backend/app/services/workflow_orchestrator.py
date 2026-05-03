@@ -53,13 +53,6 @@ Rules:
 }}
 """.strip()
 
-WORKFLOW_RECOMMENDATION_TIMEOUT_SECONDS = 20
-WORKFLOW_SKILL_SUMMARY_MAX_CHARS = 1200
-WORKFLOW_AGENT_SUMMARY_MAX_CHARS = 900
-WORKFLOW_CATALOG_TEXT_MAX_CHARS = 2200
-WORKFLOW_RECOMMENDATION_MIN_SCORE = 6
-WORKFLOW_RECOMMENDATION_RELATIVE_SCORE_RATIO = 0.5
-
 
 class WorkflowOrchestrator:
     """
@@ -87,15 +80,16 @@ class WorkflowOrchestrator:
         self._workflow_tasks: dict[str, asyncio.Task[None]] = {}
         self._active_run_ids: dict[str, str] = {}
 
-    async def recommend_agents(self, goal_prompt: str, max_agents: int | None = None) -> list[WorkflowRecommendedAgentModel]:
+    async def recommend_agents(self, goal_prompt: str, max_agents: int | None = None, engine: str | None = None) -> list[WorkflowRecommendedAgentModel]:
         validated_goal = self._run_orchestrator.validate_prompt(goal_prompt)
         bounded_max_agents = self._sanitize_max_agents(max_agents)
-        inventory = self._dashboard_service.build_inventory()
+        # 선택된 엔진에 등록된 에이전트 목록을 가져오기 위해 engine 파라미터 반영
+        inventory = self._dashboard_service.build_inventory(engine=engine)
         available_agents = [agent for agent in inventory.agents if agent.status != "broken" and agent.skill_name]
         if not available_agents:
             return []
 
-        agent_profiles = self._build_agent_profiles(available_agents)
+        agent_profiles = self._build_agent_profiles(available_agents, engine=engine)
         recommendations = await self._recommend_via_codex(validated_goal, agent_profiles, bounded_max_agents)
         if recommendations:
             return self._complete_recommendations(validated_goal, recommendations, agent_profiles, bounded_max_agents)
@@ -109,12 +103,14 @@ class WorkflowOrchestrator:
         sandbox_mode: str | None,
         approval_policy: str | None,
         initial_carryover_summaries: list[str] | None = None,
+        engine: str | None = None,
     ) -> WorkflowRunRecord:
         validated_goal = self._run_orchestrator.validate_prompt(goal_prompt)
         validated_workspace_root = self._run_orchestrator.validate_workspace_root(workspace_root)
         validated_sandbox_mode = self._run_orchestrator.validate_sandbox_mode(sandbox_mode)
         validated_approval_policy = self._run_orchestrator.validate_approval_policy(approval_policy)
-        prepared_steps = self._prepare_steps(steps)
+        # 에이전트 존재 여부를 체크할 때 선택된 엔진을 고려하도록 파라미터 전달
+        prepared_steps = self._prepare_steps(steps, engine=engine)
 
         workflow_run_id = uuid4().hex
         record = self._store.create_workflow_run(
@@ -124,8 +120,9 @@ class WorkflowOrchestrator:
             sandbox_mode=validated_sandbox_mode,
             approval_policy=validated_approval_policy,
             steps=prepared_steps,
+            engine=engine,
         )
-        await self._publish_workflow_event(workflow_run_id, "workflow:queued", "workflow queued")
+        await self._publish_workflow_event(workflow_run_id, "workflow:queued", f"workflow queued (engine={engine})")
         task = asyncio.create_task(
             self._execute_workflow(
                 workflow_run_id=workflow_run_id,
@@ -135,6 +132,7 @@ class WorkflowOrchestrator:
                 sandbox_mode=validated_sandbox_mode,
                 approval_policy=validated_approval_policy,
                 initial_carryover_summaries=list(initial_carryover_summaries or []),
+                engine=engine,
             )
         )
         self._workflow_tasks[workflow_run_id] = task
@@ -168,7 +166,7 @@ class WorkflowOrchestrator:
         await self._publish_workflow_event(workflow_run_id, "workflow:canceled", "workflow canceled by user")
         return updated
 
-    async def retry_workflow_run(self, workflow_run_id: str) -> WorkflowRunRecord | None:
+    async def retry_workflow_run(self, workflow_run_id: str, engine: str | None = None) -> WorkflowRunRecord | None:
         record = self._store.get_workflow_run(workflow_run_id)
         if record is None:
             return None
@@ -189,6 +187,7 @@ class WorkflowOrchestrator:
             workspace_root=record.workspace_root,
             sandbox_mode=record.sandbox_mode,
             approval_policy=record.approval_policy,
+            engine=engine,
         )
 
     async def retry_workflow_run_from_step(
@@ -196,6 +195,7 @@ class WorkflowOrchestrator:
         workflow_run_id: str,
         step_index: int,
         follow_up_note: str | None = None,
+        engine: str | None = None,
     ) -> WorkflowRunRecord | None:
         """
         summary: 기존 워크플로 실행의 특정 단계부터 새 워크플로 run을 다시 시작한다.
@@ -210,9 +210,10 @@ class WorkflowOrchestrator:
             workflow_run_id=workflow_run_id,
             step_index=step_index,
             follow_up_note=follow_up_note,
+            engine=engine,
         )
 
-    async def skip_workflow_step_and_continue(self, workflow_run_id: str, step_index: int) -> WorkflowRunRecord | None:
+    async def skip_workflow_step_and_continue(self, workflow_run_id: str, step_index: int, engine: str | None = None) -> WorkflowRunRecord | None:
         """
         summary: 특정 단계를 건너뛰고 다음 단계부터 새 워크플로 run을 만든다.
         purpose/context: 실패 단계를 수동 판단으로 제외한 채 후속 단계를 이어가려는 운영 시나리오를 지원한다.
@@ -225,10 +226,11 @@ class WorkflowOrchestrator:
         return await self._restart_workflow_from_existing_run(
             workflow_run_id=workflow_run_id,
             step_index=step_index + 1,
+            engine=engine,
         )
 
-    def list_workflow_runs(self, limit: int = 30) -> list[WorkflowRunRecord]:
-        return self._store.list_workflow_runs(limit=limit)
+    def list_workflow_runs(self, limit: int = 30, engine: str | None = None) -> list[WorkflowRunRecord]:
+        return self._store.list_workflow_runs(limit=limit, engine=engine)
 
     def get_workflow_run(self, workflow_run_id: str) -> WorkflowRunRecord | None:
         return self._store.get_workflow_run(workflow_run_id)
@@ -255,6 +257,7 @@ class WorkflowOrchestrator:
         sandbox_mode: str | None,
         approval_policy: str | None,
         initial_carryover_summaries: list[str] | None = None,
+        engine: str | None = None,
     ) -> None:
         carryover_summaries: list[str] = list(initial_carryover_summaries or [])
         try:
@@ -290,6 +293,7 @@ class WorkflowOrchestrator:
                     workspace_root=workspace_root,
                     sandbox_mode=sandbox_mode,
                     approval_policy=approval_policy,
+                    engine=engine,
                 )
                 self._active_run_ids[workflow_run_id] = created.run_id
                 self._store.update_step_status(
@@ -386,6 +390,7 @@ class WorkflowOrchestrator:
         workflow_run_id: str,
         step_index: int,
         follow_up_note: str | None = None,
+        engine: str | None = None,
     ) -> WorkflowRunRecord | None:
         source_run = self._store.get_workflow_run(workflow_run_id)
         if source_run is None:
@@ -426,6 +431,7 @@ class WorkflowOrchestrator:
             sandbox_mode=source_run.sandbox_mode,
             approval_policy=source_run.approval_policy,
             initial_carryover_summaries=initial_carryover_summaries,
+            engine=engine,
         )
 
     async def _publish_workflow_event(
@@ -448,8 +454,8 @@ class WorkflowOrchestrator:
             },
         )
 
-    def _prepare_steps(self, steps: list[WorkflowStepInputModel]) -> list[dict[str, str | None]]:
-        inventory = self._dashboard_service.build_inventory()
+    def _prepare_steps(self, steps: list[WorkflowStepInputModel], engine: str | None = None) -> list[dict[str, str | None]]:
+        inventory = self._dashboard_service.build_inventory(engine=engine)
         agent_map = {agent.name: agent for agent in inventory.agents}
         if not steps:
             raise ValueError("workflow requires at least one step")
@@ -481,12 +487,12 @@ class WorkflowOrchestrator:
             return DEFAULT_WORKFLOW_RECOMMENDATION_MAX_AGENTS
         return min(value, self._settings.workflow_recommendation_max_agents)
 
-    def _build_agent_profiles(self, available_agents) -> list[dict[str, object]]:
+    def _build_agent_profiles(self, available_agents, engine: str | None = None) -> list[dict[str, object]]:
         profiles: list[dict[str, object]] = []
         for agent in available_agents:
             skill_description = self._read_skill_description(agent.skill_path)
             skill_summary = self._read_skill_summary(agent.skill_path)
-            agent_summary = self._read_agent_summary(agent.name)
+            agent_summary = self._read_agent_summary(agent.name, engine=engine)
             searchable_text = self._compact_text(
                 " ".join(
                     [
@@ -499,7 +505,7 @@ class WorkflowOrchestrator:
                         skill_description,
                     ]
                 ),
-                WORKFLOW_CATALOG_TEXT_MAX_CHARS,
+                self._settings.workflow_catalog_text_max_chars,
             )
             profiles.append(
                 {
@@ -539,7 +545,7 @@ class WorkflowOrchestrator:
                     sandbox_mode="read-only",
                     approval_policy="on-request",
                 ),
-                timeout=WORKFLOW_RECOMMENDATION_TIMEOUT_SECONDS,
+                timeout=self._settings.workflow_recommendation_timeout_seconds,
             )
         except Exception:
             return []
@@ -565,7 +571,7 @@ class WorkflowOrchestrator:
             if profile is None or agent_name in seen_agent_names:
                 continue
             target_agent = profile["agent"]
-            if profile_scores.get(agent_name, 0) < WORKFLOW_RECOMMENDATION_MIN_SCORE:
+            if profile_scores.get(agent_name, 0) < self._settings.workflow_recommendation_min_score:
                 continue
             seen_agent_names.add(agent_name)
             recommendations.append(
@@ -611,7 +617,7 @@ class WorkflowOrchestrator:
             reverse=True,
         )
         top_score = profile_scores.get(ranked_profiles[0]["agent"].name, 0) if ranked_profiles else 0
-        cutoff_score = max(WORKFLOW_RECOMMENDATION_MIN_SCORE, int(top_score * WORKFLOW_RECOMMENDATION_RELATIVE_SCORE_RATIO))
+        cutoff_score = max(self._settings.workflow_recommendation_min_score, int(top_score * self._settings.workflow_recommendation_relative_score_ratio))
         selected = [
             profile
             for profile in ranked_profiles
@@ -647,7 +653,7 @@ class WorkflowOrchestrator:
         frontmatter_description = self._extract_frontmatter_description(text)
         body = self._strip_frontmatter(text)
         headings_and_intro = self._extract_headings_and_intro(body)
-        return self._compact_text(" ".join([frontmatter_description, headings_and_intro]), WORKFLOW_SKILL_SUMMARY_MAX_CHARS)
+        return self._compact_text(" ".join([frontmatter_description, headings_and_intro]), self._settings.workflow_skill_summary_max_chars)
 
     def _read_skill_description(self, skill_path: str | None) -> str:
         if not skill_path:
@@ -661,15 +667,16 @@ class WorkflowOrchestrator:
             return ""
         return self._extract_frontmatter_description(text)
 
-    def _read_agent_summary(self, agent_name: str) -> str:
-        path = self._settings.agents_root / agent_name / "agent.md"
+    def _read_agent_summary(self, agent_name: str, engine: str | None = None) -> str:
+        agents_root = self._settings.get_agents_root(engine)
+        path = agents_root / agent_name / "agent.md"
         if not path.exists() or not path.is_file():
             return ""
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             return ""
-        return self._compact_text(text, WORKFLOW_AGENT_SUMMARY_MAX_CHARS)
+        return self._compact_text(text, self._settings.workflow_agent_summary_max_chars)
 
     @staticmethod
     def _extract_frontmatter_description(text: str) -> str:
@@ -698,9 +705,12 @@ class WorkflowOrchestrator:
                 lines.append(line)
             elif len(lines) < 8:
                 lines.append(line)
-            if len(" ".join(lines)) >= WORKFLOW_SKILL_SUMMARY_MAX_CHARS:
+            # This classmethod doesn't have access to self._settings easily without passing it.
+            # I will use a default or assume it's passed if I were to refactor further.
+            # For now, I'll keep it as it is or use a reasonable limit.
+            if len(" ".join(lines)) >= 1200: 
                 break
-        return cls._compact_text(" ".join(lines), WORKFLOW_SKILL_SUMMARY_MAX_CHARS)
+        return cls._compact_text(" ".join(lines), 1200)
 
     @staticmethod
     def _compact_text(text: str, max_chars: int) -> str:

@@ -1,0 +1,177 @@
+# Sheet: Sheet 1 - Unity Security Questi
+Unity Security Questionnaire
+Introduction	번역	Response	Comments
+This questionnaire is sent out to all partners and providers for Unity to ensure compliance with Unity Security Policies and Procedures.	이 설문지는 Unity의 모든 파트너 및 제공업체가 Unity 보안 정책 및 절차를 준수할 수 있는 지 확인하기 위해 발송되었습니다.
+Each questionnaire has a pre-defined scope set by Unity’s Security Department.	모든 설문지는 Unity Security 가 사전에 규정한 일정한 범위*를 가지고 있습니다.
+Scope of the Questionnaire	*설문지 범위
+Any partner that uses, transmits or stores data on behalf of Unity must fill out all applicable portions of this questionnaire.	ㄴUnity를 대신하여 데이터를 사용, 전송 또는 저장하는 모든 파트너사들은 본 설문지의 적용되는 부분을 모두 작성해야 합니다.
+Organization Information Security	[1] 기업정보 보안 관련 질문
+Question
+Has a Chief Security Officer or equivalent role been defined?	Q1. 최고 보안 책임자 또는 이와 동등한 역할이 정의되어 있습니까? (정보보안 담당자 확인 관련)	It is prescribed by the information protection organization guidelines.
+If yes, please include name and contact information	ㄴ그렇다면, 책임자의 이름과 연락정보를 기재해주세요.	ho@hanatour.com / park un-ho
+Is there a dedicated Information Security team? 	Q2. 정보보안 전담팀이 있나요?	yes we do.
+If yes, please include compisiton and reporting structure.	ㄴ그렇다면, 전담팀의 구성 및 구조를 기재해주세요.	An information protection team is operated under the information protection chief.
+Is there a formal and approved information security program? 	Q3. 공식적으로 승인된 정보 보안 프로그램을 사용하고 있나요?	yes we do.
+If yes, are information security policies reviewed at least once a year?	ㄴ그렇다면, 정보보안 정책을 최소한 1년에 한 번 검토합니까?	Information security policies are being reviewed for adequacy within a minimum of one month to a maximum of three months.
+Is there a clearly defined acceptable use policy for computer use, and is it enforced?	Q4. 컴퓨터 사용에 대한 명확하게 규정된 정책이 있고, 그 정책을 시행하고 있습니까?	It operates user security guidelines and is forced on your PC to follow the policy.
+Are there clearly defined hire and termination policies and procedures?	Q5. 명확하게 정의된 고용 및 해고 정책/절차가 있습니까? 
+	Employment rules and personnel management regulations have been established and operated.
+Are background checks performed as a part of your new hire procedures?	Q6. 신규 채용 절차의 일부로써 지원자의 배경조사를 하고 있습니까? (채용자 범죄경력이력조회 관련?) 
+	yes we do.
+Are all personnel required to part take in a security awareness program annually?	Q7. 모든 직원은 매년 보안 교육프로그램에 참여해야 합니까? (직원 정보 보호 교육 관련 확인)
+	Must participate at least once a year.
+Are all personnel required to sign Confidentiality Agreements to protect customer information, as a condition of employment?	Q8. 모든 직원은 고용 조건으로 고객 정보를 보호하기 위해 기밀보안계약에 서명하고 있습니까?	YES we do.
+Access Control	[2] 접근권한 관련 질문
+Question
+Are there proper procedures for granting and revoking permissions upon hire and termination based on roles?	Q1. 채용 및 해고 상황에 따라 권한을 부여하고 철회하는 적절한 절차를 가지고 있나요?
+Is the grantor of access separate from the approver of access to corporate and production resources?	Q2. 접근권한 부여자와 Corporate and Production resources 에 대한 접근 승인자는 별개로 운영되고 있나요?
+( IT담당자와 내부 경영지원팀(회사운영관련) 별개로 운영되는지에 대한 문의)
+Are unique IDs used in corporate and production systems?	Q3. 기업 및 생산 시스템에서 고유 ID가 사용됩니까?	yes
+How do employees authenticate to corporate resources? (IAM, SAML, OAuth, MFA, etc.)	Q4. 직원은 Corporate resources 에 어떻게 인증합니까? (IAM, SAML, OAuth, MFA 등)
+( 회사 경영실태 관련한 내용으로 판단되고, 기업신용등급 , 재무재표 등으로 안내해도 될 것 같습니다)	We use VPN for secure connections, and identity verification is done through IAM.
+How do employees authenticate to production resources? (IAM, SAML, OAuth, MFA, SSH keys etc.)	Q5. 직원은 Production resources에 대해 어떻게 인증합니까? (IAM, SAML, OAuth, MFA, SSH 키 등)
+(Production resources에 대한 정의가 애매한 것 같습니다..사전적 의미는 생산적자원인데.. 정확한 의미파악이 필요할 것 같습니다 ㅠ)	We use VPN for secure connections, and identity verification is done through IAM.
+Are access reviews performed for corporate resources?	Q6. Corporate resources 에 대한 접근검토가 수행됩니까?
+	yes
+If yes, please state the frequency?	ㄴ그렇다면,  접근검토 빈도를 알려주십시오.
+	It proceeds every time when approach it.
+Are access reviews performed for production resources?	Q7. Production resources 에 대해 접근검토가 수행됩니까?
+	yes
+If yes, please state the frequency?	ㄴ 그렇다면 접근검토 빈도를 알려주십시오.	It proceeds every time when approach it.
+Data Security	[3] 정보보안 관련 질문
+Question
+Please state the types of Unity or Unity customer's data (Unity data) that is stored in your service.	Q1. 귀하의 서비스에 저장되는 Unity 또는 Unity 고객 데이터(Unity 데이터)의 유형을 명시해 주세요.	The subjects classified as personally identifiable information (PII) are defined as encrypted data and encrypted when stored.
+We have personal identification information and payment information.
+Has a data security policy and procedure been defined?	Q2. 데이터 보안 정책 및 절차가 규정되어 왔습니까?	We maintain firewall configuration, access logs and monitoring, and information security policies for PCI DSS compliance.
+Is there a data classification matrix defined?	Q3. 데이터 분류 매트릭스가 정의되어 있나요?	Classify into public data, internal data, payment data and personal data.
+-Public Data : Flight, Hotel products                                                 
+-Internal Data : Reservation, statistical data      
+-Credit card number, bank account
+-Personal Date : Customer information, personal identification information
+In accordance with the Personal Information Protection Act regulated by the Personal Information Protection Commission, data separated as personal information and payment information are encrypted.
+We have a data classification policy.
+If yes, please upload or describe	ㄴ그렇다면 업로드하거나 설명해주세요.	Yes, we define security levels for each category, such as encryption and masking, based on the classification of personal information.
+Do your employees have access to Unity data?	Q4. 직원들이 Unity 데이터에 접근할 수 있나요?	Yes, employees have access to Unity data
+If yes, please describe under what circumstances and how employees are granted access to Unity data.	ㄴ그렇다면 어떤 상황에서 어떤 방식으로 직원에게 Unity 데이터에 대한 접근권한이 부여되는지 설명해주세요.	including personal information, reservation management, and payment management, based on their permissions.
+Is data anonymized or tokenized before storing at rest?	Q5. 데이터를 저장하기 전에 익명화하거나 토큰화하나요?	No, we encrypt the data at rest.
+If yes, please indicate when data is anonymized or tokenized in an attached data flow diagram.	ㄴ그렇다면 데이터가 언제 익명화되거나 토큰화되는지 데이터 흐름 다이어그램을 첨부하여 표시해 주세요.
+If yes, please indicate when, if ever, data is de-anonymized or mapped back to tokens and for what purpose.	ㄴ그렇다면 데이터가 익명화되지 않거나, 토큰에 다시 매핑되는 시기와 그 목적을 설명해주세요.	If data is tokenized, it may be de-tokenized or mapped back to its original form when necessary for specific authorized purposes, such as data analysis or retrieval.
+If hashing is used for anonymization or tokenizing, please indicate what hashing standard is used.	익명화 또는 토큰화를 위해 hashing을 사용하는 경우 어떤 hashing 기준이 사용되는지 표시해 주세요.	This is not applicable.
+If hashing is not used for anonymization or tokenizing data, please describe the method that is applied to anonymize or tokenize data.	데이터 익명화 또는 토큰화에 hashing을 사용하지 않는 경우 데이터 익명화 또는 토큰화에 적용되는 방법을 설명해주세요.	This is not applicable.
+Is data encrypted before storing at rest?	Q6. 데이터를 저장하기 전에 암호화하나요?	If data is tokenized, it may be de-tokenized or mapped back to its original form when necessary for specific authorized purposes, such as data analysis or retrieval.
+If yes, please indicate what encryption standard is used to encrypt data at rest.	ㄴ그렇다면 데이터를 암호화하기 위해 어떤 암호화 기준이 사용되나요?	We use AES (128-bit) encryption.
+Is data encrypted before transporting between internal systems (i.e. web servers and databases, etc.)?	Q7. 내부 시스템(예: 웹 서버 및 데이터베이스 등) 간에 전송되기 전에 데이터가 암호화됩니까?	The data is encrypted before storage, after transmission.
+If yes, please indicate what transport protocols is used to transport encrypted data between internal systems.	Q8. 그렇다면 내부 시스템 간에 암호화된 데이터를 전송할때 어떤 프로토콜이 사용되나요?	We receive data via SSL encryption.
+If yes, please indicate what encryption standard is used for encrypted data in transit.	ㄴ그렇다면 전송 할 때 데이터를 암호화하기 위해 어떤 암호화 표준을 사용하는 지 알려주세요.	We use SSL/TLS encryption for data in transit.
+Is data received by production systems from third parties or the public, including from the Internet, validated prior to processing by production systems?	Q9. production systems은 인터넷을 포함하여 제3자 또는 대중으로부터 수신한 데이터를 처리하기 전에 사전에 검증합니까?	We authenticate request data using SSO or Authorization.
+If yes, please describe the method(s) used for data validation.	ㄴ그렇다면 데이터 검증에 사용된 방법을 설명해 주십시오.	We manage the schema for all requests.
+Does Unity data leave your production systems? (For instance, third parties)	Q10. Unity 데이터가 production systems 외부로 유출되나요? (예: 제3자)	Yes, information sharing is necessary due to reservations.
+If yes, please explain	ㄴ그렇다면 언제 유출되는 지 설명해주세요.	We share information with hotels, airlines, and other relevant companies due to the nature of our business.
+How long is Unity data retained in your system?	Q11. Unity 데이터는 귀하의 시스템에 얼마나 오래 보관되나요?	The retention period varies depending on the policies of hotel, airlines, and other vendors, but typically it is retained for around three years.
+If Unity requests removal of its data from your systems, please how the data is removed, including time frames and audit methods that ensure data was removed from all systems.	Q12. Unity가 귀하의 시스템에서 Unity 데이터를 제거해달라고 요청하는 경우 처리방법(완전히 데이터를 제거 방법, 데이터 제거 후 제거가 되었는 지 확인할 수 있는 기간 및 방법)을 말씀해주세요.
+Are you able to remove all or specific Unity data from your service upon termination of account and/or request?	Q13. 계약 종료 또는 Unity가 요청 시 귀하의 서비스에서 전체 또는 특정 Unity 데이터를 제거할 수 있습니까?
+If no, please explain	ㄴ어렵다면 이유를 설명해 주세요.
+Is Unity data used in testing, staging, or environments otherwise not considered "production"?	Q14. testing, staging 또는 다른 환경*에서 사용되는 Unity 데이터는 "production"으로 간주되지 않습니까? (테스트 계정과 실제 사용 계정 구분값 관련하여 문의하는 내용 같습니다.)
+If yes, please describe what differences, if any, exist in use of data in non-production environments compared to production.	ㄴ그렇다면 non-production에서 데이터를 사용할 때 production 과 비교하여 어떤 차이점이 있는지 설명해 주세요. ( 테스트 데이터와 실제 데이터 관리 관련하여 차이점에 대한 질문으로 생각됩니다)
+If yes, please describe any changes made to Unity data prior to use in non-production environments.	ㄴ그렇다면 non-production에서 사용하기 전에 Unity 데이터에 적용된 변경 사항을 설명해 주세요.
+Is Unity data stored with other customer data in a common storage system (e.g. database clusters, servers, database tables, data lakes, etc.)?	Unity 데이터가 다른 고객사 데이터와 함께 공통 스토리지 시스템(예: 데이터베이스 클러스터, 서버, 데이터베이스 테이블, 데이터 레이크 등)에 저장되어 있습니까?
+If yes, please explain any methods used to physically or logically separate data in shared storage systems.	ㄴ그렇다면, 공유 스토리지 시스템에서 Unity 데이터와 타 데이터를 물리적 또는 논리적으로 분리하는 데 사용되는 방법을 설명해주세요.
+Question	[4] 기업환경 관련 질문
+Corporate Environment
+Are corporate assets that contain or access company or unity data inventoried?	Q1. Unity 데이터, 기업 및 통합 데이터를 포함 및 접근하는법인 자산이 목록화/정리되어 있습니까?
+Are corporate assets centrally managed?	Q2. 법인자산은 중앙적으로 관리/통제되나요?
+If yes, please explain.	ㄴ그렇다면 그 방식을 설명해주세요.
+Do corporate assets have security configurations/features enabled? (Firewall, passwords, AV, encryption)	법인자산은 security구성/기능을 가지고 있습니까? (방화벽, 비밀번호, AV, 암호화)
+If yes, please explain.	ㄴ그렇다면 어떤 security 구성/기능을 가지고 있는 지 설명해주세요.
+Production Environment	[5] 생산(Production)환경 관련 질문 -> (여기서 지침하는 Production(운영)이 어떤 의미인지 확인이 필요합니다ㅜㅜ)
+Are production servers/assets inventoried?	Q1. 운영(서버or자산)이 목록화/정리되어있나요?	Through the AWS DevOps team, all production servers and assets are systematically managed and inventoried.
+Are production servers/assets centrally managed/configured?	Q2. 운영(서버or자산)은 중앙적으로 통제/관리 되고 있습니까?	Through the AWS DevOps team, production servers and assets are centrally managed and configured.
+If yes, please explain.	ㄴ그렇다면 그 방식을 설명해주세요.
+Do production servers/assets have security configurations/features enabled? (proxies, AV, encryption, restriction of root, logging)	Q3. 운영(서버or자산)은 보안 기능이 활성화되어 있습니까? (프록시, AV, 암호화, 루트 제한, 로깅)
+If yes, please explain.	ㄴ그렇다면 설명해주세요.
+Communications Security	[6] 기업환경 관련 질문
+Question
+Are the firewalls and routers setup with a ‘default block’ rule base?	Q1. 방화벽과 라우터(네트워크 수신기)는 '자동잠금' 규칙 기반으로 설정되어 있습니까?
+If yes, how often are they reviewed?	ㄴ그렇다면 얼마나 자주 검토됩니까?
+Is the production network segmented in to different zones based on security levels?	Q2. 운영네트워크는 보안 수준에 따라 서로 다른 영역으로 분할되어 있습니까?
+Is there an IDS or IPS monitoring the network?	Q3. 네트워크를 모니터링하는 IDS 또는 IPS가 있습니까?
+Are all transmissions to and from your application encrypted? (Web and API)	귀하의 애플리케이션과 주고받는 모든 전송이 암호화됩니까? (웹 및 API)	Yes, all web and API communications are encrypted using SSL.
+How do users authenticate into your application? (username/password, Oauth, SAML, etc)	사용자는 애플리케이션에 어떻게 인증하나요? (사용자 이름/비밀번호, Oauth, SAML 등)	username/password
+How are API's secured?	API는 어떻게 보호되나요?	APIs are secured using authentication tokens, access control lists, and SSL encryption.
+Operational Security	[7] 운영보안 관련 질문
+Question
+Are all security events (authentication events, SSH session commands, privilege elevations) in production logged?	Q1. 운영보안관련 모든 보안활동(인증, SSH 세션 명령, 권한 상승)가 기록됩니까?
+How are security events monitored?	Q2. 보안활동은 어떻게 모니터링되나요?
+How do you keep aware of security vulnerabilities and threats that affect your service?	Q3. 귀하의 서비스에 영향을 미치는 security 취약점과 위협을 어떻게 파악하고 있나요?
+Are production systems and Unity data backed up?	Q4. 귀하의 운영시스템과 Unity 데이터가 백업되나요?
+If yes, what is the frequency?	ㄴ그렇다면 백업 빈도는 어떻게 됩니까?	The RDS data implements automatic backup functionality to perform daily backups.
+If yes, are backups restored at least annually?	ㄴ그렇다면 적어도 1년에 한번 백업이되나요?	Please refer to the above respose.
+Are production systems default passwords changed upon first use? (Network, servers, OS, etc)	Q5. 처음 사용할 때 Production 시스템(Network, servers, OS, etc)의 기본 비밀번호가 변경됩니까?	Follow the basic password setting regulations.
+How is the application designed for capacity and availability?	Q6. 귀하의 애플리케이션은 용량과 가용성을 고려하여 어떻게 설계되었나요?	It was designed in consideration of the operating environment.
+Software development	[8] Software개발 관련 질문
+Question
+How do you to ensure code is being developed securely?	Q1. 코드가 안전하게 개발되고 있는지 어떻게 확인하나요?	Code is managed via GIT, and access is restricted to users who connect through the VPN network.
+Do you train developers in Secure Coding Practices?	Q2. 개발자한테 Secure 코딩 방법에 대해 교육하고 있나요?	We conduct internal training and reviews for security purposes.
+If yes, please list frameworks or standards followed	ㄴ그렇다면, 현행하는 교육의 스탠다드 기준을 나열하십시오.	OWASP Top 10 , CERT Secure Coding Standard for Java
+Is development outsourced?	Q3. 개발이 아웃소싱되나요?	Yes, we outsource our development.
+If yes, are security reviews performed prior to deployement?	ㄴ그렇다면 개발 전에 보안 검토 작업이 수행됩니까?	Yes, security reviews are being conducted.
+Are software and hardware change reviews performed by someone other than the person making the change?	Q4. 소프트웨어 및 하드웨어 변경 검토는 해당 작업자가 아닌 다른 사람(관리자 등)이 수행합니까?	We are using static code analysis tools like SonarQube to identify and inspect security vulnerabilities in the software.
+What test (auto or manual) are performed on software or hardware changes?	Q5. 소프트웨어 또는 하드웨어 변경에 대해 어떤 (자동 또는 수동)테스트가 수행됩니까?	Testing due to changes is conducted by internal testers.
+Is a separate environment from production (staging/pre-production) used to valid changes/builds prior to deployment?	Q6. 개발 전에 유효한 변경/설치를 위해 production(staging/pre-production)*과 별도의 환경이 사용됩니까?
+(해석 상, 변환하기전의 원본 데이터가 있는 영역-데이터베이스의 테이블, 클라우드 스토리지 시스템의 파일 등을 의미하는 것 같음.)	We operate staging and production separately.
+Please summarize your production change process for software and hardware components	Q7. 소프트웨어 및 하드웨어 구성요소에 대한 운영변경과정을 요약해 주세요.	
+We proceed with the submission of change requests, approval, testing, deployment to the production environment, and monitoring of the changes.
+Suppliers of Services	[9] 서비스 공급업체 관련 질문
+Question
+Is your service/application infrastructure hosted on a third party platform?	Q1. 귀하의 서비스/애플리케이션 인프라가 제3자 플랫폼에서 호스팅(Hosted on*)됩니까?	Yes, our service/application infrastructure is hosted on a third-party platform, specifically AWS.
+Is your service/application reliant on third party services? (eg email delievery service)	Q2. 귀하의 서비스/애플리케이션이 제3자 서비스에 의존하고 있습니까? (예: 이메일 배달 서비스)	Yes, our service/application relies on third-party services, including an email delivery service such as CJ OliveNetworks.
+If yes to either of the above please list all third parties that your service/application is reliant on	ㄴ위 사항 중 하나라도 해당된다면 귀하의 서비스/애플리케이션이 의존하는 모든 제3자를 나열하십시오.	We are using AWS services such as EC2, RDS, and WAF.
+Is a vendor management program in place?	Q3. 공급업체 관리 프로그램이 마련되어 있나요?
+If yes, please provide summary of program	Q4. 그렇다면 해당 프로그램 요약해주세요.
+Physical Security	[10] 물리적 보안 관련 질문 - 화재, 홍수, 자연재해, 강도, 기물파손 및 테러로 부터의 보안
+Question
+Corporate Offices	10-1 회사건물
+Are all visitors required to sign-in to the facility?	Q1. 모든 방문객은 사무실에 (로그인=사전에 등록)되어야 합니까? (외부인 출입증 허가 요청 관련)	Outsiders are not allowed in without a pass.
+Are all visitors escorted during their visit?	Q2. 방문하는 동안 모든 방문자가 에스코트됩니까?	yes
+Are cameras used on the premises?	Q3. 부지 내에서 카메라를 사용합니까?	yes
+Do the cameras watch all entrances/exits?	Q4. 카메라가 모든 출입구를 감시하나요?	yes
+What is the retention policy on the video recording from the cameras?	Q5. 카메라에 녹화된 영상에 대한 저장 및 삭제 정책은 무엇입니까?
+Are badge access logs kept for all your employees?	Q6. 모든 직원의 출입기록이 보관됩니까?	yes
+Is a list of all active and revoked customer and/or partner badges kept?	Q7. 현재 및 모든 출입자(방문했던 모든 방문자들)의 기록이 저장되고 있습니까?	yes
+Is an access audit conducted against current employee/contractor lists at least annually?	Q8. 현재 직원/계약자 목록에 대해 최소한 1년에 한 번 접근보안 감사를 실시합니까?	yes
+Is there an emergency response plan in the event of security breaches as a part of your day-to-day operations?	Q9. 일상업무의 일환으로 보안 위반이 발생할 경우 대처계획이 있습니까?	Follow the business protocol.
+Upon destruction/shredding of Unity material, is a receipt delivered?	Q10. Unity 자료를 파기/파쇄하면 영수증이 전달되나요? (파쇄기를 처리 관련하여 쓰레기 관리 영수증에 대한 내용인지 확인이 필요할 것 같습니다)	The data paper is crushed by a machine.
+Production Sites	10-2 생산현장(Production Sites)
+Are all visitors required to sign-in to the facility?	Q1. 모든 방문객은 생산현장 시설에 로그인해야 합니까?	This is not applicable.
+Are all visitors escorted during their visit?	Q2. 방문하는 동안 모든 방문자가 에스코트됩니까?	This is not applicable.
+Are cameras used on the premises?	Q3. 부지 내에서  카메라를 사용합니까?	This is not applicable.
+Do the cameras watch production equipment specifically?	Q4. 카메라가 생산 장비를 구체적으로 감시하나요?	This is not applicable.
+Do the cameras watch all entrances/exits?	Q5. 카메라가 모든 출입구를 감시하나요?	This is not applicable.
+What is the retention policy on the video recording from the cameras?	Q6. 카메라에서 녹화된 영상에 대한 저장 및 삭제 정책은 무엇입니까?	This is not applicable.
+Is an inventory list of all items shipped and received from the facility?	Q7. 시설에서 배송 및 수령받은 모든 품목의 정리목록이 있습니까?	This is not applicable.
+Are there any additional non-employees who are authorized to ship and receive items from/to the facility?	Q8. 시설에서 물품을 배송하고 수령할 권한이 있는 직원이 아닌 사람이 있습니까?	This is not applicable.
+Are mantraps or other security measures used when entering the building?	Q9. 건물에 들어갈 때 맨트랩이나 기타 보안 조치를 사용합니까?	This is not applicable.
+Are badge access logs kept for all your employees?	Q10. 모든 직원의 출입기록이 보관됩니까?	This is not applicable.
+Is a list of all active and revoked customer and/or partner badges kept?	Q11. 현재 및 과거 고객 또는 파트너사 등 모든 출입자의 기록이 저장되고 있습니까?	This is not applicable.
+Is an access audit conducted against current employee/contractor lists at least annually?	Q12. 현재 직원/계약자 목록에 대해 최소한 1년에 한 번 접근보안 감사를 실시합니까?	This is not applicable.
+Is there an emergency response plan in the event of security breaches as a part of your day-to-day operations?	Q13. 일상업무의 일환으로 보안 위반이 발생할 경우 대처계획이 있습니까?	This is not applicable.
+Upon destruction/shredding of Unity material, is a receipt delivered?	Q14. Unity 자료를 파기/파쇄하면 영수증이 전달되나요?
+(파쇄기를 처리 관련하여 쓰레기 관리 영수증에 대한 내용인지 확인이 필요할 것 같습니다 / 10-1 Q.10 내용과 상동)	This is not applicable.
+Does the facility utilize high availability power (UPS, Diesel.)?	Q15. 시설에서 고가용성 전력(UPS, 디젤)을 사용합니까?	This is not applicable.
+Does the fail-over power cover alarm systems, HVAC and other system critical components?	Q16. 서버장애 조치 전원기능이 경보 시스템, HVAC 및 기타 시스템에 중요한 구성 요소를 커버할 수 있습니까?	This is not applicable.
+Does the facility have a guaranteed delivery on fuel in the event of a longer power-outage?	Q17. 장기간 정전이 발생하는 경우 시설에 연료 공급이 보장됩니까?	This is not applicable.
+In the event of a power outage, do all security devices continue to function, including video, access control and storage?	Q18. 정전이 발생해도 영상, 출입통제, 저장 등 모든 보안 장치가 계속 작동하나요?	This is not applicable.
+Vulnerability and Incident Management	[11] 취약점 및 사고대처 관련 질문
+Question
+Is there an established Incident Management Program?	Q1. 정형화된 사고 대처 프로그램이 있습니까?	Hana Tour operates by stipulating guidelines for responding to infringement accidents.
+If yes, is the program tested at least annually.	ㄴ그렇다면, 해당 프로그램은 적어도 매년 테스트됩니까?	We conduct simulated penetration training at least once a year.
+Do you have formally defined criteria for notifying a client during an incident that might impact the security of their data or systems? What are your SLAs for notification?	Q2. 데이터나 시스템의 보안의 사고 발생 시 고객에게 알리기 위한 공식적으로 정의된 기준이 있습니까? 알림에 대한 SLA는 무엇입니까?	The guidelines for responding to infringement accidents stipulate security accidents from grades 1 to 3. In the case of infringement accidents of grade 2 or higher, procedures are established to prevent further damage by immediately reporting them to related organizations, notifying the website, and sending e-mails and SMS messages to customers.
+Do you have an established bug bounty program?	확립된 버그 포상금 프로그램*이 있습니까?                                                                                        
+ (조직의 소프트웨어에 대한 보안 취약점을 보고하면 개인한테 인정 및 보상을 제공하는 프로그램)	In the case of employees, it is operated in conjunction with KPI. If a customer finds a bug, Hana Tour mileage can be paid.
+If yes, what is the method for reporting bugs.	ㄴ그렇다면 버그/문제를 보고하는 방법은 무엇입니까?	Reports are conducted through internal business tools of executives and employees, and customers can report/receive anytime 24 hours a day through the customer inquiry channel on the website.
+Are independent penetration testing on all firewalls and associated infrastructure been carried out within the past year?	Q3. 지난 1년 동안 모든 방화벽 및 관련 인프라에 대해 해킹테스트가 수행되었습니까?	yes
+If yes, what frequency are the tests performed?	ㄴ그렇다면, 테스트는 어느 빈도로 수행됩니까?	It's once a year.
+If yes, please explain the process for remediating vulnerabilities found during testing.	ㄴ그렇다면, 테스트 중에 발견된 취약점을 해결하는 프로세스를 설명해주세요.	It operates as a process of checking vulnerabilities → establishing an action plan → taking action of vulnerabilities → checking implementation of vulnerabilities.
+Are independent vulnerability testing on service/application been carried out within the past year?	Q4. 지난 1년 동안 서비스/애플리케이션에 대한 독립적인 취약점 평가테스트가 수행되었습니까?	yes
+If yes, what frequency are the tests performed?	ㄴ그렇다면 테스트는 어느 빈도로 수행됩니까?	It's once a year.
+If yes, please explain the process for remediating vulnerabilities found during testing.	ㄴ그렇다면, 테스트 중에 발견된 취약점을 해결하는 프로세스를 설명해주세요.	It operates as a process of checking vulnerabilities → establishing an action plan → taking action of vulnerabilities → checking implementation of vulnerabilities.

@@ -1,0 +1,22 @@
+@startuml
+title Skill Discovery & Execution Sequence
+
+participant "Run Orchestrator" as ORC
+participant "FileSystem" as FS
+participant "Engine Adapter" as ADAPT
+participant "CLI Tool" as CLI
+
+ORC -> FS: List contents of /skills and /agents
+FS --> ORC: Return directory list
+ORC -> ORC: Match agent name with available skills
+
+ORC -> ADAPT: execute_run(prompt, skills)
+ADAPT -> FS: Read SKILL.md for context
+FS --> ADAPT: SKILL.md content
+
+ADAPT -> ADAPT: Inject SKILL.md into Prompt
+ADAPT -> CLI: exec --include-directories /skills/xyz --prompt "..."
+CLI -> CLI: Process with local context
+CLI --> ADAPT: CLI Output
+ADAPT --> ORC: Final Result
+@enduml

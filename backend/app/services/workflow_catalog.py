@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from app.config import SETTINGS
 
 
 @dataclass(frozen=True)
@@ -47,11 +48,12 @@ WORKFLOW_ICON_RULES: tuple[WorkflowIconRule, ...] = (
     WorkflowIconRule(key="presentation", label="프레젠테이션", keywords=("ppt", "slides", "presentation")),
 )
 
-DEFAULT_WORKFLOW_ICON_KEY = "bot"
-DEFAULT_WORKFLOW_RECOMMENDATION_MAX_AGENTS = 6
-DEFAULT_WORKFLOW_STEP_TITLE_PREFIX = "단계"
-WORKFLOW_STEP_SUMMARY_MAX_CHARS = 320
-WORKFLOW_GOAL_PREVIEW_MAX_CHARS = 140
+# Constants now refer to SETTINGS
+DEFAULT_WORKFLOW_ICON_KEY = SETTINGS.default_workflow_icon_key
+DEFAULT_WORKFLOW_RECOMMENDATION_MAX_AGENTS = SETTINGS.workflow_recommendation_max_agents
+DEFAULT_WORKFLOW_STEP_TITLE_PREFIX = SETTINGS.default_workflow_step_title_prefix
+WORKFLOW_STEP_SUMMARY_MAX_CHARS = SETTINGS.workflow_step_summary_max_chars
+WORKFLOW_GOAL_PREVIEW_MAX_CHARS = SETTINGS.workflow_goal_preview_max_chars
 
 
 def resolve_workflow_icon_key(*values: str | None) -> str:

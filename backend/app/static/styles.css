@@ -112,6 +112,15 @@ button {
   z-index: 20;
 }
 
+body[data-theme="cyber-fusion"] .rail-nav {
+  width: 260px;
+  align-items: stretch;
+  padding: 32px 20px;
+  background: linear-gradient(180deg, var(--panel) 0%, #05070a 100%);
+  border-right: 1px solid rgba(0, 255, 136, 0.3);
+  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+}
+
 body[data-theme="glass-enterprise"] .rail-nav {
   width: 280px;
   align-items: stretch;
@@ -138,6 +147,39 @@ body[data-theme="minimal-pro"] .rail-nav {
   font-weight: 700;
   margin-bottom: 40px;
   box-shadow: 0 0 15px var(--accent-glow);
+}
+
+body[data-theme="cyber-fusion"] .brand-logo {
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  box-shadow: none;
+  margin-bottom: 48px;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+body[data-theme="cyber-fusion"] .brand-logo::before {
+  content: "C";
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--accent);
+  display: grid;
+  place-items: center;
+  margin-right: 14px;
+  font-size: 1.2rem;
+  box-shadow: 0 0 15px var(--accent-glow);
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 70% 100%, 0 100%);
+}
+
+body[data-theme="cyber-fusion"] .brand-logo::after {
+  content: "CYBER_FUSION_OS";
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
 }
 
 body[data-theme="glass-enterprise"] .brand-logo,
@@ -197,6 +239,11 @@ body[data-theme="minimal-pro"] .brand-logo::after {
   align-items: center;
 }
 
+body[data-theme="cyber-fusion"] .rail-tabs {
+  align-items: stretch;
+  gap: 6px;
+}
+
 body[data-theme="glass-enterprise"] .rail-tabs,
 body[data-theme="minimal-pro"] .rail-tabs {
   align-items: stretch;
@@ -216,10 +263,31 @@ body[data-theme="minimal-pro"] .rail-tabs {
   position: relative;
 }
 
+body[data-theme="cyber-fusion"] .rail-tab {
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  padding: 12px 16px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-m);
+  display: flex;
+  gap: 14px;
+  border-left: 3px solid transparent;
+  margin-bottom: 4px;
+}
+
 .rail-tab.active {
   background: var(--accent);
   color: #000;
   box-shadow: 0 0 20px var(--accent-glow);
+}
+
+body[data-theme="cyber-fusion"] .rail-tab.active {
+  background: rgba(0, 255, 136, 0.1);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  box-shadow: inset 10px 0 20px rgba(0, 255, 136, 0.05);
 }
 
 body[data-theme="glass-enterprise"] .rail-tab,
@@ -262,32 +330,284 @@ body[data-theme="minimal-pro"] .rail-tab:nth-child(2)::after { content: "02_DASH
 body[data-theme="minimal-pro"] .rail-tab:nth-child(3)::after { content: "03_COMMANDS"; }
 body[data-theme="minimal-pro"] .rail-tab:nth-child(4)::after { content: "04_NETWORK"; }
 body[data-theme="minimal-pro"] .rail-tab:nth-child(5)::after { content: "05_INSPECTOR"; }
+body[data-theme="cyber-fusion"] .rail-tab:nth-child(1)::after { content: "01_ORG_TOPOLOGY"; }
+body[data-theme="cyber-fusion"] .rail-tab:nth-child(2)::after { content: "02_LIVE_DASHBOARD"; }
+body[data-theme="cyber-fusion"] .rail-tab:nth-child(3)::after { content: "03_MISSION_CONSOLE"; }
+body[data-theme="cyber-fusion"] .rail-tab:nth-child(4)::after { content: "04_LOGIC_NETWORK"; }
+body[data-theme="cyber-fusion"] .rail-tab:nth-child(5)::after { content: "05_UNIT_INSPECTOR"; }
 
 body[data-theme="glass-enterprise"] .rail-tab::after,
-body[data-theme="minimal-pro"] .rail-tab::after {
+body[data-theme="minimal-pro"] .rail-tab::after,
+body[data-theme="cyber-fusion"] .rail-tab::after {
   font-size: 0.8rem;
   font-weight: 600;
 }
 
-body[data-theme="minimal-pro"] .rail-tab::after {
+body[data-theme="minimal-pro"] .rail-tab::after,
+body[data-theme="cyber-fusion"] .rail-tab::after {
   font-size: 0.7rem;
   letter-spacing: 0.08em;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+}
+
+body[data-theme="cyber-fusion"] .rail-tab::after {
+  color: var(--text-m);
+}
+
+body[data-theme="cyber-fusion"] .rail-tab.active::after {
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
 }
 
 body[data-theme="glass-enterprise"] .rail-tab span,
-body[data-theme="minimal-pro"] .rail-tab span {
+body[data-theme="minimal-pro"] .rail-tab span,
+body[data-theme="cyber-fusion"] .rail-tab span {
   display: none;
 }
 
 .rail-bottom {
   width: 100%;
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   padding: 0 12px;
+  margin-top: auto;
 }
 
-.theme-quick-switch {
-  display: none;
+.selection-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.theme-picker-group,
+.engine-picker-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 3px;
+  width: 100%;
+}
+
+.theme-picker-btn,
+.engine-picker-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-m);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 48px;
+}
+
+.theme-picker-btn .theme-icon {
+  font-size: 1.1rem;
+}
+
+.theme-picker-btn .theme-label,
+.engine-picker-btn .engine-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  letter-spacing: 0.05em;
+}
+
+.theme-picker-btn:hover,
+.engine-picker-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.theme-picker-btn.active,
+.engine-picker-btn.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+/* Cyber Fusion specific readability & aesthetic improvements */
+body[data-theme="cyber-fusion"] .rail-bottom {
+  padding: 0 20px 20px;
+  gap: 16px;
+}
+
+body[data-theme="cyber-fusion"] .selection-box {
+  background: rgba(2, 6, 12, 0.85);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  border-radius: 4px; /* Shorter radius for tech feel */
+  padding: 12px 6px 8px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+
+body[data-theme="cyber-fusion"] .selection-box::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  opacity: 0.8;
+}
+
+body[data-theme="cyber-fusion"] .selection-box::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  transform: rotate(45deg);
+  opacity: 0.5;
+}
+
+body[data-theme="cyber-fusion"] .field-label {
+  font-size: 0.58rem;
+  margin-bottom: 10px;
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent-glow);
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+body[data-theme="cyber-fusion"] .field-label::before {
+  content: "»";
+  font-size: 0.7rem;
+  animation: cyber-blink 1.5s infinite;
+}
+
+@keyframes cyber-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-group,
+body[data-theme="cyber-fusion"] .engine-picker-group {
+  background: rgba(0, 10, 20, 0.6);
+  border-color: rgba(0, 255, 136, 0.15);
+  flex-direction: row;
+  gap: 4px;
+  padding: 4px;
+  background-image: 
+    repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0, 255, 136, 0.03) 1px, rgba(0, 255, 136, 0.03) 2px),
+    linear-gradient(rgba(0, 255, 136, 0.02) 1px, transparent 1px);
+  background-size: 100% 2px, 100% 20px;
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-btn,
+body[data-theme="cyber-fusion"] .engine-picker-btn {
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 4px;
+  gap: 4px;
+  min-height: 52px;
+  width: 100%;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.01);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-btn:hover,
+body[data-theme="cyber-fusion"] .engine-picker-btn:hover {
+  background: rgba(0, 255, 136, 0.05);
+  border-color: rgba(0, 255, 136, 0.2);
+  transform: translateY(-1px);
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-btn .theme-icon {
+  font-size: 1.1rem;
+  width: auto;
+  filter: drop-shadow(0 0 5px var(--accent-glow));
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-btn .theme-label,
+body[data-theme="cyber-fusion"] .engine-picker-btn .engine-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--text-m);
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-btn.active,
+body[data-theme="cyber-fusion"] .engine-picker-btn.active {
+  background: rgba(0, 255, 136, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.15), inset 0 0 10px rgba(0, 255, 136, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-btn.active::after,
+body[data-theme="cyber-fusion"] .engine-picker-btn.active::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: cyber-scanline-down 2s linear infinite;
+}
+
+@keyframes cyber-scanline-down {
+  from { top: -10%; opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  to { top: 110%; opacity: 0; }
+}
+
+body[data-theme="cyber-fusion"] .theme-picker-btn.active .theme-label,
+body[data-theme="cyber-fusion"] .engine-picker-btn.active .engine-label {
+  color: var(--accent);
+  text-shadow: 0 0 8px var(--accent-glow);
+}
+
+/* Glass Enterprise tweaks */
+body[data-theme="glass-enterprise"] .rail-bottom {
+  width: 100%;
+}
+
+body[data-theme="glass-enterprise"] .theme-picker-group,
+body[data-theme="glass-enterprise"] .engine-picker-group {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 16px;
+}
+
+body[data-theme="glass-enterprise"] .theme-picker-btn.active,
+body[data-theme="glass-enterprise"] .engine-picker-btn.active {
+  background: #fff;
+  color: var(--accent);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Minimal Pro tweaks */
+body[data-theme="minimal-pro"] .theme-picker-group,
+body[data-theme="minimal-pro"] .engine-picker-group,
+body[data-theme="minimal-pro"] .theme-picker-btn,
+body[data-theme="minimal-pro"] .engine-picker-btn {
+  border-radius: 0;
+}
+
+body[data-theme="minimal-pro"] .theme-picker-btn.active,
+body[data-theme="minimal-pro"] .engine-picker-btn.active {
+  background: #fff;
+  color: #000;
 }
 
 .theme-select,
@@ -299,40 +619,6 @@ body[data-theme="minimal-pro"] .rail-tab span {
   padding: 12px;
   color: var(--text);
   outline: none;
-}
-
-body[data-theme="glass-enterprise"] .theme-select,
-body[data-theme="glass-enterprise"] .proto-input {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 16px;
-}
-
-body[data-theme="minimal-pro"] .theme-select,
-body[data-theme="minimal-pro"] .proto-input {
-  border-radius: 2px;
-}
-
-body[data-theme="cyber-fusion"] .rail-bottom {
-  justify-items: center;
-  padding: 0 8px;
-}
-
-body[data-theme="cyber-fusion"] .rail-bottom .field-label {
-  text-align: left;
-  font-size: 0.75rem;
-  letter-spacing: 0.1em;
-  color: var(--accent);
-  margin-bottom: 6px;
-  display: block;
-}
-
-body[data-theme="cyber-fusion"] .theme-select {
-  display: block;
-  font-size: 0.85rem;
-  padding: 8px 12px;
-  border-color: var(--accent);
-  color: var(--text);
-  background: rgba(0, 255, 136, 0.05);
 }
 
 body[data-theme="cyber-fusion"] .theme-quick-switch {
