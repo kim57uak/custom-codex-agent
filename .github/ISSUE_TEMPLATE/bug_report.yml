@@ -1,0 +1,43 @@
+name: Bug Report
+about: Create a report to help us improve
+title: "[BUG] "
+labels: bug
+assignees: ''
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        먼저 버그를 제보해 주셔서 감사합니다! 🐛
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 버그 설명
+      description: 어떤 현상이 발생하는지 명확하고 간결하게 설명해 주세요.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 재현 단계
+      description: 버그를 재현하기 위한 단계를 적어주세요.
+      placeholder: |
+        1. '...' 탭으로 이동합니다.
+        2. '...' 버튼을 클릭합니다.
+        3. '...' 현상이 발생합니다.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 예상 결과
+      description: 원래 어떤 결과가 나와야 하는지 설명해 주세요.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 실행 환경
+      description: OS, 브라우저 버전, Python 버전 등을 적어주세요.

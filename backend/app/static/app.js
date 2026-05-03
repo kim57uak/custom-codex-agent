@@ -987,8 +987,19 @@
     const events = state.runEvents.get(state.selectedRunId) || [];
     el.runMeta.textContent = run ? `${run.agent_name} · ${run.status} · ${run.workspace_root || ""}` : state.selectedRunId;
     el.runLog.textContent = events.length > 0 ? events.map(function (event) {
+      if (event.event_type === "run:reply") {
+        return `[${fmtDate(event.created_at)}] USER_INPUT >>> ${event.message}`;
+      }
       return `[${fmtDate(event.created_at)}] ${event.event_type} ${event.message}`;
     }).join("\n") : "> Awaiting Mission Input...";
+    
+    // 버튼 라벨 업데이트
+    if (el.runSubmitBtn) {
+      const selectedRun = state.runs.find(r => r.run_id === state.selectedRunId);
+      const isRunning = selectedRun && selectedRun.status === "running";
+      el.runSubmitBtn.textContent = isRunning ? "REPLY" : "COMMENCE";
+    }
+
     el.runLog.scrollTop = el.runLog.scrollHeight;
   }
 
@@ -1943,6 +1954,24 @@
     }
   }
 
+  async function replyToSelectedRun() {
+    if (!state.selectedRunId || !el.runPromptInput) return;
+    const message = el.runPromptInput.value || "";
+    if (!message.trim()) return;
+
+    try {
+      await postJsonWithAuth(`/api/runs/${encodeURIComponent(state.selectedRunId)}/reply`, {
+        message: message
+      });
+      el.runPromptInput.value = "";
+      state.liveText = "답변 전송 완료";
+      // 리프레시를 통해 새 이벤트(run:reply)를 가져옴
+      await refreshAll();
+    } catch (err) {
+      showToast(`답변 전송 실패: ${err.message}`, "error");
+    }
+  }
+
   async function cancelSelectedRun() {
     if (!state.selectedRunId) return;
     await postJsonWithAuth(`/api/runs/${encodeURIComponent(state.selectedRunId)}/cancel`);
@@ -2383,7 +2412,16 @@
       window.localStorage.setItem(APPROVAL_POLICY_KEY, state.selectedApprovalPolicy);
     });
     if (el.runWorkspacePickerBtn) el.runWorkspacePickerBtn.addEventListener("click", function () { openWorkspacePicker("run").catch(handleError); });
-    if (el.runSubmitBtn) el.runSubmitBtn.addEventListener("click", function () { createRun().catch(handleError); });
+    if (el.runSubmitBtn) el.runSubmitBtn.addEventListener("click", function () { 
+      const selectedRun = state.runs.find(r => r.run_id === state.selectedRunId);
+      const isRunning = selectedRun && selectedRun.status === "running";
+      
+      if (isRunning) {
+        replyToSelectedRun().catch(handleError);
+      } else {
+        createRun().catch(handleError);
+      }
+    });
     if (el.runCancelBtn) el.runCancelBtn.addEventListener("click", function () { cancelSelectedRun().catch(handleError); });
     if (el.runRetryBtn) el.runRetryBtn.addEventListener("click", function () { retrySelectedRun().catch(handleError); });
 

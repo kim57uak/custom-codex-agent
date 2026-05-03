@@ -37,6 +37,8 @@ class RunRecord:
     prompt: str
     status: str
     engine: str
+    sandbox_mode: str | None
+    approval_policy: str | None
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
@@ -88,6 +90,7 @@ class RunStore:
                     workspace_root text not null,
                     prompt text not null,
                     status text not null,
+                    engine text not null default 'gemini',
                     created_at integer not null,
                     started_at integer null,
                     completed_at integer null,
@@ -114,23 +117,43 @@ class RunStore:
                 # 이미 컬럼이 존재하는 경우는 마이그레이션 성공으로 간주한다.
                 pass
             try:
-                connection.execute("alter table runs add column engine text not null default 'codex'")
+                connection.execute("alter table runs add column engine text not null default 'gemini'")
             except sqlite3.OperationalError:
-                # engine 컬럼이 이미 존재하면 무시한다.
+                # 기존 스키마에서 이미 추가되었거나 생성 시 포함된 경우 무시한다.
+                pass
+            try:
+                connection.execute("alter table runs add column sandbox_mode text null")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                connection.execute("alter table runs add column approval_policy text null")
+            except sqlite3.OperationalError:
                 pass
 
-    def create_run(self, run_id: str, agent_name: str, workspace_root: str, prompt: str, engine: str | None = None) -> RunRecord:
+    def create_run(
+        self,
+        run_id: str,
+        agent_name: str,
+        workspace_root: str,
+        prompt: str,
+        engine: str | None = None,
+        sandbox_mode: str | None = None,
+        approval_policy: str | None = None,
+    ) -> RunRecord:
         effective_engine = engine or SETTINGS.default_engine
         now = _utc_now()
         with self._connect() as connection:
             connection.execute(
                 """
-                insert into runs (run_id, agent_name, workspace_root, prompt, status, engine, created_at)
-                values (?, ?, ?, ?, ?, ?, ?)
+                insert into runs (run_id, agent_name, workspace_root, prompt, status, engine, sandbox_mode, approval_policy, created_at)
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (run_id, agent_name, workspace_root, prompt, "queued", effective_engine, _to_unix_seconds(now)),
+                (run_id, agent_name, workspace_root, prompt, "queued", effective_engine, sandbox_mode, approval_policy, _to_unix_seconds(now)),
             )
-        return self.get_run(run_id)
+        created = self.get_run(run_id)
+        if created is None:
+            raise RuntimeError(f"failed to create run: {run_id}")
+        return created
 
     def mark_running(self, run_id: str) -> RunRecord | None:
         now = _utc_now()
@@ -175,7 +198,7 @@ class RunStore:
         with self._connect() as connection:
             row = connection.execute(
                 """
-                select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
+                select run_id, agent_name, workspace_root, prompt, status, engine, sandbox_mode, approval_policy, created_at, started_at, completed_at, exit_code, error_message
                 from runs
                 where run_id = ?
                 """,
@@ -196,7 +219,7 @@ class RunStore:
             if engine:
                 rows = connection.execute(
                     """
-                    select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
+                    select run_id, agent_name, workspace_root, prompt, status, engine, sandbox_mode, approval_policy, created_at, started_at, completed_at, exit_code, error_message
                     from runs
                     where engine = ?
                     order by created_at desc
@@ -207,7 +230,7 @@ class RunStore:
             else:
                 rows = connection.execute(
                     """
-                    select run_id, agent_name, workspace_root, prompt, status, engine, created_at, started_at, completed_at, exit_code, error_message
+                    select run_id, agent_name, workspace_root, prompt, status, engine, sandbox_mode, approval_policy, created_at, started_at, completed_at, exit_code, error_message
                     from runs
                     order by created_at desc
                     limit ?
@@ -248,6 +271,8 @@ class RunStore:
             prompt=str(row["prompt"]),
             status=str(row["status"]),
             engine=engine_value,
+            sandbox_mode=str(row["sandbox_mode"]) if row["sandbox_mode"] else None,
+            approval_policy=str(row["approval_policy"]) if row["approval_policy"] else None,
             created_at=_from_unix_seconds(row["created_at"]) or _utc_now(),
             started_at=_from_unix_seconds(row["started_at"]),
             completed_at=_from_unix_seconds(row["completed_at"]),

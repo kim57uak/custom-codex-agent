@@ -68,6 +68,8 @@ class RunOrchestrator:
             workspace_root=str(workspace_root),
             prompt=prompt,
             engine=engine,
+            sandbox_mode=sandbox_mode,
+            approval_policy=approval_policy,
         )
         await self._publish_run_event(run_id, "run:queued", f"run queued for agent={agent_name} engine={engine}")
         task = asyncio.create_task(
@@ -115,10 +117,12 @@ class RunOrchestrator:
             return None
         workspace_root = self.validate_workspace_root(record.workspace_root or None)
         return await self.create_run(
-            agent_name=record.agent_name, 
-            prompt=record.prompt, 
+            agent_name=record.agent_name,
+            prompt=record.prompt,
             workspace_root=workspace_root,
-            engine=engine
+            sandbox_mode=record.sandbox_mode,
+            approval_policy=record.approval_policy,
+            engine=engine,
         )
 
     async def wait_for_run(self, run_id: str) -> RunRecord | None:
@@ -146,6 +150,30 @@ class RunOrchestrator:
                 # 실행 task 내부에서 상태와 이벤트를 이미 기록하므로 여기서는 후속 조회만 수행한다.
                 pass
         return self._store.get_run(run_id)
+
+    async def reply_to_run(self, run_id: str, message: str) -> bool:
+        """
+        실행 중인 에이전트 프로세스의 stdin으로 추가 메시지를 보낸다 (Multi-turn 대화 지원).
+        """
+        process = self._active_processes.get(run_id)
+        if process is None or process.returncode is not None:
+            return False
+
+        if process.stdin is None:
+            return False
+
+        try:
+            # 사용자의 답변을 이벤트로 기록하여 로그에 남김
+            await self._publish_run_event(run_id, "run:reply", message)
+
+            # stdin으로 메시지 전송 (개행 추가 필수)
+            payload = (message if message.endswith("\n") else message + "\n").encode("utf-8")
+            process.stdin.write(payload)
+            await process.stdin.drain()
+            return True
+        except Exception as err:
+            await self._publish_run_event(run_id, "run:error", f"failed to send reply: {err}")
+            return False
 
     async def execute_codex_text(
         self,
@@ -190,7 +218,7 @@ class RunOrchestrator:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
+
         if adapter.uses_stdin_for_prompt:
             await self._write_prompt(process, prompt)
 
@@ -238,7 +266,7 @@ class RunOrchestrator:
                     include_dirs.append(str(skill_path.parent))
 
                 adapter = self._engine_factory.get_adapter(engine)
-                
+
                 command = adapter.build_command(
                     sandbox_mode=sandbox_mode,
                     approval_policy=approval_policy,
@@ -257,6 +285,11 @@ class RunOrchestrator:
                     env["GEMINI_HOME"] = str(self._settings.gemini_home)
                 if self._settings.codex_home:
                     env["CODEX_HOME"] = str(self._settings.codex_home)
+
+                # API Key 전파: CLI에서 LLM에 접근할 수 있도록 현재 프로세스의 환경변수를 명시적으로 주입
+                for key in ["GOOGLE_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"]:
+                    if key in os.environ:
+                        env[key] = os.environ[key]
 
                 if adapter.uses_stdin_for_prompt:
                     process = await asyncio.create_subprocess_exec(
@@ -391,13 +424,12 @@ class RunOrchestrator:
             config_file = agent_dir / "config.json"
             if not config_file.exists():
                 return None, None
-            
-            import json
+
             config = json.loads(config_file.read_text(encoding="utf-8"))
             skill_path_str = config.get("skill_path")
             if not skill_path_str:
                 return None, None
-            
+
             skill_path = Path(skill_path_str).expanduser()
             if skill_path.exists():
                 return skill_path.read_text(encoding="utf-8"), skill_path

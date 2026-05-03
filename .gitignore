@@ -1,2 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv
+venv/
+ENV/
+
+# Databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Logs
+*.log
+history.jsonl
+logs_2.sqlite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environments
 .env
-!.env.example
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Project Specific
+backend/app/static/backups/
+backups/
+temp/

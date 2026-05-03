@@ -1,0 +1,11 @@
+{
+  "name": "tactical-advisor",
+  "role": "전략적 조언자",
+  "department": "전략기획팀",
+  "status": "healthy",
+  "skill_path": "skills/tactical-advisor/SKILL.md",
+  "metadata": {
+    "version": "1.0.0",
+    "capability": "Strategic planning and risk assessment"
+  }
+}

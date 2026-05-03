@@ -231,7 +231,7 @@ def register_inspector_routes(ctx: ApiContext) -> None:
         if len(payload.content) > ctx.settings.safe_read_text_max_chars * 10:
             raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file content is too large")
 
-        engine = payload.engine if hasattr(payload, "engine") else None
+        engine = payload.engine
         
         # JSON 유효성 검사 (설정 파일인 경우)
         if payload.path.lower().endswith(".json"):
@@ -254,10 +254,13 @@ def register_inspector_routes(ctx: ApiContext) -> None:
                 status="ok", 
                 file=ctx.inspector_service.build_file_model(saved_path, kind="updated")
             )
-        except (PermissionError, FileNotFoundError) as e:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-        except Exception as e:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"save failed: {e}")
+        except (PermissionError, FileNotFoundError) as err:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(err)) from err
+        except Exception as err:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"save failed: {err}",
+            ) from err
 
 
 def register_config_routes(ctx: ApiContext) -> None:
@@ -403,11 +406,10 @@ def register_run_routes(ctx: ApiContext) -> None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _to_run_detail_model(run)
 
-
     @ctx.router.get("/runs/{run_id}/events", response_model=RunEventsResponse)
     def get_run_events(
         run_id: str,
-        limit: int = Query(default=ctx.settings.run_event_list_limit_default, ge=1, le=ctx.settings.run_event_list_limit_max)
+        limit: int = Query(default=ctx.settings.run_event_list_limit_default, ge=1, le=ctx.settings.run_event_list_limit_max),
     ) -> RunEventsResponse:
         run = ctx.run_orchestrator.get_run(run_id)
         if run is None:
@@ -480,6 +482,21 @@ def register_run_routes(ctx: ApiContext) -> None:
         if retried is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _to_run_detail_model(retried.record)
+
+    @ctx.router.post("/runs/{run_id}/reply")
+    async def reply_to_run(
+        run_id: str,
+        message: str = Body(..., embed=True),
+        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+    ) -> dict[str, bool]:
+        _verify_write_token(ctx.write_api_token, x_api_token)
+        success = await ctx.run_orchestrator.reply_to_run(run_id, message)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="failed to send reply (run may be finished or not found)"
+            )
+        return {"success": True}
 
 
 def register_workflow_routes(ctx: ApiContext) -> None:
@@ -609,7 +626,7 @@ def register_workflow_routes(ctx: ApiContext) -> None:
                 workflow_run_id,
                 step_index=request.step_index,
                 follow_up_note=request.follow_up_note,
-                engine=request.engine if hasattr(request, "engine") else None,
+                engine=request.engine,
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
@@ -628,7 +645,7 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             created = await ctx.workflow_orchestrator.skip_workflow_step_and_continue(
                 workflow_run_id,
                 request.step_index,
-                engine=request.engine if hasattr(request, "engine") else None,
+                engine=request.engine,
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
