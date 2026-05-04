@@ -1,0 +1,111 @@
+.workflow-shell {
+  padding: 32px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+}
+
+.workflow-stage-panel {
+  min-width: 1180px;
+  min-height: 760px;
+  overflow: hidden;
+  position: relative;
+}
+
+.workflow-stage-frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workflow-scene {
+  position: relative;
+  width: var(--scene-width, 100%);
+  height: var(--scene-height, 100%);
+  min-height: 480px;
+}
+
+.workflow-wires {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.workflow-wire {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 0.25;
+}
+
+.workflow-wire.active {
+  opacity: 1;
+  stroke-dasharray: 6;
+  animation: dash 10s linear infinite;
+}
+
+.flow-node {
+  position: absolute;
+  min-width: 180px;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  z-index: 2;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.flow-node-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.flow-node-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.node-icon {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #000;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.workflow-log-feed {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.workflow-log-entry {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 16px 18px;
+}
+
+.workflow-codex-answer {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.72;
+  font-size: 0.96rem;
+  color: var(--text);
+}

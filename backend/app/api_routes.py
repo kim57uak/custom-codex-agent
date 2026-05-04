@@ -1,17 +1,20 @@
 from __future__ import annotations
-
-import asyncio
-import json
 import logging
-from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
-from typing import TYPE_CHECKING
-
-from fastapi import APIRouter, Body, Header, HTTPException, Query, status
+import asyncio
+from typing import Annotated, TYPE_CHECKING
+from fastapi import APIRouter, Body, Header, HTTPException, Query, status, Depends
 from fastapi.responses import StreamingResponse
 
-from app.config import SETTINGS
+from app.dependencies import (
+    get_dashboard_service,
+    get_event_broker,
+    get_run_orchestrator,
+    get_workflow_orchestrator,
+    get_backup_service,
+    get_inspector_service,
+    get_settings,
+    verify_write_access,
+)
 from app.models import (
     AgentInspectorFileModel,
     AgentInspectorFileSaveRequest,
@@ -69,48 +72,179 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class ApiContext:
-    """
-    Context object passed to route registration functions to provide access
-    to shared services, configuration, and state. Using a context object
-    simplifies dependency injection for FastAPI routes.
-    """
-    router: APIRouter
-    service: DashboardService
-    broker: EventBroker
-    run_orchestrator: RunOrchestrator
-    workflow_orchestrator: WorkflowOrchestrator
-    write_api_token: str | None
-    settings: AppSettings
-    backup_service: SkillAgentBackupService
-    inspector_service: AgentInspectorService
+def _find_agent_or_404(service: DashboardService, agent_name: str, engine: str | None = None):
+    # 엔진 선택에 따라 에이전트 목록이 달라질 수 있으므로 engine 파라미터를 명시적으로 전달함
+    inventory = service.build_inventory(engine=engine)
+    target = next((agent for agent in inventory.agents if agent.name == agent_name), None)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent not found")
+    return target
+
+
+def register_read_routes(router: APIRouter) -> None:
+    @router.get("/overview", response_model=OverviewModel)
+    def get_overview(
+        engine: str | None = Query(default=None),
+        service: DashboardService = Depends(get_dashboard_service),
+    ) -> OverviewModel:
+        return service.build_overview(engine=engine)
+
+    @router.get("/graph/router", response_model=RouterGraphResponse)
+    def get_router_graph(
+        engine: str | None = Query(default=None),
+        service: DashboardService = Depends(get_dashboard_service),
+    ) -> RouterGraphResponse:
+        return service.build_router_graph(engine=engine)
+
+    @router.get("/graph/org", response_model=OrganizationChartResponse)
+    def get_org_chart(
+        engine: str | None = Query(default=None),
+        service: DashboardService = Depends(get_dashboard_service),
+    ) -> OrganizationChartResponse:
+        return service.build_org_chart(engine=engine)
+
+    @router.get("/dashboard", response_model=DashboardResponse)
+    def get_dashboard(
+        engine: str | None = Query(default=None),
+        service: DashboardService = Depends(get_dashboard_service),
+    ) -> DashboardResponse:
+        return service.build_dashboard(engine=engine)
+
+    @router.get("/inventory", response_model=InventoryResponse)
+    def get_inventory(
+        engine: str | None = Query(default=None),
+        service: DashboardService = Depends(get_dashboard_service),
+    ) -> InventoryResponse:
+        return service.build_inventory(engine=engine)
+
+    @router.get("/agents/executable", response_model=ExecutableAgentsResponse)
+    def get_executable_agents(
+        engine: str | None = Query(default=None),
+        service: DashboardService = Depends(get_dashboard_service),
+    ) -> ExecutableAgentsResponse:
+        inventory = service.build_inventory(engine=engine)
+        agents = [
+            ExecutableAgentModel(
+                name=agent.name,
+                role_label_ko=agent.role_label_ko,
+                department_label_ko=agent.department_label_ko,
+                runnable=agent.status != "broken",
+                reason=agent.reason,
+                short_description=agent.short_description,
+                one_click_prompt=agent.one_click_prompt,
+            )
+            for agent in inventory.agents
+        ]
+def register_inspector_routes(router: APIRouter) -> None:
+    @router.get("/agents/{agent_name}/inspector", response_model=AgentInspectorResponse)
+    def get_agent_inspector(
+        agent_name: str,
+        engine: str | None = Query(default=None),
+        service: DashboardService = Depends(get_dashboard_service),
+        inspector_service: AgentInspectorService = Depends(get_inspector_service),
+    ) -> AgentInspectorResponse:
+        target = _find_agent_or_404(service, agent_name, engine=engine)
+        return inspector_service.build_inspector_response(target, engine=engine)
+
+    @router.post("/agents/{agent_name}/inspector/files", response_model=AgentInspectorFileSaveResponse)
+    def save_agent_inspector_file(
+        agent_name: str,
+        payload: AgentInspectorFileSaveRequest,
+        service: DashboardService = Depends(get_dashboard_service),
+        inspector_service: AgentInspectorService = Depends(get_inspector_service),
+        settings: AppSettings = Depends(get_settings),
+        _=Depends(verify_write_access),
+    ) -> AgentInspectorFileSaveResponse:
+        if len(payload.content) > settings.safe_read_text_max_chars * 10:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file content is too large")
+
+        engine = payload.engine
+        
+        if payload.path.lower().endswith(".json"):
+            try:
+                json.loads(payload.content)
+            except json.JSONDecodeError as err:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"invalid json: {err.msg}") from err
+
+        try:
+            saved_path = inspector_service.save_file(
+                agent_name=agent_name,
+                file_path_str=payload.path,
+                content=payload.content,
+                engine=engine
+            )
+            return AgentInspectorFileSaveResponse(
+                status="ok", 
+                file=inspector_service.build_file_model(saved_path, kind="updated")
+            )
+        except (PermissionError, FileNotFoundError) as err:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(err)) from err
+        except Exception as err:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"save failed: {err}",
+            ) from err
+
+
+def register_config_routes(router: APIRouter) -> None:
+    @router.get("/run-config", response_model=RunConfigResponse)
+    def get_run_config(
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
+        settings: AppSettings = Depends(get_settings),
+    ) -> RunConfigResponse:
+        return RunConfigResponse(
+            default_workspace_root=str(run_orchestrator.default_workspace_root),
+            write_api_enabled=bool(settings.write_api_token),
+            default_write_api_token=settings.write_api_token,
+            available_engines=["gemini", "codex"],
+            default_engine=settings.default_engine,
+        )
+
+    @router.get("/workflows/ui-config", response_model=WorkflowUiConfigResponse)
+    def get_workflow_ui_config(settings: AppSettings = Depends(get_settings)) -> WorkflowUiConfigResponse:
+        return WorkflowUiConfigResponse(
+            sandbox_modes=[UiOptionModel(value=value, label=label) for value, label in WORKFLOW_SANDBOX_OPTIONS],
+            approval_policies=[UiOptionModel(value=value, label=label) for value, label in WORKFLOW_APPROVAL_OPTIONS],
+            workflow_step_statuses=[
+                UiOptionModel(value=value, label=label) for value, label in WORKFLOW_STEP_STATUS_OPTIONS
+            ],
+            agent_icons=[
+                WorkflowAgentIconModel(key=rule.key, label=rule.label, keywords=list(rule.keywords))
+                for rule in WORKFLOW_ICON_RULES
+            ],
+            recommendation_max_agents=settings.workflow_recommendation_max_agents,
+        )
+
+    @router.get("/fs/directories", response_model=DirectoryBrowseResponse)
+    def list_directories(
+        path: str | None = Query(default=None),
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
+        settings: AppSettings = Depends(get_settings),
+    ) -> DirectoryBrowseResponse:
+        target_path = (path or "").strip()
+        base = run_orchestrator.default_workspace_root
+        candidate = Path(target_path).expanduser() if target_path else base
+        if not candidate.is_absolute():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path must be an absolute path")
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path is not accessible")
+        if not resolved.is_dir():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path must be a directory")
+        try:
+            items = sorted((entry for entry in resolved.iterdir() if entry.is_dir()), key=lambda item: item.name.lower())
+        except OSError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="failed to read directory")
+
+        directories = [DirectoryItemModel(name=item.name, path=str(item)) for item in items[:settings.directory_list_limit]]
+        parent_path = str(resolved.parent) if resolved.parent != resolved else None
+        return DirectoryBrowseResponse(current_path=str(resolved), parent_path=parent_path, directories=directories)
 
 
 def _to_run_status(raw_status: str) -> str:
     allowed = {"queued", "running", "completed", "failed", "canceled"}
     return raw_status if raw_status in allowed else "failed"
-
-
-def _verify_write_token(write_api_token: str | None, x_api_token: str | None) -> None:
-    """
-    Verifies if the provided API token matches the expected write token.
-    This ensures that state-modifying endpoints (POST/PUT/DELETE) are protected
-    from unauthorized access.
-    """
-    if not write_api_token:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="write api disabled")
-    if x_api_token != write_api_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid write api token")
-
-
-def _find_agent_or_404(ctx: ApiContext, agent_name: str, engine: str | None = None):
-    # 엔진 선택에 따라 에이전트 목록이 달라질 수 있으므로 engine 파라미터를 명시적으로 전달함
-    inventory = ctx.service.build_inventory(engine=engine)
-    target = next((agent for agent in inventory.agents if agent.name == agent_name), None)
-    if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="agent not found")
-    return target
 
 
 def _to_run_detail_model(record) -> RunDetailModel:
@@ -129,11 +263,11 @@ def _to_run_detail_model(record) -> RunDetailModel:
     )
 
 
-def _get_workflow_run_detail_or_404(ctx: ApiContext, workflow_run_id: str) -> WorkflowRunDetailModel:
-    run = ctx.workflow_orchestrator.get_workflow_run(workflow_run_id)
+def _get_workflow_run_detail_or_404(workflow_orchestrator: WorkflowOrchestrator, workflow_run_id: str) -> WorkflowRunDetailModel:
+    run = workflow_orchestrator.get_workflow_run(workflow_run_id)
     if run is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-    steps = ctx.workflow_orchestrator.list_workflow_steps(workflow_run_id)
+    steps = workflow_orchestrator.list_workflow_steps(workflow_run_id)
     return WorkflowRunDetailModel(
         workflow_run_id=run.workflow_run_id,
         goal_prompt=run.goal_prompt,
@@ -170,172 +304,28 @@ def _get_workflow_run_detail_or_404(ctx: ApiContext, workflow_run_id: str) -> Wo
     )
 
 
-def register_read_routes(ctx: ApiContext) -> None:
-    @ctx.router.get("/overview", response_model=OverviewModel)
-    def get_overview(engine: str | None = Query(default=None)) -> OverviewModel:
-        # 선택된 엔진에 맞는 개요 데이터를 로드하도록 파라미터 추가
-        return ctx.service.build_overview(engine=engine)
-
-    @ctx.router.get("/graph/router", response_model=RouterGraphResponse)
-    def get_router_graph(engine: str | None = Query(default=None)) -> RouterGraphResponse:
-        # 엔진별 라우터 구성이 다를 수 있으므로 engine 파라미터 반영
-        return ctx.service.build_router_graph(engine=engine)
-
-    @ctx.router.get("/graph/org", response_model=OrganizationChartResponse)
-    def get_org_chart(engine: str | None = Query(default=None)) -> OrganizationChartResponse:
-        # 엔진별 에이전트 소속이 다를 수 있으므로 실시간 조직도 생성 시 engine 파라미터 사용
-        return ctx.service.build_org_chart(engine=engine)
-
-    @ctx.router.get("/dashboard", response_model=DashboardResponse)
-    def get_dashboard(engine: str | None = Query(default=None)) -> DashboardResponse:
-        return ctx.service.build_dashboard(engine=engine)
-
-    @ctx.router.get("/inventory", response_model=InventoryResponse)
-    def get_inventory(engine: str | None = Query(default=None)) -> InventoryResponse:
-        # 인벤토리 조회 시에도 엔진 파라미터를 넘겨서 Gemini/Codex 전용 목록을 가져옴
-        return ctx.service.build_inventory(engine=engine)
-
-    @ctx.router.get("/agents/executable", response_model=ExecutableAgentsResponse)
-    def get_executable_agents(engine: str | None = Query(default=None)) -> ExecutableAgentsResponse:
-        inventory = ctx.service.build_inventory(engine=engine)
-        agents = [
-            ExecutableAgentModel(
-                name=agent.name,
-                role_label_ko=agent.role_label_ko,
-                department_label_ko=agent.department_label_ko,
-                runnable=agent.status != "broken",
-                reason=agent.reason,
-                short_description=agent.short_description,
-                one_click_prompt=agent.one_click_prompt,
-            )
-            for agent in inventory.agents
-        ]
-        agents.sort(key=lambda item: (0 if item.runnable else 1, item.department_label_ko, item.role_label_ko))
-        return ExecutableAgentsResponse(agents=agents)
-
-
-def register_inspector_routes(ctx: ApiContext) -> None:
-    @ctx.router.get("/agents/{agent_name}/inspector", response_model=AgentInspectorResponse)
-    def get_agent_inspector(agent_name: str, engine: str | None = Query(default=None)) -> AgentInspectorResponse:
-        # 에이전트 인스펙터 진입 시에도 선택된 엔진의 홈 디렉토리에서 파일을 찾도록 engine 파라미터 추가
-        target = _find_agent_or_404(ctx, agent_name, engine=engine)
-        return ctx.inspector_service.build_inspector_response(target, engine=engine)
-
-    @ctx.router.post("/agents/{agent_name}/inspector/files", response_model=AgentInspectorFileSaveResponse)
-    def save_agent_inspector_file(
-        agent_name: str,
-        payload: AgentInspectorFileSaveRequest,
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
-    ) -> AgentInspectorFileSaveResponse:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        if len(payload.content) > ctx.settings.safe_read_text_max_chars * 10:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="file content is too large")
-
-        engine = payload.engine
-        
-        # JSON 유효성 검사 (설정 파일인 경우)
-        if payload.path.lower().endswith(".json"):
-            try:
-                json.loads(payload.content)
-            except json.JSONDecodeError as err:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"invalid json: {err.msg}") from err
-
-        try:
-            saved_path = ctx.inspector_service.save_file(
-                agent_name=agent_name,
-                file_path_str=payload.path,
-                content=payload.content,
-                engine=engine
-            )
-            # 성공 시 갱신된 파일 정보를 반환하기 위해 서비스 헬퍼 사용
-            # kind는 저장 시점에 정확히 알기 어려우므로 general하게 처리하거나 서비스에서 반환받아야 함
-            # 여기서는 간단히 저장된 경로만 반환하거나 서비스에서 모델을 생성하도록 유도
-            return AgentInspectorFileSaveResponse(
-                status="ok", 
-                file=ctx.inspector_service.build_file_model(saved_path, kind="updated")
-            )
-        except (PermissionError, FileNotFoundError) as err:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(err)) from err
-        except Exception as err:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"save failed: {err}",
-            ) from err
-
-
-def register_config_routes(ctx: ApiContext) -> None:
-    @ctx.router.get("/run-config", response_model=RunConfigResponse)
-    def get_run_config() -> RunConfigResponse:
-        return RunConfigResponse(
-            default_workspace_root=str(ctx.run_orchestrator.default_workspace_root),
-            write_api_enabled=bool(ctx.write_api_token),
-            default_write_api_token=ctx.write_api_token,
-            available_engines=["gemini", "codex"],
-            default_engine=ctx.settings.default_engine,
-        )
-
-    @ctx.router.get("/workflows/ui-config", response_model=WorkflowUiConfigResponse)
-    def get_workflow_ui_config() -> WorkflowUiConfigResponse:
-        return WorkflowUiConfigResponse(
-            sandbox_modes=[UiOptionModel(value=value, label=label) for value, label in WORKFLOW_SANDBOX_OPTIONS],
-            approval_policies=[UiOptionModel(value=value, label=label) for value, label in WORKFLOW_APPROVAL_OPTIONS],
-            workflow_step_statuses=[
-                UiOptionModel(value=value, label=label) for value, label in WORKFLOW_STEP_STATUS_OPTIONS
-            ],
-            agent_icons=[
-                WorkflowAgentIconModel(key=rule.key, label=rule.label, keywords=list(rule.keywords))
-                for rule in WORKFLOW_ICON_RULES
-            ],
-            recommendation_max_agents=ctx.settings.workflow_recommendation_max_agents,
-        )
-
-    @ctx.router.get("/fs/directories", response_model=DirectoryBrowseResponse)
-    def list_directories(path: str | None = Query(default=None)) -> DirectoryBrowseResponse:
-        target_path = (path or "").strip()
-        base = ctx.run_orchestrator.default_workspace_root
-        candidate = Path(target_path).expanduser() if target_path else base
-        if not candidate.is_absolute():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path must be an absolute path")
-        try:
-            resolved = candidate.resolve(strict=True)
-        except (OSError, RuntimeError):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path is not accessible")
-        if not resolved.is_dir():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="path must be a directory")
-        try:
-            items = sorted((entry for entry in resolved.iterdir() if entry.is_dir()), key=lambda item: item.name.lower())
-        except OSError:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="failed to read directory")
-
-        directories = [DirectoryItemModel(name=item.name, path=str(item)) for item in items[:ctx.settings.directory_list_limit]]
-        parent_path = str(resolved.parent) if resolved.parent != resolved else None
-        return DirectoryBrowseResponse(current_path=str(resolved), parent_path=parent_path, directories=directories)
-
-
-def register_maintenance_routes(ctx: ApiContext) -> None:
-    @ctx.router.post("/scan")
-    async def trigger_scan(x_api_token: str | None = Header(default=None, alias="X-API-Token")) -> dict[str, str]:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        await ctx.broker.publish("scan:completed", {"source": "manual"})
-        await ctx.broker.publish("dashboard:updated", {"source": "manual"})
+def register_maintenance_routes(router: APIRouter) -> None:
+    @router.post("/scan")
+    async def trigger_scan(broker: EventBroker = Depends(get_event_broker), _=Depends(verify_write_access)) -> dict[str, str]:
+        await broker.publish("scan:completed", {"source": "manual"})
+        await broker.publish("dashboard:updated", {"source": "manual"})
         return {"status": "ok"}
 
-    @ctx.router.post("/activity/refresh")
-    async def refresh_activity(x_api_token: str | None = Header(default=None, alias="X-API-Token")) -> dict[str, str]:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        await ctx.broker.publish("activity:updated", {"source": "manual"})
-        await ctx.broker.publish("dashboard:updated", {"source": "manual"})
+    @router.post("/activity/refresh")
+    async def refresh_activity(broker: EventBroker = Depends(get_event_broker), _=Depends(verify_write_access)) -> dict[str, str]:
+        await broker.publish("activity:updated", {"source": "manual"})
+        await broker.publish("dashboard:updated", {"source": "manual"})
         return {"status": "ok"}
 
-    @ctx.router.post("/backups/skills-agents", response_model=SkillAgentBackupResponse)
+    @router.post("/backups/skills-agents", response_model=SkillAgentBackupResponse)
     async def backup_skills_agents(
         engine: str | None = Query(default=None),
         purge_after_backup: bool = Query(default=False),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        backup_service: SkillAgentBackupService = Depends(get_backup_service),
+        _=Depends(verify_write_access),
     ) -> SkillAgentBackupResponse:
-        _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            backup_result = ctx.backup_service.backup(engine=engine, purge_after_backup=purge_after_backup)
+            backup_result = backup_service.backup(engine=engine, purge_after_backup=purge_after_backup)
         except FileNotFoundError as err:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
         except OSError as err:
@@ -350,14 +340,14 @@ def register_maintenance_routes(ctx: ApiContext) -> None:
             size_bytes=backup_result.size_bytes,
         )
 
-    @ctx.router.post("/backups/skills-agents/restore", response_model=SkillAgentRestoreResponse)
+    @router.post("/backups/skills-agents/restore", response_model=SkillAgentRestoreResponse)
     async def restore_skills_agents(
         engine: str | None = Query(default=None),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        backup_service: SkillAgentBackupService = Depends(get_backup_service),
+        _=Depends(verify_write_access),
     ) -> SkillAgentRestoreResponse:
-        _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            restore_result = ctx.backup_service.restore_latest(engine=engine)
+            restore_result = backup_service.restore_latest(engine=engine)
         except (FileNotFoundError, ValueError) as err:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
         except OSError as err:
@@ -372,14 +362,15 @@ def register_maintenance_routes(ctx: ApiContext) -> None:
         )
 
 
-def register_run_routes(ctx: ApiContext) -> None:
-    @ctx.router.get("/runs", response_model=RunsResponse)
+def register_run_routes(router: APIRouter) -> None:
+    @router.get("/runs", response_model=RunsResponse)
     def list_runs(
-        limit: int = Query(default=ctx.settings.run_list_limit_default, ge=1, le=ctx.settings.run_list_limit_max),
+        limit: int = Query(default=50, ge=1, le=100),
         engine: str | None = Query(default=None),
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
+        settings: AppSettings = Depends(get_settings),
     ) -> RunsResponse:
-        # 콘솔 탭에서 현재 엔진에 해당하는 실행 이력만 볼 수 있도록 engine 파라미터 추가
-        runs = ctx.run_orchestrator.list_runs(limit=limit, engine=engine)
+        runs = run_orchestrator.list_runs(limit=limit, engine=engine)
         return RunsResponse(
             runs=[
                 RunSummaryModel(
@@ -387,7 +378,7 @@ def register_run_routes(ctx: ApiContext) -> None:
                     agent_name=run.agent_name,
                     workspace_root=run.workspace_root,
                     status=_to_run_status(run.status),
-                    prompt_preview=ctx.run_orchestrator.to_prompt_preview(run.prompt),
+                    prompt_preview=run_orchestrator.to_prompt_preview(run.prompt),
                     engine=run.engine,
                     created_at=run.created_at,
                     started_at=run.started_at,
@@ -399,22 +390,23 @@ def register_run_routes(ctx: ApiContext) -> None:
             ]
         )
 
-    @ctx.router.get("/runs/{run_id}", response_model=RunDetailModel)
-    def get_run(run_id: str) -> RunDetailModel:
-        run = ctx.run_orchestrator.get_run(run_id)
+    @router.get("/runs/{run_id}", response_model=RunDetailModel)
+    def get_run(run_id: str, run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator)) -> RunDetailModel:
+        run = run_orchestrator.get_run(run_id)
         if run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _to_run_detail_model(run)
 
-    @ctx.router.get("/runs/{run_id}/events", response_model=RunEventsResponse)
+    @router.get("/runs/{run_id}/events", response_model=RunEventsResponse)
     def get_run_events(
         run_id: str,
-        limit: int = Query(default=ctx.settings.run_event_list_limit_default, ge=1, le=ctx.settings.run_event_list_limit_max),
+        limit: int = Query(default=100, ge=1, le=500),
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
     ) -> RunEventsResponse:
-        run = ctx.run_orchestrator.get_run(run_id)
+        run = run_orchestrator.get_run(run_id)
         if run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
-        events = ctx.run_orchestrator.list_run_events(run_id=run_id, limit=limit)
+        events = run_orchestrator.list_run_events(run_id=run_id, limit=limit)
         return RunEventsResponse(
             events=[
                 RunEventModel(
@@ -428,21 +420,23 @@ def register_run_routes(ctx: ApiContext) -> None:
             ]
         )
 
-    @ctx.router.post("/runs", response_model=RunDetailModel)
+    @router.post("/runs", response_model=RunDetailModel)
     async def create_run(
         request: RunCreateRequest,
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
+        service: DashboardService = Depends(get_dashboard_service),
+        settings: AppSettings = Depends(get_settings),
+        _=Depends(verify_write_access),
     ) -> RunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            prompt = ctx.run_orchestrator.validate_prompt(request.prompt)
-            workspace_root = ctx.run_orchestrator.validate_workspace_root(request.workspace_root)
-            sandbox_mode = ctx.run_orchestrator.validate_sandbox_mode(request.sandbox_mode)
-            approval_policy = ctx.run_orchestrator.validate_approval_policy(request.approval_policy)
+            prompt = run_orchestrator.validate_prompt(request.prompt)
+            workspace_root = run_orchestrator.validate_workspace_root(request.workspace_root)
+            sandbox_mode = run_orchestrator.validate_sandbox_mode(request.sandbox_mode)
+            approval_policy = run_orchestrator.validate_approval_policy(request.approval_policy)
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
 
-        inventory = ctx.service.build_inventory()
+        inventory = service.build_inventory()
         agent_map = {agent.name: agent for agent in inventory.agents}
         target_agent = agent_map.get(request.agent_name)
         if target_agent is None:
@@ -450,47 +444,47 @@ def register_run_routes(ctx: ApiContext) -> None:
         if target_agent.status == "broken":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="broken agent cannot be executed")
 
-        created = await ctx.run_orchestrator.create_run(
+        created = await run_orchestrator.create_run(
             agent_name=request.agent_name,
             prompt=prompt,
             workspace_root=workspace_root,
             sandbox_mode=sandbox_mode,
             approval_policy=approval_policy,
-            engine=request.engine or ctx.settings.default_engine,
+            engine=request.engine or settings.default_engine,
         )
         return _to_run_detail_model(created.record)
 
-    @ctx.router.post("/runs/{run_id}/cancel", response_model=RunDetailModel)
+    @router.post("/runs/{run_id}/cancel", response_model=RunDetailModel)
     async def cancel_run(
         run_id: str,
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
+        _=Depends(verify_write_access),
     ) -> RunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        updated = await ctx.run_orchestrator.cancel_run(run_id)
+        updated = await run_orchestrator.cancel_run(run_id)
         if updated is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _to_run_detail_model(updated)
 
-    @ctx.router.post("/runs/{run_id}/retry", response_model=RunDetailModel)
+    @router.post("/runs/{run_id}/retry", response_model=RunDetailModel)
     async def retry_run(
         run_id: str,
         engine: str | None = Body(None, embed=True),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
+        _=Depends(verify_write_access),
     ) -> RunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        retried = await ctx.run_orchestrator.retry_run(run_id, engine=engine)
+        retried = await run_orchestrator.retry_run(run_id, engine=engine)
         if retried is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="run not found")
         return _to_run_detail_model(retried.record)
 
-    @ctx.router.post("/runs/{run_id}/reply")
+    @router.post("/runs/{run_id}/reply")
     async def reply_to_run(
         run_id: str,
         message: str = Body(..., embed=True),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
+        _=Depends(verify_write_access),
     ) -> dict[str, bool]:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        success = await ctx.run_orchestrator.reply_to_run(run_id, message)
+        success = await run_orchestrator.reply_to_run(run_id, message)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
@@ -499,17 +493,16 @@ def register_run_routes(ctx: ApiContext) -> None:
         return {"success": True}
 
 
-def register_workflow_routes(ctx: ApiContext) -> None:
-    @ctx.router.post("/workflows/recommend", response_model=WorkflowRecommendResponse)
+def register_workflow_routes(router: APIRouter) -> None:
+    @router.post("/workflows/recommend", response_model=WorkflowRecommendResponse)
     async def recommend_workflow_agents(
         payload: WorkflowRecommendRequest,
         engine: str | None = Query(default=None),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
+        _=Depends(verify_write_access),
     ) -> WorkflowRecommendResponse:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        # 워크플로 추천 시에도 현재 선택된 엔진에 등록된 에이전트 중에서 고르도록 engine 파라미터 반영
         try:
-            recommendations = await ctx.workflow_orchestrator.recommend_agents(
+            recommendations = await workflow_orchestrator.recommend_agents(
                 goal_prompt=payload.goal_prompt,
                 max_agents=payload.max_agents,
                 engine=engine,
@@ -518,18 +511,18 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
         return WorkflowRecommendResponse(goal=payload.goal_prompt.strip(), recommended_agents=recommendations)
 
-    @ctx.router.get("/workflow-runs", response_model=WorkflowRunsResponse)
+    @router.get("/workflow-runs", response_model=WorkflowRunsResponse)
     def list_workflow_runs(
-        limit: int = Query(default=ctx.settings.run_list_limit_default, ge=1, le=ctx.settings.run_list_limit_max),
+        limit: int = Query(default=50, ge=1, le=100),
         engine: str | None = Query(default=None),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
     ) -> WorkflowRunsResponse:
-        # 워크플로 실행 이력 조회 시 현재 엔진에 해당하는 것만 필터링하도록 파라미터 추가
-        runs = ctx.workflow_orchestrator.list_workflow_runs(limit=limit, engine=engine)
+        runs = workflow_orchestrator.list_workflow_runs(limit=limit, engine=engine)
         return WorkflowRunsResponse(
             runs=[
                 WorkflowRunSummaryModel(
                     workflow_run_id=run.workflow_run_id,
-                    goal_prompt_preview=ctx.workflow_orchestrator.to_goal_preview(run.goal_prompt),
+                    goal_prompt_preview=workflow_orchestrator.to_goal_preview(run.goal_prompt),
                     workspace_root=run.workspace_root,
                     status=run.status,
                     current_step_index=run.current_step_index,
@@ -543,19 +536,23 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             ]
         )
 
-    @ctx.router.get("/workflow-runs/{workflow_run_id}", response_model=WorkflowRunDetailModel)
-    def get_workflow_run(workflow_run_id: str) -> WorkflowRunDetailModel:
-        return _get_workflow_run_detail_or_404(ctx, workflow_run_id)
+    @router.get("/workflow-runs/{workflow_run_id}", response_model=WorkflowRunDetailModel)
+    def get_workflow_run(
+        workflow_run_id: str,
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
+    ) -> WorkflowRunDetailModel:
+        return _get_workflow_run_detail_or_404(workflow_orchestrator, workflow_run_id)
 
-    @ctx.router.get("/workflow-runs/{workflow_run_id}/events", response_model=WorkflowEventsResponse)
+    @router.get("/workflow-runs/{workflow_run_id}/events", response_model=WorkflowEventsResponse)
     def get_workflow_events(
         workflow_run_id: str,
-        limit: int = Query(default=ctx.settings.workflow_event_list_limit_default, ge=1, le=ctx.settings.workflow_event_list_limit_max),
+        limit: int = Query(default=100, ge=1, le=500),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
     ) -> WorkflowEventsResponse:
-        run = ctx.workflow_orchestrator.get_workflow_run(workflow_run_id)
+        run = workflow_orchestrator.get_workflow_run(workflow_run_id)
         if run is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-        events = ctx.workflow_orchestrator.list_workflow_events(workflow_run_id, limit=limit)
+        events = workflow_orchestrator.list_workflow_events(workflow_run_id, limit=limit)
         return WorkflowEventsResponse(
             events=[
                 WorkflowEventModel(
@@ -570,16 +567,15 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             ]
         )
 
-    @ctx.router.post("/workflow-runs", response_model=WorkflowRunDetailModel)
+    @router.post("/workflow-runs", response_model=WorkflowRunDetailModel)
     async def create_workflow_run(
         payload: WorkflowRunCreateRequest,
         engine: str | None = Query(default=None),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
+        _=Depends(verify_write_access),
     ) -> WorkflowRunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        # 워크플로 생성 시에도 engine 파라미터를 넘겨서 올바른 설정으로 실행되도록 함
         try:
-            created = await ctx.workflow_orchestrator.create_workflow_run(
+            created = await workflow_orchestrator.create_workflow_run(
                 goal_prompt=payload.goal_prompt,
                 steps=payload.steps,
                 workspace_root=payload.workspace_root,
@@ -589,40 +585,40 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             )
         except ValueError as err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
-        return _get_workflow_run_detail_or_404(ctx, created.workflow_run_id)
+        return _get_workflow_run_detail_or_404(workflow_orchestrator, created.workflow_run_id)
 
-    @ctx.router.post("/workflow-runs/{workflow_run_id}/cancel", response_model=WorkflowRunDetailModel)
+    @router.post("/workflow-runs/{workflow_run_id}/cancel", response_model=WorkflowRunDetailModel)
     async def cancel_workflow_run(
         workflow_run_id: str,
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
+        _=Depends(verify_write_access),
     ) -> WorkflowRunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        updated = await ctx.workflow_orchestrator.cancel_workflow_run(workflow_run_id)
+        updated = await workflow_orchestrator.cancel_workflow_run(workflow_run_id)
         if updated is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-        return _get_workflow_run_detail_or_404(ctx, updated.workflow_run_id)
+        return _get_workflow_run_detail_or_404(workflow_orchestrator, updated.workflow_run_id)
 
-    @ctx.router.post("/workflow-runs/{workflow_run_id}/retry", response_model=WorkflowRunDetailModel)
+    @router.post("/workflow-runs/{workflow_run_id}/retry", response_model=WorkflowRunDetailModel)
     async def retry_workflow_run(
         workflow_run_id: str,
         engine: str | None = Body(None, embed=True),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
+        _=Depends(verify_write_access),
     ) -> WorkflowRunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
-        retried = await ctx.workflow_orchestrator.retry_workflow_run(workflow_run_id, engine=engine)
+        retried = await workflow_orchestrator.retry_workflow_run(workflow_run_id, engine=engine)
         if retried is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-        return _get_workflow_run_detail_or_404(ctx, retried.workflow_run_id)
+        return _get_workflow_run_detail_or_404(workflow_orchestrator, retried.workflow_run_id)
 
-    @ctx.router.post("/workflow-runs/{workflow_run_id}/retry-from-step", response_model=WorkflowRunDetailModel)
+    @router.post("/workflow-runs/{workflow_run_id}/retry-from-step", response_model=WorkflowRunDetailModel)
     async def retry_workflow_run_from_step(
         workflow_run_id: str,
         request: WorkflowStepActionRequest = Body(None),
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
+        _=Depends(verify_write_access),
     ) -> WorkflowRunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            retried = await ctx.workflow_orchestrator.retry_workflow_run_from_step(
+            retried = await workflow_orchestrator.retry_workflow_run_from_step(
                 workflow_run_id,
                 step_index=request.step_index,
                 follow_up_note=request.follow_up_note,
@@ -632,17 +628,17 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
         if retried is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-        return _get_workflow_run_detail_or_404(ctx, retried.workflow_run_id)
+        return _get_workflow_run_detail_or_404(workflow_orchestrator, retried.workflow_run_id)
 
-    @ctx.router.post("/workflow-runs/{workflow_run_id}/skip-step", response_model=WorkflowRunDetailModel)
+    @router.post("/workflow-runs/{workflow_run_id}/skip-step", response_model=WorkflowRunDetailModel)
     async def skip_workflow_step(
         workflow_run_id: str,
         request: WorkflowStepActionRequest,
-        x_api_token: str | None = Header(default=None, alias="X-API-Token"),
+        workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
+        _=Depends(verify_write_access),
     ) -> WorkflowRunDetailModel:
-        _verify_write_token(ctx.write_api_token, x_api_token)
         try:
-            created = await ctx.workflow_orchestrator.skip_workflow_step_and_continue(
+            created = await workflow_orchestrator.skip_workflow_step_and_continue(
                 workflow_run_id,
                 request.step_index,
                 engine=request.engine,
@@ -651,13 +647,13 @@ def register_workflow_routes(ctx: ApiContext) -> None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err)) from err
         if created is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="workflow run not found")
-        return _get_workflow_run_detail_or_404(ctx, created.workflow_run_id)
+        return _get_workflow_run_detail_or_404(workflow_orchestrator, created.workflow_run_id)
 
 
-def register_event_routes(ctx: ApiContext) -> None:
-    @ctx.router.get("/events")
-    async def stream_events() -> StreamingResponse:
-        queue = ctx.broker.subscribe()
+def register_event_routes(router: APIRouter) -> None:
+    @router.get("/events")
+    async def stream_events(broker: EventBroker = Depends(get_event_broker)) -> StreamingResponse:
+        queue = broker.subscribe()
 
         async def event_generator():
             try:
@@ -668,6 +664,6 @@ def register_event_routes(ctx: ApiContext) -> None:
                     except asyncio.TimeoutError:
                         yield "data: {\"type\":\"heartbeat\",\"payload\":{},\"createdAt\":null}\n\n"
             finally:
-                ctx.broker.unsubscribe(queue)
+                broker.unsubscribe(queue)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")

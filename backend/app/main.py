@@ -11,29 +11,13 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import build_api_router
 from app.config import SETTINGS
-from app.services.config_reader import CodexConfigReader
-from app.services.dashboard_service import DashboardService
-from app.services.event_stream import EventBroker
+from app.dependencies import (
+    get_event_broker,
+    get_dashboard_service,
+    _broker as broker, # Use the singleton from dependencies
+)
 from app.services.file_watcher import CodexFileWatcher
-from app.services.run_orchestrator import RunOrchestrator
-from app.services.run_store import RunStore
-from app.services.workflow_orchestrator import WorkflowOrchestrator
-from app.services.workflow_store import WorkflowStore
 
-
-reader = CodexConfigReader(SETTINGS)
-service = DashboardService(reader, SETTINGS)
-broker = EventBroker()
-try:
-    run_store = RunStore(SETTINGS.run_db_path)
-except sqlite3.OperationalError:
-    run_store = RunStore(SETTINGS.fallback_run_db_path)
-run_orchestrator = RunOrchestrator(SETTINGS, broker, run_store)
-try:
-    workflow_store = WorkflowStore(SETTINGS.run_db_path)
-except sqlite3.OperationalError:
-    workflow_store = WorkflowStore(SETTINGS.fallback_run_db_path)
-workflow_orchestrator = WorkflowOrchestrator(SETTINGS, service, broker, run_orchestrator, workflow_store)
 watcher: CodexFileWatcher | None = None
 
 app = FastAPI(title="Custom Codex Agent API", version="0.1.0")
@@ -44,16 +28,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-app.include_router(
-    build_api_router(
-        service,
-        broker,
-        run_orchestrator,
-        workflow_orchestrator,
-        SETTINGS.write_api_token,
-        SETTINGS,
-    )
-)
+app.include_router(build_api_router())
 
 
 class NoCacheStaticFiles(StaticFiles):

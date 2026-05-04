@@ -1,0 +1,66 @@
+:root {
+  color-scheme: dark;
+  --bg: #010204;
+  --panel: #0a0c12;
+  --panel-soft: rgba(10, 12, 18, 0.9);
+  --accent: #00ff88;
+  --accent-glow: rgba(0, 255, 136, 0.4);
+  --border: #1a1f26;
+  --text: #e6edf3;
+  --text-m: #a7b4c4;
+  --accent-contrast: #03140b;
+  --button-bg: rgba(17, 22, 30, 0.92);
+  --button-bg-hover: rgba(22, 30, 40, 0.98);
+  --button-primary-bg: linear-gradient(135deg, #00ff88 0%, #0fd7a0 100%);
+  --warn: #ffcc00;
+  --danger: #ff4444;
+  --ok: #27d887;
+  --grid: rgba(0, 255, 136, 0.04);
+  --font-display: "Orbitron", "Inter", sans-serif;
+  --font-body: "Inter", "Pretendard", "Noto Sans KR", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body[data-theme="glass-enterprise"] {
+  color-scheme: light;
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --panel-soft: rgba(255, 255, 255, 0.75);
+  --accent: #4f46e5;
+  --accent-glow: rgba(79, 70, 229, 0.18);
+  --border: #cbd5e1;
+  --text: #0f172a;
+  --text-m: #334155;
+  --accent-contrast: #ffffff;
+  --button-bg: rgba(255, 255, 255, 0.98);
+  --button-bg-hover: #f1f5f9;
+  --button-primary-bg: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  --warn: #d97706;
+  --danger: #dc2626;
+  --ok: #059669;
+  --grid: rgba(71, 85, 105, 0.08);
+  --font-display: "Outfit", "Inter", sans-serif;
+  --font-body: "Outfit", "Inter", sans-serif;
+}
+
+body[data-theme="minimal-pro"] {
+  color-scheme: dark;
+  --bg: #000000;
+  --panel: #050505;
+  --panel-soft: rgba(0, 0, 0, 0.92);
+  --accent: #ffffff;
+  --accent-glow: rgba(255, 255, 255, 0.12);
+  --border: #333333;
+  --text: #ffffff;
+  --text-m: #d1d1d1;
+  --accent-contrast: #000000;
+  --button-bg: #111111;
+  --button-bg-hover: #1a1a1a;
+  --button-primary-bg: linear-gradient(135deg, #ffffff 0%, #eeeeee 100%);
+  --warn: #fde047;
+  --danger: #ff5555;
+  --ok: #ffffff;
+  --grid: rgba(255, 255, 255, 0.06);
+  --font-display: "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+}

@@ -112,16 +112,28 @@ class BaseSkillAgentBackupStrategy(EngineBackupStrategy):
         if not included_roots:
             raise FileNotFoundError(f"{self.engine_prefix} skills/agents have no entries to backup")
 
+        import tempfile
         self._backups_root.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d-%H%M%S")
         suffix = self._settings.backup_archive_name_suffix
         archive_path = self._backups_root / f"{self.engine_prefix}{suffix}{timestamp}.tar.gz"
 
-        with tarfile.open(archive_path, mode="w:gz") as archive:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            # GStack 스킬 등 심볼릭 링크로 연결된 외부 리소스를 실제 파일로 포함하기 위해
+            # 임시 디렉토리에 symlinks=False로 복사 후 압축합니다.
+            # 백업 효율성을 위해 node_modules, .venv 등 대용량 불필요 폴더는 제외합니다.
+            ignore_patterns = shutil.ignore_patterns("node_modules", ".venv", "__pycache__", ".git", "dist", "build", ".tempmediaStorage")
             if "skills" in included_roots:
-                archive.add(self.skills_root, arcname="skills")
+                shutil.copytree(self.skills_root, tmp_path / "skills", symlinks=False, dirs_exist_ok=True, ignore=ignore_patterns)
             if "agents" in included_roots:
-                archive.add(self.agents_root, arcname="agents")
+                shutil.copytree(self.agents_root, tmp_path / "agents", symlinks=False, dirs_exist_ok=True, ignore=ignore_patterns)
+
+            with tarfile.open(archive_path, mode="w:gz") as archive:
+                if (tmp_path / "skills").exists():
+                    archive.add(tmp_path / "skills", arcname="skills")
+                if (tmp_path / "agents").exists():
+                    archive.add(tmp_path / "agents", arcname="agents")
 
         return archive_path, included_roots
 
@@ -215,6 +227,11 @@ class BaseSkillAgentBackupStrategy(EngineBackupStrategy):
             if root_path is None or not root_path.exists() or not root_path.is_dir():
                 continue
             for entry in root_path.iterdir():
+                # 심볼릭 링크는 rmtree가 아닌 unlink로 처리해야 합니다.
+                if entry.is_symlink():
+                    entry.unlink(missing_ok=True)
+                    deleted_count += 1
+                    continue
                 if entry.is_dir():
                     shutil.rmtree(entry)
                     deleted_count += 1

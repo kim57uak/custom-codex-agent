@@ -16,12 +16,12 @@
   <body data-theme="cyber-fusion">
     <aside class="rail-nav">
       <div class="brand-logo">C</div>
-      <nav class="rail-tabs" aria-label="Primary Navigation">
-        <button id="tab-org" class="rail-tab active" type="button"><span>◎</span></button>
-        <button id="tab-dashboard" class="rail-tab" type="button"><span>▦</span></button>
-        <button id="tab-console" class="rail-tab" type="button"><span>></span></button>
-        <button id="tab-workflow" class="rail-tab" type="button"><span>◇</span></button>
-        <button id="tab-inspector" class="rail-tab" type="button"><span>i</span></button>
+      <nav class="rail-tabs" role="tablist" aria-label="Primary Navigation">
+        <button id="tab-org" class="rail-tab active" type="button" role="tab" aria-selected="true" aria-controls="org-view"><span>◎</span></button>
+        <button id="tab-dashboard" class="rail-tab" type="button" role="tab" aria-selected="false" aria-controls="dashboard-view"><span>▦</span></button>
+        <button id="tab-console" class="rail-tab" type="button" role="tab" aria-selected="false" aria-controls="console-view"><span>&gt;</span></button>
+        <button id="tab-workflow" class="rail-tab" type="button" role="tab" aria-selected="false" aria-controls="workflow-view"><span>◇</span></button>
+        <button id="tab-inspector" class="rail-tab" type="button" role="tab" aria-selected="false" aria-controls="inspector-view"><span>i</span></button>
       </nav>
       <div class="rail-bottom">
         <div class="selection-box">
@@ -74,7 +74,7 @@
 
       <section id="error-banner" class="error-banner hidden"></section>
 
-      <section id="org-view" class="view active-view">
+      <section id="org-view" class="view active-view" role="tabpanel" aria-labelledby="tab-org">
         <div class="view-canvas org-canvas-shell">
           <div class="org-hud-shell">
             <div class="org-hud-head">
@@ -92,7 +92,7 @@
         </div>
       </section>
 
-      <section id="dashboard-view" class="view hidden">
+      <section id="dashboard-view" class="view hidden" role="tabpanel" aria-labelledby="tab-dashboard">
         <div class="view-canvas dashboard-shell">
           <div id="dashboard-metrics" class="dashboard-grid"></div>
           <div class="dashboard-feed-card stage-card span-all">
@@ -114,7 +114,7 @@
         </div>
       </section>
 
-      <section id="console-view" class="view hidden">
+      <section id="console-view" class="view hidden" role="tabpanel" aria-labelledby="tab-console">
         <div class="view-canvas exec-pane">
           <section class="stage-card console-box">
             <div class="section-kicker">MISSION_PARAMETERS</div>
@@ -171,7 +171,7 @@
         </div>
       </section>
 
-      <section id="workflow-view" class="view hidden">
+      <section id="workflow-view" class="view hidden" role="tabpanel" aria-labelledby="tab-workflow">
         <div class="view-canvas workflow-shell">
           <div id="workflow-progress-hud" class="progress-hud hidden">
             <div class="progress-dot"></div>
@@ -329,7 +329,7 @@
         </div>
       </section>
 
-      <section id="inspector-view" class="view hidden">
+      <section id="inspector-view" class="view hidden" role="tabpanel" aria-labelledby="tab-inspector">
         <div class="view-canvas inspector-shell">
           <section class="stage-card inspector-directory">
             <div class="section-kicker">AGENT_DIRECTORY</div>

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 EngineType = Literal["codex", "gemini"]
 
-DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[4]
+DEFAULT_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_GEMINI_HOME = Path.home() / ".gemini" / "antigravity"
 DEFAULT_CODEX_HOME = Path.home() / ".codex"
 
@@ -76,6 +76,12 @@ class AppSettings(BaseModel):
     dashboard_recent_history_limit: int = Field(default=20)
     backups_root: Path = Field(default=DEFAULT_PROJECT_ROOT / "backups")
     backup_archive_name_suffix: str = Field(default="-skills-agents-backup-")
+    additional_allowed_roots: tuple[Path, ...] = Field(
+        default=(
+            Path.home() / ".claude",
+            Path.home() / "Downloads" / "project",
+        )
+    )
 
     @property
     def history_file_path(self) -> Path:

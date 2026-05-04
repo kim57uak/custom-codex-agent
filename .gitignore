@@ -48,3 +48,4 @@ pip-delete-this-directory.txt
 backend/app/static/backups/
 backups/
 temp/
+.gstack/

@@ -137,8 +137,19 @@ class AgentInspectorService:
         return text[:limit], True
 
     def _is_within_root(self, path: Path, root: Path) -> bool:
+        # 기본 엔진 홈 확인
         try:
             path.resolve().relative_to(root.resolve())
             return True
         except ValueError:
-            return False
+            pass
+            
+        # 추가 허용된 루트들 확인 (GStack 등 공용 리소스 지원)
+        for allowed_root in self._settings.additional_allowed_roots:
+            try:
+                path.resolve().relative_to(allowed_root.resolve())
+                return True
+            except ValueError:
+                continue
+                
+        return False

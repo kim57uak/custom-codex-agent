@@ -528,10 +528,11 @@
     if (!el.enginePickerGroup) return;
     const engines = state.availableEngines || ["gemini"];
     el.enginePickerGroup.innerHTML = engines.map(function (engine) {
-      const active = state.selectedEngine === engine ? "active" : "";
+      const activeClass = state.selectedEngine === engine ? "active" : "";
+      const activePressed = state.selectedEngine === engine ? "true" : "false";
       const icon = engine === "codex" ? "⚙️" : "✨";
       return `
-        <button class="engine-picker-btn ${active}" type="button" data-engine-value="${escapeHtml(engine)}">
+        <button class="engine-picker-btn ${activeClass}" type="button" data-engine-value="${escapeHtml(engine)}" aria-pressed="${activePressed}">
           <span class="theme-icon">${icon}</span>
           <span class="engine-label">${escapeHtml(engine.toUpperCase())}</span>
         </button>
@@ -561,7 +562,9 @@
     };
     Object.entries(buttons).forEach(function ([key, button]) {
       if (!button) return;
-      button.classList.toggle("active", key === state.tab);
+      const active = key === state.tab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
     });
   }
 
@@ -2323,8 +2326,8 @@
 
     if (el.scanBtn) el.scanBtn.addEventListener("click", function () { postAction("/api/scan").catch(handleError); });
     if (el.refreshBtn) el.refreshBtn.addEventListener("click", function () { postAction("/api/activity/refresh").catch(handleError); });
-    if (el.backupBtn) el.backupBtn.addEventListener("click", function () { postAction("/api/backups/skills-agents").then(function () { showToast("백업 완료", "success"); }).catch(handleError); });
-    if (el.restoreBtn) el.restoreBtn.addEventListener("click", function () { postAction("/api/backups/skills-agents/restore").then(function () { showToast("리스토어 완료", "success"); }).catch(handleError); });
+    if (el.backupBtn) el.backupBtn.addEventListener("click", function () { postAction(`/api/backups/skills-agents?engine=${state.selectedEngine}`).then(function () { showToast("백업 완료", "success"); }).catch(handleError); });
+    if (el.restoreBtn) el.restoreBtn.addEventListener("click", function () { postAction(`/api/backups/skills-agents/restore?engine=${state.selectedEngine}`).then(function () { showToast("리스토어 완료", "success"); }).catch(handleError); });
     if (el.inspectorSkillSaveBtn) {
       el.inspectorSkillSaveBtn.addEventListener("click", function () {
         const data = state.selectedInspectorAgentName ? state.inspectorCache.get(state.selectedInspectorAgentName) : null;

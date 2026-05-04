@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 
 from app.config import AppSettings
 from app.models import (
@@ -38,6 +39,7 @@ class DashboardService:
         self._settings = settings
         self._founder_name = settings.founder_name.strip() or "대표이사"
 
+    @lru_cache(maxsize=16)
     def build_inventory(self, engine: str | None = None) -> InventoryResponse:
         """
         사용 가능한 모든 스킬과 에이전트 정보를 집계하고 상호 연결 상태를 검증한다.
@@ -224,6 +226,7 @@ class DashboardService:
 
     def _extract_routes(self, router_config: dict) -> list[RouteModel]:
         routes = []
+        # 'routes' 리스트 형식 지원 (기존)
         raw_routes = router_config.get("routes", [])
         if isinstance(raw_routes, list):
             for r in raw_routes:
@@ -231,6 +234,17 @@ class DashboardService:
                     RouteModel(
                         agent_name=str(r.get("agent", "unknown")),
                         keyword=str(r.get("intent", ""))[:30],
+                    )
+                )
+        
+        # 'routing_hints' 딕셔너리 형식 지원 (신규)
+        hints = router_config.get("routing_hints", {})
+        if isinstance(hints, dict):
+            for keyword, agent_name in hints.items():
+                routes.append(
+                    RouteModel(
+                        agent_name=str(agent_name),
+                        keyword=str(keyword)[:30],
                     )
                 )
         return routes
