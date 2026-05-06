@@ -135,6 +135,7 @@ def register_read_routes(router: APIRouter) -> None:
             )
             for agent in inventory.agents
         ]
+        return ExecutableAgentsResponse(agents=agents)
 def register_inspector_routes(router: APIRouter) -> None:
     @router.get("/agents/{agent_name}/inspector", response_model=AgentInspectorResponse)
     def get_agent_inspector(
@@ -400,7 +401,7 @@ def register_run_routes(router: APIRouter) -> None:
     @router.get("/runs/{run_id}/events", response_model=RunEventsResponse)
     def get_run_events(
         run_id: str,
-        limit: int = Query(default=100, ge=1, le=500),
+        limit: int = Query(default=100, ge=1, le=2000),
         run_orchestrator: RunOrchestrator = Depends(get_run_orchestrator),
     ) -> RunEventsResponse:
         run = run_orchestrator.get_run(run_id)
@@ -546,7 +547,7 @@ def register_workflow_routes(router: APIRouter) -> None:
     @router.get("/workflow-runs/{workflow_run_id}/events", response_model=WorkflowEventsResponse)
     def get_workflow_events(
         workflow_run_id: str,
-        limit: int = Query(default=100, ge=1, le=500),
+        limit: int = Query(default=100, ge=1, le=2000),
         workflow_orchestrator: WorkflowOrchestrator = Depends(get_workflow_orchestrator),
     ) -> WorkflowEventsResponse:
         run = workflow_orchestrator.get_workflow_run(workflow_run_id)

@@ -84,12 +84,11 @@ body {
   overflow: hidden;
 }
 
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 input::placeholder,
@@ -687,68 +686,6 @@ body[data-theme="cyber-fusion"] .theme-quick-switch {
   background: rgba(10, 12, 18, 0.95);
   backdrop-filter: blur(20px);
   z-index: 10;
-  transition: background 0.3s ease, border 0.3s ease;
-}
-
-/* --- Immersive Overlays (Cyber Fusion) --- */
-.cyber-overlay {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  opacity: 0;
-  transition: opacity 0.5s ease;
-}
-
-body[data-theme="cyber-fusion"] .cyber-overlay {
-  opacity: 1;
-}
-
-.scanlines {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to bottom,
-    transparent 50%,
-    rgba(0, 255, 136, 0.03) 51%,
-    transparent 52%
-  );
-  background-size: 100% 4px;
-  animation: scanline-flicker 0.1s infinite;
-}
-
-.crt-grid {
-  position: absolute;
-  inset: 0;
-  background-image: 
-    linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%),
-    linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-  background-size: 100% 3px, 3px 100%;
-}
-
-.vignette {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle, transparent 40%, rgba(0, 0, 0, 0.4) 100%);
-}
-
-@keyframes scanline-flicker {
-  0% { opacity: 0.98; }
-  50% { opacity: 1; }
-  100% { opacity: 0.99; }
-}
-
-/* --- Micro-animations --- */
-.app-shell, .rail-nav, .view-canvas, .stage-card {
-  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), 
-              opacity 0.4s ease, 
-              background 0.3s ease, 
-              border 0.3s ease, 
-              box-shadow 0.3s ease;
-}
-
-body.theme-transitioning * {
-  transition: none !important;
 }
 
 body[data-theme="glass-enterprise"] .topbar {
@@ -1070,98 +1007,13 @@ body[data-theme="minimal-pro"] .workflow-stage-dock {
   border-radius: 0;
 }
 
-/* --- Workflow Map HUD --- */
-.workflow-map-hud {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+.workflow-stage-dock-actions {
+  justify-content: flex-end;
 }
 
-.map-step {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-display);
-  font-size: 0.65rem;
-  color: var(--text-m);
-  background: var(--panel);
-  transition: all 0.3s ease;
-}
-
-.map-step.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 10px var(--accent-glow);
-  background: rgba(0, 255, 136, 0.05);
-}
-
-.map-connector {
-  width: 20px;
-  height: 1px;
-  background: var(--border);
-}
-
-.map-step.active + .map-connector {
-  background: var(--accent);
-  box-shadow: 0 0 5px var(--accent-glow);
-}
-
-/* --- Template Chips --- */
-.workflow-templates {
-  margin-top: 24px;
-}
-
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.template-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  color: var(--text-m);
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.template-chip:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--accent);
-  color: var(--text);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.template-chip .chip-icon {
-  font-size: 1.1rem;
-}
-
-.template-chip .chip-label {
-  font-family: var(--font-display);
-  font-size: 0.65rem;
-  letter-spacing: 0.05em;
-}
-
-/* --- Pulse Animation --- */
-.pulse-primary {
-  animation: pulse-glow 2s infinite;
-}
-
-@keyframes pulse-glow {
-  0% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
-  70% { box-shadow: 0 0 0 15px rgba(0, 255, 136, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+.workflow-stage-dock-primary {
+  width: 100%;
+  min-height: 48px;
 }
 
 .workflow-stage-dock-actions .action-btn {
@@ -1655,39 +1507,6 @@ body[data-theme="minimal-pro"] .modal-panel {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 8px 0;
-}
-
-.live-pulse {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: var(--accent);
-  border-radius: 50%;
-  margin-left: 10px;
-  position: relative;
-  vertical-align: middle;
-}
-
-.live-pulse::after {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border: 1px solid var(--accent);
-  border-radius: 50%;
-  animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
-}
-
-@keyframes pulse-ring {
-  0% { transform: scale(0.33); opacity: 0; }
-  80%, 100% { opacity: 0; }
-}
-
-body[data-theme="cyber-fusion"] .stage-card {
-  background: rgba(10, 12, 18, 0.7);
-  backdrop-filter: blur(12px) saturate(180%);
-  border: 1px solid rgba(0, 255, 136, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .hud-grid {

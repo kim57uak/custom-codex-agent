@@ -79,10 +79,7 @@
           <div class="org-hud-shell">
             <div class="org-hud-head">
               <div>
-                <div class="section-kicker">
-                  OVERVIEW_HUD
-                  <span class="live-pulse"></span>
-                </div>
+                <div class="section-kicker">OVERVIEW_HUD</div>
                 <div class="detail-subtitle">상단 지표는 필요할 때만 펼쳐서 볼 수 있습니다.</div>
               </div>
               <button id="org-hud-toggle-btn" class="action-btn" type="button">지표 보기</button>
@@ -194,15 +191,6 @@
                 <div class="status-pill"><span>선택 실행</span><strong id="workflow-selected-run-label">없음</strong></div>
                 <div class="status-pill wide-pill"><span>추천 메타</span><strong id="workflow-recommendation-meta">추천 결과 없음</strong></div>
               </div>
-              <div class="workflow-map-hud">
-                <div class="map-step active" data-step="1">01</div>
-                <div class="map-connector"></div>
-                <div class="map-step" data-step="2">02</div>
-                <div class="map-connector"></div>
-                <div class="map-step" data-step="3">03</div>
-                <div class="map-connector"></div>
-                <div class="map-step" data-step="4">04</div>
-              </div>
             </div>
             <div class="workflow-stage-frame">
               <div id="workflow-step-list" class="workflow-stage"></div>
@@ -211,28 +199,7 @@
                   <div class="workflow-goal-row workflow-goal-row-inline">
                     <textarea id="workflow-goal-input" class="proto-input workflow-goal-input" placeholder="완성하고 싶은 결과를 한 문장으로 적어주세요. 예: 신규 고객 온보딩 플로우를 설계하고 QA 체크리스트까지 구성"></textarea>
                     <div class="workflow-command-actions workflow-primary-actions workflow-goal-actions">
-                      <button id="workflow-recommend-btn" class="action-btn action-btn-primary pulse-primary" type="button">RECOMMEND</button>
-                    </div>
-                  </div>
-                  <div class="workflow-templates">
-                    <div class="section-kicker">TACTICAL_TEMPLATES</div>
-                    <div class="template-grid">
-                      <button class="template-chip" type="button" data-prompt="신규 프로젝트 코드 리뷰 및 아키텍처 개선 제안">
-                        <span class="chip-icon">🔍</span>
-                        <span class="chip-label">CODE_REVIEW</span>
-                      </button>
-                      <button class="template-chip" type="button" data-prompt="React 컴포넌트 단위 테스트 작성 및 QA">
-                        <span class="chip-icon">🧪</span>
-                        <span class="chip-label">QA_STRIKE</span>
-                      </button>
-                      <button class="template-chip" type="button" data-prompt="API 문서 자동 생성 및 배포 파이프라인 구성">
-                        <span class="chip-icon">📄</span>
-                        <span class="chip-label">DOC_DEPLOY</span>
-                      </button>
-                      <button class="template-chip" type="button" data-prompt="보안 취약점 스캔 및 패치 자동화">
-                        <span class="chip-icon">🛡️</span>
-                        <span class="chip-label">SEC_AUDIT</span>
-                      </button>
+                      <button id="workflow-recommend-btn" class="action-btn action-btn-primary" type="button">RECOMMEND</button>
                     </div>
                   </div>
                 </div>
@@ -478,12 +445,6 @@
     </div>
 
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
-
-    <div class="cyber-overlay">
-      <div class="scanlines"></div>
-      <div class="crt-grid"></div>
-      <div class="vignette"></div>
-    </div>
 
     <script src="/static/app.js?v=20260427-01"></script>
   </body>

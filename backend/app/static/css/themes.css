@@ -1,125 +1,95 @@
-/* Cyber Fusion Theme Overrides */
+/* Theme-specific Overrides & Accents */
+
+/* Cyber Fusion (Default) */
 body[data-theme="cyber-fusion"] {
-  --bg: #020408;
-  --panel: #05070a;
-  --accent: #00ff88;
-  --accent-glow: rgba(0, 255, 136, 0.4);
-  --border: rgba(0, 255, 136, 0.2);
-  background-image: 
-    linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
-  background-size: 50px 50px;
+  --accent: #00f2fe;
+  --accent-glow: rgba(0, 242, 254, 0.3);
 }
 
 body[data-theme="cyber-fusion"] .rail-nav {
-  width: 260px;
-  align-items: stretch;
-  padding: 32px 20px;
-  background: linear-gradient(180deg, #05070a 0%, #010204 100%);
-  border-right: 1px solid rgba(0, 255, 136, 0.4);
-  box-shadow: 10px 0 30px rgba(0, 0, 0, 0.9);
-  position: relative;
-  overflow: hidden;
+  border-right: 1px solid rgba(0, 242, 254, 0.2);
 }
 
-body[data-theme="cyber-fusion"] .rail-nav::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 1px;
-  height: 100%;
-  background: linear-gradient(to bottom, transparent, var(--accent), transparent);
-  box-shadow: 0 0 15px var(--accent);
-  z-index: 25;
-}
-
-body[data-theme="cyber-fusion"] .rail-nav::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 136, 0.01) 2px, rgba(0, 255, 136, 0.01) 4px);
-  pointer-events: none;
-}
-
-body[data-theme="cyber-fusion"] .brand-logo {
-  width: auto;
-  height: auto;
-  border: 0;
-  border-radius: 0;
-  display: flex;
-  align-items: center;
-  box-shadow: none;
-  margin-bottom: 48px;
-  color: var(--accent);
-  text-shadow: 0 0 10px var(--accent-glow);
-}
-
-body[data-theme="cyber-fusion"] .rail-tab {
-  width: 100%;
-  height: auto;
-  justify-content: flex-start;
-  padding: 12px 16px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--text-m);
-  display: flex;
-  gap: 14px;
-  border-left: 3px solid transparent;
-  margin-bottom: 4px;
+body[data-theme="cyber-fusion"] .topbar {
+  border-bottom: 1px solid rgba(0, 242, 254, 0.15);
 }
 
 body[data-theme="cyber-fusion"] .rail-tab.active {
-  background: rgba(0, 255, 136, 0.1);
-  color: var(--accent);
-  border-left-color: var(--accent);
-  box-shadow: inset 10px 0 20px rgba(0, 255, 136, 0.05);
+  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
 }
 
-/* Glass Enterprise Theme Overrides */
-body[data-theme="glass-enterprise"] .rail-nav {
-  width: 280px;
-  align-items: stretch;
-  padding: 32px 18px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(18px);
+/* Glass Enterprise */
+body[data-theme="glass-enterprise"] {
+  --bg: #f0f2f5;
+  --panel: rgba(255, 255, 255, 0.7);
+  --glass: blur(20px) saturate(200%);
 }
 
-body[data-theme="glass-enterprise"] .rail-tab.active {
-  background: #eef2ff;
-  color: var(--accent);
+body[data-theme="glass-enterprise"] .app-shell {
+  background-image: none;
+  background-color: #f0f2f5;
 }
 
-/* Minimal Pro Theme Overrides */
-body[data-theme="minimal-pro"] .rail-nav {
-  width: 240px;
-  align-items: stretch;
-  padding: 48px 32px;
+body[data-theme="glass-enterprise"] .rail-nav,
+body[data-theme="glass-enterprise"] .topbar {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: var(--glass);
+  border-color: rgba(0, 0, 0, 0.05);
 }
 
-@keyframes action-btn-scan {
-  to {
-    transform: translateX(100%);
-  }
+body[data-theme="glass-enterprise"] .stage-card {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: var(--glass);
+  border-color: rgba(0, 0, 0, 0.05);
 }
 
-@keyframes glitch {
-  0% { transform: translate(0); }
-  20% { transform: translate(-2px, 2px); }
-  40% { transform: translate(-2px, -2px); }
-  60% { transform: translate(2px, 2px); }
-  80% { transform: translate(2px, -2px); }
-  100% { transform: translate(0); }
+/* Minimal Pro */
+body[data-theme="minimal-pro"] {
+  --accent: #fff;
+  --accent-glow: rgba(255, 255, 255, 0.1);
+  --font-display: var(--font-main); /* Use sans-serif for display too */
 }
 
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 10px var(--accent-glow); }
-  50% { box-shadow: 0 0 25px var(--accent-glow); }
+body[data-theme="minimal-pro"] .rail-nav,
+body[data-theme="minimal-pro"] .topbar,
+body[data-theme="minimal-pro"] .stage-card {
+  border-color: #222;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 body[data-theme="minimal-pro"] .rail-tab.active {
-  background: transparent;
-  color: #fff;
-  border-left-color: #fff;
-  padding-left: 14px;
+  background: #fff;
+  color: #000;
+  border-radius: 4px;
+}
+
+/* Global Aesthetics */
+.view-canvas {
+  scrollbar-gutter: stable;
+}
+
+.viewport-header h1 {
+  font-size: 2rem;
+  margin: 4px 0;
+  background: linear-gradient(to right, var(--text) 30%, var(--text-m) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.live-state {
+  font-size: 0.8rem;
+  color: var(--text-s);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-state::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--success);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--success);
 }
