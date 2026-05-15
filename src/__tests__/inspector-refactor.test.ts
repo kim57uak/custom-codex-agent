@@ -201,7 +201,7 @@ describe('Inspector Refactor — 전체 검증', () => {
     it('inspector-main__split 그리드 레이아웃이 있다', () => {
       expect(source).toContain('inspector-main__split');
       expect(source).toContain('InspectorFileBrowser');
-      expect(source).toContain('inspector-main__editor-area');
+      expect(source).toContain('inspector-main__right');
     });
 
     it('저장 관련 상태 관리가 있다', () => {

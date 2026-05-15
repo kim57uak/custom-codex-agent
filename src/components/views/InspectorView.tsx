@@ -535,8 +535,6 @@ const FileEditor: React.FC<{
 };
 
 const InspectorView: React.FC = () => {
-  const agents = useInspectorStore(s => s.agents);
-  const skills = useInspectorStore(s => s.skills);
   const selectedAgent = useInspectorStore(s => s.selectedAgent);
   const selectedSkill = useInspectorStore(s => s.selectedSkill);
   const response = useInspectorStore(s => s.response);
@@ -562,21 +560,8 @@ const InspectorView: React.FC = () => {
     if (response) setSelectedFilePath(null);
   }, [response]);
 
-  useEffect(() => {
-    console.debug('[InspectorView] selectedAgent changed:', selectedAgent?.name ?? '(null)');
-  }, [selectedAgent]);
-
-  useEffect(() => {
-    console.debug('[InspectorView] response changed:', response ? 'set' : '(null)');
-  }, [response]);
-
-  useEffect(() => {
-    console.debug('[InspectorView] loading changed:', loading);
-  }, [loading]);
-
-  useEffect(() => {
-    console.debug('[InspectorView] error changed:', error);
-  }, [error]);
+  const effectiveAgent = selectedAgent ?? (response ? { id: response.agentName, name: response.agentName, engine: 'codex' as const } : null);
+  const effectiveMeta = effectiveAgent ? getEngineMeta(effectiveAgent.engine) : undefined;
 
   const loadData = async () => {
     const [agentList, inventory] = await Promise.all([
@@ -603,6 +588,18 @@ const InspectorView: React.FC = () => {
   }, [response]);
 
   const selectedFileModel = selectedFilePath ? fileMap.get(selectedFilePath) ?? null : null;
+
+  const hasInspectorFiles = useMemo(() => {
+    if (!response) return false;
+    return !!(
+      response.skillMarkdown ||
+      response.agentToml ||
+      response.agentJson ||
+      response.references.length ||
+      response.scripts.length ||
+      response.assets.length
+    );
+  }, [response]);
 
   const handleSelectFile = useCallback((filePath: string) => {
     const file = fileMap.get(filePath);
@@ -639,54 +636,45 @@ const InspectorView: React.FC = () => {
   }, [originalContent]);
 
   const hasChanges = editContent !== originalContent;
-  const meta = selectedAgent ? getEngineMeta(selectedAgent.engine) : undefined;
 
   return (
     <div className="inspector-view">
-      {!selectedAgent && !selectedSkill && (
+      {!response && !loading && !error && !selectedSkill && (
         <div className="inspector-view__welcome">
           <div className="inspector-view__welcome-content">
             <span className="codicon codicon-inspect" style={{ fontSize: '48px', opacity: 0.2 }} />
-            <h2>Agent & Skill Inspector</h2>
-            <p>
-              좌측 사이드바에서 에이전트를 선택하면 스킬 파일을 확인하고 편집할 수 있습니다.
-            </p>
-            <div className="inspector-view__welcome-stats">
-              <div className="inspector-view__welcome-stat">
-                <span className="inspector-view__welcome-stat-value">{agents.length}</span>
-                <span className="inspector-view__welcome-stat-label">Agents</span>
-              </div>
-              <div className="inspector-view__welcome-stat">
-                <span className="inspector-view__welcome-stat-value">{skills.length}</span>
-                <span className="inspector-view__welcome-stat-label">Skills</span>
-              </div>
-            </div>
+            <h2>Agent Inspector</h2>
+            <p>좌측 사이드바에서 에이전트를 선택하세요</p>
           </div>
         </div>
       )}
 
-      {selectedAgent && response && (
+      {response && hasInspectorFiles && (
         <div className="inspector-main">
-          <div className="inspector-main__agent-hero" style={{ '--hero-accent': meta?.color } as React.CSSProperties}>
-            <span className="inspector-main__agent-badge" style={{ background: meta?.color }}>
-              {meta?.badge}
-            </span>
-            <div className="inspector-main__agent-info">
-              <h2 className="inspector-main__agent-name">{response.agentName}</h2>
-              <p className="inspector-main__agent-sub">
-                {response.roleLabelKo} · {response.departmentLabelKo}
-                {response.skillName && <span> · Skill: {response.skillName}</span>}
-              </p>
-            </div>
-          </div>
-
           <div className="inspector-main__split">
-            <InspectorFileBrowser
-              response={response}
-              selectedFile={selectedFilePath}
-              onSelectFile={handleSelectFile}
-            />
-            <div className="inspector-main__editor-area">
+            <div className="inspector-main__left">
+              <div className="inspector-main__agent-card" style={{ '--card-accent': effectiveMeta?.color } as React.CSSProperties}>
+                <span className="inspector-main__agent-badge" style={{ background: effectiveMeta?.color }}>
+                  {effectiveMeta?.badge}
+                </span>
+                <div className="inspector-main__agent-info">
+                  <h2 className="inspector-main__agent-name">{response.agentName}</h2>
+                  <p className="inspector-main__agent-sub">
+                    {response.roleLabelKo} · {response.departmentLabelKo}
+                    {response.skillName && <span> · Skill: {response.skillName}</span>}
+                  </p>
+                  {response.description && (
+                    <p className="inspector-main__agent-desc">{response.description}</p>
+                  )}
+                </div>
+              </div>
+              <InspectorFileBrowser
+                response={response}
+                selectedFile={selectedFilePath}
+                onSelectFile={handleSelectFile}
+              />
+            </div>
+            <div className="inspector-main__right">
               {selectedFileModel ? (
                 <FileEditor
                   file={{ ...selectedFileModel, content: editContent }}
@@ -707,6 +695,10 @@ const InspectorView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {response && !hasInspectorFiles && effectiveAgent && (
+        <AgentEditor agent={effectiveAgent} />
       )}
 
       {selectedAgent && !response && !loading && !error && (
