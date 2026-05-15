@@ -48,7 +48,7 @@ export const Sidebar: React.FC<{ activeView: string }> = ({ activeView }) => {
         return null;
       case 'dashboard':
         return (
-          <div className="sidebar-panel active" id="sidebar-dashboard">
+          <div className="sidebar-panel active" id="sidebar-dashboard" style={{ overflowY: 'auto' }}>
             <DashboardSidebar />
           </div>
         );
@@ -63,7 +63,7 @@ export const Sidebar: React.FC<{ activeView: string }> = ({ activeView }) => {
         );
       case 'inspector':
         return (
-          <div className="sidebar-panel active" id="sidebar-inspector" style={{ overflow: 'hidden' }}>
+          <div className="sidebar-panel active" id="sidebar-inspector">
             <InspectorSidebar />
           </div>
         );

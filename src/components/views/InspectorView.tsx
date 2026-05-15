@@ -2,6 +2,54 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { AgentConfig, SkillModel, AgentInspectorFileModel, AgentInspectorResponse } from '../../../types/ipc-contract';
 import { useInspectorStore } from '../../stores/inspectorStore';
 import { useUIStore } from '../../stores/uiStore';
+import Editor, { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
+loader.config({ monaco });
+
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+
+self.MonacoEnvironment = {
+  getWorker(_: string, label: string) {
+    if (label === 'json') return new jsonWorker();
+    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker();
+    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker();
+    if (label === 'typescript' || label === 'javascript') return new tsWorker();
+    return new editorWorker();
+  },
+};
+
+function ensureMonacoTheme() {
+  try {
+    const style = typeof document !== 'undefined' ? getComputedStyle(document.documentElement) : null;
+    const read = (key: string, fallback: string) => style?.getPropertyValue(key)?.trim() || fallback;
+    monaco.editor.defineTheme('app-theme', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': read('--bg-primary', '#1e1e2e'),
+        'editor.foreground': read('--text-primary', '#d4d4d4'),
+        'editor.lineHighlightBackground': read('--bg-secondary', '#2a2a3a'),
+        'editor.selectionBackground': read('--selection-bg', '#3a3a5c'),
+        'editor.inactiveSelectionBackground': read('--selection-bg', '#3a3a5c') + '80',
+        'editorCursor.foreground': read('--text-primary', '#d4d4d4'),
+        'editorLineNumber.foreground': read('--text-tertiary', '#6c7086'),
+        'editorLineNumber.activeForeground': read('--text-primary', '#d4d4d4'),
+        'editor.selectionHighlightBackground': 'rgba(255,255,255,0.05)',
+        'editor.wordHighlightBackground': 'rgba(255,255,255,0.05)',
+        'editorBracketMatch.background': 'rgba(255,255,255,0.05)',
+        'editorBracketMatch.border': read('--border-primary', '#3a3a4a'),
+      },
+    });
+  } catch {
+    // fallback: Monaco uses default theme
+  }
+}
+try { ensureMonacoTheme(); } catch {}
 
 async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
   if (typeof window === 'undefined' || !window.electronAPI) return null;
@@ -490,6 +538,8 @@ const FileEditor: React.FC<{
 }> = ({ file, onContentChange, onSave, saving, hasChanges, successMsg, error, onRevert }) => {
   const lang = detectLanguage(file.name);
 
+  useEffect(() => { ensureMonacoTheme(); }, []);
+
   return (
     <div className="inspector-file-editor">
       <div className="inspector-file-editor__toolbar">
@@ -517,12 +567,23 @@ const FileEditor: React.FC<{
         </div>
       </div>
       <div className="inspector-file-editor__body">
-        <textarea
-          className="inspector-file-editor__textarea"
+        <Editor
+          height="100%"
+          language={lang}
           value={file.content}
-          onChange={e => onContentChange(e.target.value)}
-          spellCheck={false}
-          data-lang={lang}
+          onChange={v => onContentChange(v ?? '')}
+          theme="app-theme"
+          options={{
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            fontSize: 13,
+            lineNumbers: 'on',
+            tabSize: 2,
+            automaticLayout: true,
+            wordWrap: 'on',
+            padding: { top: 12 },
+            renderWhitespace: 'selection',
+          }}
         />
         {file.truncated && (
           <div className="inspector-file-editor__truncated-warning">

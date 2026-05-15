@@ -243,7 +243,7 @@ describe('Inspector Refactor — 전체 검증', () => {
 
     it('FileEditor가 file 객체를 받아 렌더링한다', () => {
       expect(source).toContain('const FileEditor: React.FC');
-      expect(source).toContain('inspector-file-editor__textarea');
+      expect(source).toContain('@monaco-editor/react');
       expect(source).toContain('onContentChange');
       expect(source).toContain('onSave');
     });

@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import type { OverviewResponse, InventoryResponse } from '../../../types/ipc-contract';
 
 interface RunRecord {
   id: string;
@@ -169,23 +170,27 @@ interface DashboardViewProps {}
  */
 export const DashboardView: React.FC<DashboardViewProps> = () => {
   const [runs, setRuns] = useState<RunRecord[]>([]);
+  const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [inventory, setInventory] = useState<InventoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  /** 실행 목록 로드 */
-  const loadRuns = useCallback(async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
-    const result = await ipcInvoke<{ runs: RunRecord[] }>('run:list');
-    if (result?.runs) {
-      setRuns(result.runs);
-    }
+    const [runResult, overviewResult, invResult] = await Promise.all([
+      ipcInvoke<{ runs: RunRecord[] }>('run:list'),
+      ipcInvoke<OverviewResponse>('dashboard:overview'),
+      ipcInvoke<InventoryResponse>('dashboard:inventory'),
+    ]);
+    if (runResult?.runs) setRuns(runResult.runs);
+    if (overviewResult) setOverview(overviewResult);
+    if (invResult) setInventory(invResult);
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    loadRuns();
-  }, [loadRuns]);
+    loadData();
+  }, [loadData]);
 
-  /** 메트릭 계산 */
   const totalRuns = runs.length;
   const completedRuns = runs.filter(r => r.status === 'completed').length;
   const failedRuns = runs.filter(r => r.status === 'failed').length;
@@ -212,7 +217,6 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
   const successLastWeek = runs.filter(r => r.status === 'completed' && (() => { const t = new Date(r.createdAt).getTime(); return t > now - 2 * weekMs && t <= now - weekMs; })()).length;
   const successRateChange = runsLastWeek > 0 ? Math.round(((successThisWeek - successLastWeek) / runsLastWeek) * 100) : 0;
 
-  /** 로딩 상태 */
   if (isLoading) {
     return (
       <div className="dashboard-view">
@@ -230,8 +234,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     );
   }
 
-  /** Empty 상태 */
-  if (runs.length === 0) {
+  if (runs.length === 0 && !overview) {
     return (
       <div className="dashboard-view">
         <div className="main-toolbar">
@@ -245,18 +248,25 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             </div>
             <h3>No runs yet</h3>
             <p>Run your first agent to see metrics here.</p>
-            <button className="btn-cta" onClick={loadRuns}>Run Agent</button>
+            <button className="btn-cta" onClick={loadData}>Refresh</button>
           </div>
         </div>
       </div>
     );
   }
 
+  const activeAgents = overview?.activeAgents ?? 0;
+  const totalSkills = overview?.totalSkills ?? inventory?.skills?.length ?? 0;
+  const routedAgents = overview?.routedAgents ?? 0;
+  const activeThreads = overview?.activeThreads ?? 0;
+  const brokenMappings = overview?.brokenMappings ?? 0;
+  const totalAgents = overview?.totalAgents ?? inventory?.agents?.length ?? 0;
+
   return (
     <div className="dashboard-view">
       <div className="main-toolbar">
         <span className="title">Dashboard</span>
-        <span className="subtitle">Last 7 days</span>
+        <span className="subtitle">Overview &amp; last 7 days</span>
       </div>
 
       <div className="main-content">
@@ -291,6 +301,41 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
             trend="up"
             bars={Object.values(engineRuns).length > 0 ? [dominantEnginePct, 100 - dominantEnginePct] : [50, 50]}
             barColor="var(--status-info)"
+          />
+        </div>
+
+        <div className="metrics-grid" style={{ marginTop: 'var(--space-4)' }}>
+          <MetricCard
+            label="Active Agents"
+            value={activeAgents}
+            change={totalAgents > 0 ? `${Math.round(activeAgents / totalAgents * 100)}% online` : 'No data'}
+            trend="up"
+            bars={[60, 70, 80, 75, 85, 90, activeAgents > 0 ? Math.min(activeAgents * 10, 100) : 0]}
+            barColor="var(--accent-primary)"
+          />
+          <MetricCard
+            label="Total Skills"
+            value={totalSkills}
+            change={`${routedAgents} agents routed`}
+            trend="up"
+            bars={[40, 50, 60, 55, 65, 70, 75]}
+            barColor="var(--status-success)"
+          />
+          <MetricCard
+            label="Failed Runs"
+            value={failedRuns}
+            change={totalRuns > 0 ? `${Math.round(failedRuns / totalRuns * 100)}% failure rate` : 'No data'}
+            trend="down"
+            bars={failedRuns > 0 ? [100 - Math.min(failedRuns * 5, 90), 100] : [100, 100]}
+            barColor="var(--status-error)"
+          />
+          <MetricCard
+            label="Active Threads"
+            value={activeThreads}
+            change={brokenMappings > 0 ? `${brokenMappings} broken mappings` : 'All clear'}
+            trend={brokenMappings > 0 ? 'down' : 'up'}
+            bars={[30, 40, 50, 45, 55, activeThreads > 0 ? Math.min(activeThreads * 15, 100) : 0, 60]}
+            barColor="var(--accent-tertiary)"
           />
         </div>
       </div>

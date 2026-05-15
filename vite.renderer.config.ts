@@ -8,4 +8,16 @@ export default defineConfig({
       '@': '/src',
     },
   },
+  optimizeDeps: {
+    include: ['monaco-editor'],
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          monaco: ['monaco-editor'],
+        },
+      },
+    },
+  },
 });
