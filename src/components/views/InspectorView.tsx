@@ -129,12 +129,12 @@ function getFileIcon(filePath: string): string {
 }
 
 const FILE_KIND_LABELS: Record<string, string> = {
-  'agent-toml': 'Agent 설정 (TOML)',
-  'agent-json': 'Agent 설정 (JSON)',
-  'skill-md': '스킬 정의',
-  'reference': '참조 문서',
-  'script': '스크립트',
-  'asset': '에셋',
+  'agent-toml': 'Agent Config (TOML)',
+  'agent-json': 'Agent Config (JSON)',
+  'skill-md': 'Skill Definition',
+  'reference': 'Reference Doc',
+  'script': 'Script',
+  'asset': 'Asset',
 };
 
 function getKindIcon(kind: string): string {
@@ -201,7 +201,7 @@ const InspectorSidebar: React.FC = () => {
     if (result) {
       setResponse(result);
     } else {
-      setError('에이전트 정보를 불러올 수 없습니다.');
+      setError('Could not load agent info.');
     }
   };
 
@@ -216,7 +216,7 @@ const InspectorSidebar: React.FC = () => {
   return (
     <div className="inspector-sidebar">
       <div className="inspector-sidebar__header">
-        <span>인스펙터</span>
+        <span>Inspector</span>
         {selectedEngine !== 'all' && selectedEngineMeta && (
           <span className="inspector-sidebar__engine-badge" style={{ background: selectedEngineMeta.color }}>
             {selectedEngineMeta.badge} {selectedEngineMeta.label}
@@ -235,7 +235,7 @@ const InspectorSidebar: React.FC = () => {
           onClick={() => setActiveTab('agents')}
         >
           <span className="codicon codicon-account" />
-          에이전트
+          Agents
           <span className="inspector-sidebar__tab-count">{engineFilteredAgents.length}</span>
         </button>
         <button
@@ -243,7 +243,7 @@ const InspectorSidebar: React.FC = () => {
           onClick={() => setActiveTab('skills')}
         >
           <span className="codicon codicon-book" />
-          스킬
+          Skills
           <span className="inspector-sidebar__tab-count">{skills.length}</span>
         </button>
       </div>
@@ -253,7 +253,7 @@ const InspectorSidebar: React.FC = () => {
         <input
           type="text"
           className="inspector-sidebar__search-input"
-          placeholder={activeTab === 'agents' ? '에이전트 검색...' : '스킬 검색...'}
+          placeholder={activeTab === 'agents' ? 'Search agents...' : 'Search skills...'}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
@@ -265,7 +265,7 @@ const InspectorSidebar: React.FC = () => {
             {filteredAgents.length === 0 && (
               <div className="inspector-sidebar__empty">
                 <span className="codicon codicon-account" style={{ fontSize: '24px', opacity: 0.3 }} />
-                <p>에이전트가 없습니다</p>
+                <p>No agents found</p>
               </div>
             )}
             {Object.entries(groupedAgents).map(([dept, deptAgents]) => (
@@ -305,7 +305,7 @@ const InspectorSidebar: React.FC = () => {
             {filteredSkills.length === 0 && (
               <div className="inspector-sidebar__empty">
                 <span className="codicon codicon-book" style={{ fontSize: '24px', opacity: 0.3 }} />
-                <p>스킬이 없습니다</p>
+                <p>No skills found</p>
               </div>
             )}
             {filteredSkills.map(skill => {
@@ -336,7 +336,7 @@ const InspectorSidebar: React.FC = () => {
       {response && (
         <div className="inspector-sidebar__agent-detail">
           <div className="inspector-sidebar__agent-detail-header">
-            <span className="inspector-sidebar__agent-detail-title">에이전트 정보</span>
+            <span className="inspector-sidebar__agent-detail-title">Agent Info</span>
           </div>
           <div className="inspector-sidebar__agent-detail-scroll">
             <div className="inspector-sidebar__agent-detail-body">
@@ -360,7 +360,7 @@ const InspectorSidebar: React.FC = () => {
               )}
               {response.skillName && (
                 <div className="inspector-sidebar__detail-row">
-                  <span className="inspector-sidebar__detail-label">스킬</span>
+                  <span className="inspector-sidebar__detail-label">Skills</span>
                   <span className="inspector-sidebar__detail-value">{response.skillName}</span>
                 </div>
               )}
@@ -466,7 +466,7 @@ const InspectorFileBrowser: React.FC<{
     <div className="inspector-file-browser">
       <div className="inspector-file-browser__header">
         <span className="codicon codicon-files" />
-        <span>스킬 파일</span>
+        <span>Skill Files</span>
         <span className="inspector-file-browser__count">{allFiles.length}개</span>
       </div>
       <div className="inspector-file-browser__body">
@@ -481,7 +481,7 @@ const InspectorFileBrowser: React.FC<{
         ) : null}
         {response.skillMarkdown ? (
           <FileGroup
-            title="스킬 정의"
+            title="Skill Definition"
             icon="📝"
             files={[response.skillMarkdown]}
             selectedFile={selectedFile}
@@ -518,7 +518,7 @@ const InspectorFileBrowser: React.FC<{
         {allFiles.length === 0 && (
           <div className="inspector-file-browser__empty">
             <span className="codicon codicon-files" style={{ fontSize: '32px', opacity: 0.2 }} />
-            <p>이 에이전트에 스킬 파일이 없습니다.</p>
+            <p>No skill files for this agent.</p>
           </div>
         )}
       </div>
@@ -705,7 +705,7 @@ const InspectorView: React.FC = () => {
           <div className="inspector-view__welcome-content">
             <span className="codicon codicon-inspect" style={{ fontSize: '48px', opacity: 0.2 }} />
             <h2>Agent Inspector</h2>
-            <p>좌측 사이드바에서 에이전트를 선택하세요</p>
+            <p>Select an agent from the sidebar</p>
           </div>
         </div>
       )}
@@ -766,7 +766,7 @@ const InspectorView: React.FC = () => {
         <div className="inspector-view__welcome">
           <div className="inspector-view__welcome-content">
             <div className="spinner" />
-            <p>에이전트 정보를 불러오는 중...</p>
+            <p>Loading agent info...</p>
           </div>
         </div>
       )}
@@ -775,7 +775,7 @@ const InspectorView: React.FC = () => {
         <div className="inspector-view__welcome">
           <div className="inspector-view__welcome-content">
             <div className="spinner" />
-            <p>에이전트 정보를 불러오는 중...</p>
+            <p>Loading agent info...</p>
           </div>
         </div>
       )}
@@ -922,7 +922,7 @@ const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
       setContent(result.content);
       setOriginalContent(result.content);
     } else {
-      setError('스킬 파일을 읽을 수 없습니다');
+      setError('Could not read skill file');
     }
     setLoading(false);
   };
@@ -962,7 +962,7 @@ const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
         {loading && (
           <div className="inspector-editor__loading">
             <div className="spinner" />
-            <span>스킬 내용을 불러오는 중...</span>
+            <span>Loading skill content...</span>
           </div>
         )}
 
@@ -976,7 +976,7 @@ const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
         {content !== null && !loading && (
           <>
             <div className="inspector-editor__toolbar">
-              <span className="inspector-editor__toolbar-label">스킬 정의 (Markdown)</span>
+              <span className="inspector-editor__toolbar-label">Skill Definition (Markdown)</span>
               <div className="inspector-editor__toolbar-actions">
                 {successMsg && <span className="inspector-editor__success">{successMsg}</span>}
                 {hasChanges && (
@@ -1006,7 +1006,7 @@ const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
 
         {!content && !loading && !error && (
           <div className="inspector-editor__empty">
-            <p>이 스킬의 내용이 없습니다.</p>
+            <p>No content for this skill.</p>
           </div>
         )}
       </div>

@@ -57,7 +57,7 @@ export const WorkflowSidebar: React.FC<WorkflowSidebarProps> = () => {
     if (result) {
       setWorkflows(result);
     } else {
-      setError('워크플로 목록을 불러올 수 없습니다');
+      setError('Could not load workflow list');
     }
     setIsLoading(false);
   }, []);
@@ -143,7 +143,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = () => {
         setSelectedWorkflow(first.id);
       }
     } else {
-      setError('워크플로 목록을 불러올 수 없습니다');
+      setError('Could not load workflow list');
     }
     setIsLoading(false);
   }, []);

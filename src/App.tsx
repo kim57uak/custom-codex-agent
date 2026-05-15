@@ -53,8 +53,8 @@ const App: React.FC = () => {
 
 
 
-  // activeView에 따라 sidebar 표시 여부 결정
-  const sidebarNeeded = !sidebarCollapsed && activeView === 'inspector';
+  // activeView에 따라 sidebar 표시 여부 결정 (Sidebar.tsx와 동기화)
+  const sidebarNeeded = !sidebarCollapsed && activeView !== 'org' && activeView !== 'console';
 
   /**
    * 컴포넌트 마운트 시 테마 적용

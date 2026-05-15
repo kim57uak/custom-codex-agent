@@ -139,7 +139,7 @@ describe('InspectorView AgentEditor integration', () => {
 
     render(<InspectorView />);
 
-    expect(screen.getByText('스킬 파일')).toBeTruthy();
+    expect(screen.getByText('Skill Files')).toBeTruthy();
     expect(screen.queryByText('Save Changes')).toBeNull();
   });
 
@@ -153,7 +153,7 @@ describe('InspectorView AgentEditor integration', () => {
 
     render(<InspectorView />);
 
-    expect(screen.getByText('에이전트 정보를 불러오는 중...')).toBeTruthy();
+    expect(screen.getByText('Loading agent info...')).toBeTruthy();
   });
 
   it('renders welcome when no agent is selected', () => {
@@ -174,12 +174,12 @@ describe('InspectorView AgentEditor integration', () => {
       selectedAgent: mockAgent,
       response: null,
       loading: false,
-      error: '에이전트 정보를 불러올 수 없습니다.',
+      error: 'Could not load agent info.',
     });
 
     render(<InspectorView />);
 
     expect(screen.getByText('오류')).toBeTruthy();
-    expect(screen.getByText('에이전트 정보를 불러올 수 없습니다.')).toBeTruthy();
+    expect(screen.getByText('Could not load agent info.')).toBeTruthy();
   });
 });

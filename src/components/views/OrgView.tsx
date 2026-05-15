@@ -17,14 +17,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { AgentConfig } from '../../../types/ipc-contract';
 
 const DEPT_META: Record<string, { label: string; deptEn: string; color: string; icon: string }> = {
-  '개발팀': { label: '개발팀', deptEn: 'Engineering', color: 'var(--accent-primary)', icon: 'device-terminal' },
-  '전략 기획팀': { label: '전략 기획팀', deptEn: 'Strategic Planning', color: 'var(--status-success)', icon: 'sparkles' },
-  '플랫폼 지원팀': { label: '플랫폼 지원팀', deptEn: 'Platform Support', color: 'var(--status-info)', icon: 'symbol-method' },
-  '품질 검증팀': { label: '품질 검증팀', deptEn: 'Quality', color: 'var(--status-warning)', icon: 'beaker' },
-  '콘텐츠 자산팀': { label: '콘텐츠 자산팀', deptEn: 'Content Assets', color: 'var(--accent-tertiary)', icon: 'file' },
-  '플랫폼 운영팀': { label: '플랫폼 운영팀', deptEn: 'Platform Ops', color: 'var(--status-error)', icon: 'settings-gear' },
-  '경영진': { label: '경영진', deptEn: 'Executive Office', color: 'var(--accent-secondary)', icon: 'organization' },
-  '마케팅/영업/CS': { label: '마케팅/영업/CS', deptEn: 'Sales · CS', color: '#ec4899', icon: 'megaphone' },
+  '개발팀': { label: 'Engineering', deptEn: 'Engineering', color: 'var(--accent-primary)', icon: 'device-terminal' },
+  '전략 기획팀': { label: 'Strategic Planning', deptEn: 'Strategic Planning', color: 'var(--status-success)', icon: 'sparkles' },
+  '플랫폼 지원팀': { label: 'Platform Support', deptEn: 'Platform Support', color: 'var(--status-info)', icon: 'symbol-method' },
+  '품질 검증팀': { label: 'Quality', deptEn: 'Quality', color: 'var(--status-warning)', icon: 'beaker' },
+  '콘텐츠 자산팀': { label: 'Content Assets', deptEn: 'Content Assets', color: 'var(--accent-tertiary)', icon: 'file' },
+  '플랫폼 운영팀': { label: 'Platform Ops', deptEn: 'Platform Ops', color: 'var(--status-error)', icon: 'settings-gear' },
+  '경영진': { label: 'Executive Office', deptEn: 'Executive Office', color: 'var(--accent-secondary)', icon: 'organization' },
+  '마케팅/영업/CS': { label: 'Sales · CS', deptEn: 'Sales · CS', color: '#ec4899', icon: 'megaphone' },
 };
 
 function getDeptMeta(dept: string): { label: string; deptEn: string; color: string; icon: string } {
@@ -117,7 +117,7 @@ export const OrgTree: React.FC<OrgTreeProps> = ({ onSelectAgent }) => {
     if (result) {
       setGroups(groupByDept(result));
     } else {
-      setError('에이전트 목록을 불러올 수 없습니다');
+      setError('Could not load agent list');
     }
     setIsLoading(false);
   }, []);
@@ -293,31 +293,31 @@ export const OrgView: React.FC<OrgViewProps> = () => {
       <div className="org-view__canvas">
         {/* Founder Card */}
         <div className="org-view__founder-card">
-          <div className="org-view__founder-subtitle">이 PC의 주인</div>
+          <div className="org-view__founder-subtitle">PC Owner</div>
           <div className="org-view__founder-name">{username}</div>
           <div className="org-view__founder-role">System Owner</div>
           <div className="org-view__founder-tags">
-            <span>최고 의사결정권자</span>
+            <span>Chief Decision Officer</span>
           </div>
         </div>
 
         {/* CEO Card */}
         <div className="org-view__ceo-card">
-          <div className="org-view__ceo-subtitle">대표이사</div>
+          <div className="org-view__ceo-subtitle">President</div>
           <div className="org-view__ceo-name">CEO</div>
-          <div className="org-view__ceo-role">총괄 의사결정</div>
+          <div className="org-view__ceo-role">Executive Decision</div>
           <div className="org-view__ceo-tags">
-            <span>경영 총괄</span>
+            <span>Executive Management</span>
           </div>
         </div>
 
         {/* Router Agent Card */}
         <div className="org-view__router-card">
-          <div className="org-view__router-subtitle">비서실</div>
+          <div className="org-view__router-subtitle">Executive Office</div>
           <div className="org-view__router-name">router-agent</div>
           <div className="org-view__router-role">Keyword Router · {totalAgents} routes</div>
           <div className="org-view__router-tags">
-            <span>대기</span>
+            <span>Standby</span>
           </div>
         </div>
 
@@ -380,7 +380,7 @@ export const OrgView: React.FC<OrgViewProps> = () => {
                 </div>
               </div>
               <div className="org-view__summary-footer">
-                각 에이전트는 1개의 엔진에 매핑. Router가 키워드로 라우팅.
+                Each agent maps to 1 engine. Router dispatches by keyword.
               </div>
             </div>
           </div>
