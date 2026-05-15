@@ -1,17 +1,24 @@
 @startuml
-title Custom Codex Agent - Use Case Diagram
+title Agent Orchestrator Desktop - Use Case Diagram
 
 left to right direction
 actor User
 
-rectangle "Custom Codex Agent System" {
-    usecase "Execute Single Run" as UC1
+rectangle "Agent Orchestrator Desktop" {
+    usecase "Execute Single Agent Run" as UC1
     usecase "Execute Multi-step Workflow" as UC2
-    usecase "Switch AI Engine (Gemini/Codex)" as UC3
+    usecase "Switch AI Engine" as UC3
     usecase "Retry Failed Run" as UC4
     usecase "Retry with Engine Override" as UC5
     usecase "View Real-time Logs" as UC6
     usecase "Cancel Active Task" as UC7
+
+    usecase "Browse Organization Hierarchy" as UC8
+    usecase "View Dashboard Metrics" as UC9
+    usecase "Edit Skills/Agents (Inspector)" as UC10
+    usecase "Chat with AI Sidepanel" as UC11
+    usecase "Switch UI Theme" as UC12
+    usecase "Design Workflow Visually" as UC13
 }
 
 User --> UC1
@@ -21,7 +28,19 @@ User --> UC4
 User --> UC5
 User --> UC6
 User --> UC7
+User --> UC8
+User --> UC9
+User --> UC10
+User --> UC11
+User --> UC12
+User --> UC13
 
 UC5 ..> UC3 : <<include>>
 UC4 ..> UC1 : <<extend>>
+
+note right of UC3
+  Codex | Gemini (Phase 1-4)
+  OpenCode | ClaudeCode (Phase 5)
+end note
+
 @enduml

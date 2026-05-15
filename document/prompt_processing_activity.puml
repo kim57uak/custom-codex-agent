@@ -1,32 +1,46 @@
 @startuml
-title Prompt Processing & Execution Activity
+title Prompt Processing & Execution Activity (Electron IPC)
 
 start
-:Receive Run Request;
-if (Engine specified?) then (yes)
-  :Use Specified Engine;
+:User inputs prompt in ConsoleView;
+:ConsoleView validates input (length, type);
+
+if (Engine selected?) then (yes)
+  :Use selected Engine;
 else (no)
-  :Use AppSettings Default (Gemini);
+  :Show EngineSelector dropdown;
+  :Prompt user to select engine;
 endif
 
-:Create Run Record (Status: Queued);
-:Resolve Workspace Root;
-
-partition "Execution Loop" {
-  :Initialize Engine Adapter;
-  :Fetch Required Skills/Agents;
-  :Build Full Prompt Context;
-  :Execute CLI (Subprocess);
-  
-  if (CLI Execution Success?) then (yes)
-    :Parse CLI Output;
-    :Mark Run Completed;
-  else (no)
-    :Capture Error Message;
-    :Mark Run Failed;
-  endif
+partition "Renderer → Main (IPC)" {
+  :window.electronAPI.runAgent({ engine, prompt, workspace });
+  note: ipcRenderer.invoke('run:agent')
+  :contextBridge passes to Main Process;
+  :ipcMain.handle validates input\n(type check, length < 100KB, allowed command);
 }
 
-:Publish Event to UI;
+partition "Main → Worker Thread" {
+  :RunOrchestrator receives validated input;
+  :Create RunRecord (Status: Queued);
+  :Dispatch to Worker Thread via parentPort;
+}
+
+partition "Worker Thread (CLI Execution)" {
+  :Initialize Engine Adapter;
+  :Resolve workspace root & skills;
+  :Build full prompt context;
+  :child_process.spawn(engine, args, { shell: false });
+  :Stream stdout/stderr → parentPort.postMessage();
+  :Parse CLI output;
+}
+
+partition "IPC Event Publishing" {
+  :Worker Thread sends final result;
+  :EventBroker routes to correct IPC channel;
+  :Renderer receives via ipcRenderer.on();
+  :Update Zustand Store;
+  :ConsoleView shows terminal output + status;
+}
+
 stop
 @enduml

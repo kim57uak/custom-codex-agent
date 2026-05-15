@@ -1,70 +1,155 @@
-# Custom Codex Agent Platform
+# Agent Orchestrator Desktop
 
-> **Tactical Multi-Agent Orchestration & Visualization Surface**
+> **Multi-Agent Orchestration & Visualization Desktop App**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Custom Codex Agent Platform**은 로컬 환경에서 Codex CLI 및 Gemini CLI 기반의 인공지능 에이전트를 시각적으로 관리, 조립, 실행할 수 있는 차세대 오퍼레이션 플랫폼입니다. 글래스모피즘 기반의 세련된 UI와 강력한 워크플로 엔진을 통해 복잡한 AI 작업을 손쉽게 제어할 수 있습니다.
-
-![Main UI Preview](https://via.placeholder.com/1200x600/1e293b/ffffff?text=Tactical+Operations+Surface+Preview)
+**Agent Orchestrator Desktop** is an Electron-based desktop application for visually managing, orchestrating, and executing AI agents powered by Codex CLI and Gemini CLI. Features a Cursor/VS Code-style interface with Activity Bar, Sidebar, Panel layout, 10 themes, and real-time execution streaming.
 
 ---
 
-## ✨ Key Features
+## Features
 
-### 1. Tactical Multi-Theme UI
-*   **Cyber Fusion**: 고대비 다크 모드의 몰입형 인터페이스.
-*   **Glass Enterprise**: 세련된 반투명 디자인의 라이트 모드.
-*   **Minimal Pro**: 집중력을 극대화하는 정갈한 디자인.
+### Multi-Agent Orchestration
+- **Organization View**: Visual hierarchy of agents with real-time health status
+- **Console**: Run single agents with live terminal (xterm.js) output
+- **Workflow Engine**: Chain multiple agents sequentially or in parallel
+- **Dashboard**: Execution metrics, success rates, duration tracking
 
-### 2. Multi-Agent Orchestration
-*   **Organization View**: 에이전트 간의 관계와 조직 구조를 한눈에 파악.
-*   **Workflow Engine**: 여러 에이전트를 순차적으로 연결하여 복잡한 미션 수행.
-*   **Interactive Console**: 실행 중인 에이전트와 실시간 대화(Multi-turn) 가능.
+### Desktop Native
+- **System Tray**: Background operation with menu bar integration
+- **Native Notifications**: Run completion and error alerts
+- **Auto-Update**: Seamless updates via electron-updater + GitHub Releases
+- **Offline Mode**: Full functionality without internet (CLI engines required)
 
-### 3. Agent Lifecycle Management
-*   **Inspector**: 에이전트의 스킬(SKILL.md), 설정(config.json), 스크립트를 즉시 수정.
-*   **Event Stream**: 모든 실행 과정을 SSE(Server-Sent Events)를 통해 실시간 모니터링.
-*   **Backup & Restore**: 스킬과 에이전트 구성을 안전하게 아카이빙.
+### 10 Visual Themes
+- Dark: Cyber Fusion, Night Ops, Matrix Green, Aurora, Dracula Pro
+- Light: Glass Enterprise, Minimal Pro, Paper, Solarized Light
+- Hybrid: Nord (Dark/Light)
+
+### Skill & Agent Inspector
+- Browse and edit SKILL.md, config.json in Monaco Editor
+- Real-time file watching via chokidar
+- Backup & Restore with archiver
 
 ---
 
-## 🚀 Getting Started
+## Quick Start
 
 ### Prerequisites
-*   **Python**: 3.9 이상
-*   **Underlying CLIs**:
-    *   [Gemini CLI](https://github.com/google/gemini-cli) (추천)
-    *   [Codex CLI](https://github.com/google/codex-cli)
+- **Node.js**: 18.x or later
+- **One of the following CLI engines**:
+  - [Codex CLI](https://github.com/openai/codex)
+  - [Gemini CLI](https://github.com/google/gemini-cli)
 
-### Installation
-1.  저장소를 클론합니다.
-    ```bash
-    git clone https://github.com/your-username/custom-codex-agent.git
-    cd custom-codex-agent
-    ```
-2.  의존성을 설치합니다.
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  서버를 실행합니다.
-    ```bash
-    python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    ```
-4.  브라우저에서 `http://localhost:8000`에 접속합니다.
+### Install & Run
+
+```bash
+# Clone the repository
+git clone https://github.com/kim57uak/custom-codex-agent.git
+cd custom-codex-agent
+
+# Install dependencies
+npm install
+
+# Start in development mode
+npm run dev
+```
+
+### Build for Distribution
+
+```bash
+# Build for macOS
+npm run build:mac
+
+# Build for Windows
+npm run build:win
+
+# Build for current platform
+npm run build
+```
 
 ---
 
-## 🛠 Configuration
-시스템은 환경 변수를 통해 유연하게 설정할 수 있습니다.
-*   `GOOGLE_API_KEY`: Gemini 엔진 사용 시 필수.
-*   `OPENAI_API_KEY`: Codex 엔진 사용 시 필수.
-*   `CUSTOM_CODEX_AGENT_GEMINI_HOME`: Gemini 설정 저장 경로.
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Renderer Process (React + TypeScript)                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐  │
+│  │ Activity  │  │ Sidebar  │  │  Main    │  │  Panel    │  │
+│  │ Bar      │  │          │  │  Area    │  │  Terminal │  │
+│  └──────────┘  └──────────┘  └──────────┘  └───────────┘  │
+└──────────────────────┬──────────────────────────────────────┘
+                       │ IPC (contextBridge)
+┌──────────────────────▼──────────────────────────────────────┐
+│  Main Process (Node.js/TypeScript)                          │
+│  ┌────────────┐  ┌──────────────┐  ┌────────────────────┐  │
+│  │ Agent      │  │ Services     │  │ CLI Adapters       │  │
+│  │ Orchestrator│  │ ConfigReader │  │ Codex/Gemini/...  │  │
+│  │ + Workflow │  │ EventBroker  │  │ child_process     │  │
+│  │ Engine     │  │ Inspector    │  │ spawn, shell:false │  │
+│  └────────────┘  └──────────────┘  └────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+See [document/](document/) for detailed architecture diagrams (PlantUML).
 
 ---
 
-## 🤝 Contributing
-이 프로젝트는 커뮤니티의 기여를 환영합니다! 버그 제보, 기능 제안, PR은 언제나 열려 있습니다. 자세한 내용은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참조하세요.
+## Documentation
 
-## 📄 License
-이 프로젝트는 [MIT License](LICENSE)에 따라 라이선스가 부여됩니다.
+| Document | Description |
+|----------|-------------|
+| [Planning.md](Planning.md) | Full product plan, architecture, and roadmap |
+| [CODE_STANDARDS.md](CODE_STANDARDS.md) | TypeScript, React, Electron coding standards |
+| [document/](document/) | PlantUML architecture diagrams |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
+
+---
+
+## Development
+
+```bash
+npm run dev       # Start dev server with HMR
+npm run lint      # Run ESLint
+npm run typecheck # Run TypeScript checks
+npm run test      # Run tests (vitest)
+npm run test:e2e  # Run E2E tests (Playwright)
+```
+
+### Project Structure
+
+```
+├── electron/           # Main Process
+│   ├── main.ts         # BrowserWindow, lifecycle
+│   ├── preload.ts      # contextBridge
+│   ├── ipc/            # IPC handlers
+│   ├── services/       # Business logic
+│   ├── orchestrator/   # Run/Workflow state machines
+│   ├── adapters/       # CLI engine adapters
+│   └── stores/         # SQLite access
+├── src/                # Renderer Process (React)
+│   ├── components/     # UI components
+│   │   ├── layout/     # ActivityBar, Sidebar, etc.
+│   │   ├── views/      # OrgView, ConsoleView, etc.
+│   │   └── common/     # Shared components
+│   ├── stores/         # Zustand stores
+│   ├── hooks/          # IPC wrapper hooks
+│   └── types/          # TypeScript types
+├── resources/          # Icons, assets
+├── document/           # Architecture diagrams
+└── build/              # electron-builder config
+```
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.

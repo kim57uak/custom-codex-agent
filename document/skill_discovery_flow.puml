@@ -1,22 +1,35 @@
 @startuml
-title Skill Discovery & Execution Sequence
+title Skill Discovery & Execution (Electron IPC)
 
-participant "Run Orchestrator" as ORC
-participant "FileSystem" as FS
+participant "InspectorView (React)" as VIEW
+participant "IPC Handlers" as IPC
+participant "InspectorService" as IS
+participant "RunOrchestrator" as RO
 participant "Engine Adapter" as ADAPT
 participant "CLI Tool" as CLI
 
-ORC -> FS: List contents of /skills and /agents
-FS --> ORC: Return directory list
-ORC -> ORC: Match agent name with available skills
+== Skill/Agent Browsing ==
+VIEW -> IPC: ipcRenderer.invoke('inspector:list', { path })
+IPC -> IS: listDirectory(path)
+IS -> IS: path traversal validation\n(reject '..' / symlink escape)
+IS -> IPC: Return FileEntry[]
+IPC --> VIEW: display in file browser tree
 
-ORC -> ADAPT: execute_run(prompt, skills)
-ADAPT -> FS: Read SKILL.md for context
-FS --> ADAPT: SKILL.md content
+== Skill Injection into Run ==
+RO -> IS: resolveSkills(agentName)
+IS -> IS: List /skills and /agents directories
+IS --> RO: matched SKILL.md paths
 
-ADAPT -> ADAPT: Inject SKILL.md into Prompt
-ADAPT -> CLI: exec --include-directories /skills/xyz --prompt "..."
-CLI -> CLI: Process with local context
-CLI --> ADAPT: CLI Output
-ADAPT --> ORC: Final Result
+RO -> ADAPT: execute_run(prompt, { skillPaths })
+ADAPT -> IS: readFile(skillPath + '/SKILL.md')
+IS --> ADAPT: SKILL.md content
+note right: Read-only access via\nInspectorService
+
+ADAPT -> ADAPT: Inject SKILL.md content into prompt context
+ADAPT -> CLI: spawn(engine, ['--include', skillDir, '-p', prompt])
+CLI --> ADAPT: CLI output
+ADAPT --> RO: Final result
+RO --> IPC: publish 'run:completed'
+IPC --> VIEW: update UI with result
+
 @enduml

@@ -1,34 +1,55 @@
 @startuml
-title Custom Codex Agent - Deployment View
+title Agent Orchestrator Desktop - Deployment View
 
-node "User's Local Machine" {
-    node "Web Browser" {
-        component "Frontend (HTML/JS)" as FE
+node "User's Machine (macOS / Windows)" {
+    node "Electron App (.dmg / .exe)" {
+        component "Renderer Process\n(React + TypeScript)" as RENDERER
+        component "Main Process\n(Node.js/TypeScript)" as MAIN
+        component "Worker Thread 1\n(RunOrchestrator)" as WT1
+        component "Worker Thread 2\n(WorkflowEngine)" as WT2
     }
-    
-    node "Python Runtime (FastAPI)" {
-        component "Backend Server" as BE
-        component "Run Orchestrator" as ORC
-    }
-    
+
     node "Storage" {
-        database "SQLite DB" as DB
-        folder "Skills Directory" as SKILLS
-        folder "Agents Directory" as AGENTS
+        database "SQLite DB\n(WAL mode)" as DB
+        folder "Skills Directory\n(~/.codex/skills)" as SKILLS
+        folder "Agents Directory\n(~/.gemini/antigravity/agents)" as AGENTS
+        folder "Logs\n(macOS: ~/Library/Logs/AgentOrchestrator\nWindows: ~/AppData/Local/AgentOrchestrator/logs)" as LOGS
+        folder "App Data\n(macOS: ~/Library/Application Support/AgentOrchestrator\nWindows: ~/AppData/Local/AgentOrchestrator)" as APPDATA
     }
-    
+
     node "CLI Tools" {
-        artifact "Codex CLI" as CODEX
-        artifact "Gemini CLI" as GEMINI
+        artifact "Codex CLI\n(openai-codex)" as CODEX
+        artifact "Gemini CLI\n(google-gemini)" as GEMINI
+        artifact "OpenCode CLI\n(P5)" as OPENCODE
+        artifact "ClaudeCode CLI\n(P5)" as CLAUDECODE
     }
 }
 
-FE -- BE : HTTP / JSON
-BE -- ORC : Internal Calls
-ORC -- DB : SQL
-ORC -- SKILLS : File Access
-ORC -- AGENTS : File Access
-ORC -- CODEX : Subprocess Exec
-ORC -- GEMINI : Subprocess Exec
+RENDERER -- MAIN : contextBridge (IPC)
+MAIN -- WT1 : Worker Thread (parentPort)
+MAIN -- WT2 : Worker Thread (parentPort)
+MAIN -- DB : better-sqlite3 (via Worker)
+MAIN -- LOGS : electron-log
+MAIN -- APPDATA : electron-log, better-sqlite3
+MAIN -- SKILLS : fs-extra (via InspectorService)
+MAIN -- AGENTS : fs-extra (via InspectorService)
+MAIN -- CODEX : child_process.spawn (shell: false)
+MAIN -- GEMINI : child_process.spawn (shell: false)
+MAIN -- OPENCODE : child_process.spawn (P5, shell: false)
+MAIN -- CLAUDECODE : child_process.spawn (P5, shell: false)
+
+note top of RENDERER
+  contextIsolation: true
+  nodeIntegration: false
+  sandbox: true
+  NO direct filesystem/CLI access
+end note
+
+note top of MAIN
+  Electron Main Process
+  IPC input validation
+  Allowed commands only
+  spawn() only, no exec()
+end note
 
 @enduml

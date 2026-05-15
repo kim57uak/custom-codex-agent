@@ -1,0 +1,205 @@
+<mxfile host="65bd71144e">
+    <diagram name="System Architecture" id="d1">
+        <mxGraphModel dx="1318" dy="824" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1100" background="#FFFFFF" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="title" value="&lt;b style=&quot;font-size:18px;color:#000000;&quot;&gt;Agent Orchestrator Desktop — System Architecture&lt;/b&gt;&lt;br/&gt;&lt;span style=&quot;font-size:11px;color:#333333;&quot;&gt;Electron + React + TypeScript · Planning.md §2&lt;/span&gt;" style="text;html=1;align=left;verticalAlign=middle;resizable=0;points=[];autosize=0;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="10" width="700" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp_renderer" value="Electron Renderer Process  (React · Vite · TypeScript)" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;startSize=36;fontColor=#000000;rounded=1;arcSize=6;swimlaneLine=1;separatorColor=#999999;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="70" width="1500" height="260" as="geometry"/>
+                </mxCell>
+                <mxCell id="activity_bar" value="Activity Bar" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="120" width="130" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="sidebar" value="Sidebar&#10;(Org / Console&#10;/ Workflow / Inspect)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="210" y="120" width="160" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="main_area" value="Main Area&#10;(Dashboard / Canvas)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="390" y="120" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="panel" value="Panel&#10;(xterm.js Terminal&#10;/ Output / Events)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="610" y="120" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="chat_panel" value="AI Chat&#10;Sidepanel" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="830" y="120" width="140" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="zustand" value="Zustand Stores&#10;(UI State)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="230" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="ipc_hooks" value="IPC Hooks&#10;(window.electronAPI)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="260" y="230" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec_renderer" value="contextIsolation = true&#10;nodeIntegration = false&#10;sandbox = true" style="shape=note;whiteSpace=wrap;html=1;fontSize=10;fontColor=#666666;fillColor=#f5f5f5;strokeColor=#cccccc;strokeWidth=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="120" width="210" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="ipc_boundary" value="&lt;b&gt;contextBridge  (IPC)&lt;/b&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;fontColor=#b85450;fontSize=12;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="345" width="1500" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp_main" value="Electron Main Process  (Node.js · TypeScript)" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;startSize=36;fontColor=#000000;rounded=1;arcSize=6;swimlaneLine=1;separatorColor=#999999;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="40" y="390" width="1500" height="540" as="geometry"/>
+                </mxCell>
+                <mxCell id="ipc_handlers" value="IPC Handlers&#10;(run / workflow&#10;/ inspector)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="440" width="180" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp_services" value="Services" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;startSize=36;fontColor=#000000;rounded=1;arcSize=6;swimlaneLine=1;separatorColor=#999999;fillColor=#fafafa;strokeColor=#999999;strokeWidth=1;fontStyle=0;fontSize=11;startSize=28;" parent="1" vertex="1">
+                    <mxGeometry x="60" y="535" width="200" height="325" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_config" value="ConfigReader" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="575" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_event" value="EventBroker&#10;(IPC Push)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="630" width="160" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_dashboard" value="DashboardService" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="690" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_inspector" value="InspectorService" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="745" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_filewatch" value="FileWatcher&#10;/ BackupService" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="80" y="795" width="160" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp_workers" value="Worker Threads" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;startSize=36;fontColor=#000000;rounded=1;arcSize=6;swimlaneLine=1;separatorColor=#999999;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" parent="1" vertex="1">
+                    <mxGeometry x="290" y="440" width="470" height="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="run_orch" value="RunOrchestrator&#10;(PID Registry&#10;/ CLI Spawn)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="480" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="workflow_eng" value="WorkflowEngine&#10;(State Machine&#10;/ Fan-out)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="480" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="log_transform" value="LogTransformer&#10;(50MB Ring Buffer&#10;/ Adaptive Flush)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="560" width="430" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp_cli" value="CLI Engine Adapters" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;startSize=36;fontColor=#000000;rounded=1;arcSize=6;swimlaneLine=1;separatorColor=#999999;fillColor=#fafafa;strokeColor=#999999;strokeWidth=1;fontStyle=0;fontSize=11;startSize=28;" parent="1" vertex="1">
+                    <mxGeometry x="290" y="650" width="480" height="160" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli_iface" value="EngineAdapter&#10;«interface»" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontStyle=2;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="685" width="150" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli_codex" value="CodexEngine" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="685" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli_gemini" value="GeminiEngine" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="685" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli_opencode" value="OpenCodeEngine&#10;(Phase 5)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;strokeDasharray=8 4;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="745" width="130" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="cli_claudecode" value="ClaudeCodeEngine&#10;(Phase 5)" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#000000;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;strokeDasharray=8 4;" parent="1" vertex="1">
+                    <mxGeometry x="630" y="745" width="130" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="grp_stores" value="Stores  (better-sqlite3 · WAL)" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;fontSize=13;startSize=36;fontColor=#000000;rounded=1;arcSize=6;swimlaneLine=1;separatorColor=#999999;fillColor=#fafafa;strokeColor=#999999;strokeWidth=1;fontStyle=0;fontSize=11;startSize=28;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="440" width="250" height="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="store_run" value="RunStore" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=11;fontColor=#000000;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="480" width="210" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="store_workflow" value="WorkflowStore" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=11;fontColor=#000000;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="570" width="210" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="sec_main" value="ALLOWED_COMMANDS:&#10;['codex', 'gemini']&#10;shell: false&#10;Env sanitization" style="shape=note;whiteSpace=wrap;html=1;fontSize=10;fontColor=#666666;fillColor=#f5f5f5;strokeColor=#cccccc;strokeWidth=1;backgroundOutline=1;size=15;" parent="1" vertex="1">
+                    <mxGeometry x="1300" y="440" width="210" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="ext_codex_cli" value="codex CLI" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#FFFFFF;fillColor=#333333;strokeColor=#000000;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="310" y="960" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ext_gemini_cli" value="gemini CLI" style="rounded=1;whiteSpace=wrap;html=1;fontSize=11;fontColor=#FFFFFF;fillColor=#333333;strokeColor=#000000;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="960" width="130" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="ext_sqlite" value="SQLite DB&#10;(~/Library/Application Support/)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fontSize=10;fontColor=#000000;fillColor=#f5f5f5;strokeColor=#999999;strokeWidth=1.5;" parent="1" vertex="1">
+                    <mxGeometry x="820" y="960" width="250" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="legend" value="&lt;b&gt;Legend&lt;/b&gt;&lt;br/&gt;&lt;font color=&quot;#9673a6&quot;&gt;■&lt;/font&gt; UI Components  &lt;font color=&quot;#d6b656&quot;&gt;■&lt;/font&gt; State  &lt;font color=&quot;#b85450&quot;&gt;■&lt;/font&gt; IPC  &lt;font color=&quot;#82b366&quot;&gt;■&lt;/font&gt; Services  &lt;font color=&quot;#6c8ebf&quot;&gt;■&lt;/font&gt; Adapters  &lt;font color=&quot;#d79b00&quot;&gt;■&lt;/font&gt; Workers / DB  &lt;font color=&quot;#333333&quot;&gt;■&lt;/font&gt; External CLI" style="text;html=1;align=left;verticalAlign=middle;fontSize=10;fontColor=#666666;fillColor=#fafafa;strokeColor=#cccccc;rounded=1;strokeWidth=1;" parent="1" vertex="1">
+                    <mxGeometry x="1100" y="960" width="440" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="activity_bar" target="sidebar" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="sidebar" target="main_area" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="sidebar" target="panel" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="main_area" target="zustand" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="panel" target="zustand" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="chat_panel" target="zustand" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="zustand" target="ipc_hooks" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" value="invoke" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#b85450;fontColor=#000000;fontSize=10;dashed=0;labelBackgroundColor=#FFFFFF;" parent="1" source="ipc_hooks" target="ipc_boundary" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" value="handle" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=3;strokeColor=#b85450;fontColor=#000000;fontSize=10;dashed=0;labelBackgroundColor=#FFFFFF;" parent="1" source="ipc_boundary" target="ipc_handlers" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="ipc_handlers" target="run_orch" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="ipc_handlers" target="workflow_eng" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="ipc_handlers" target="svc_config" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="ipc_handlers" target="svc_inspector" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="ipc_handlers" target="svc_dashboard" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e15" value="delegate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="workflow_eng" target="run_orch" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e16" value="spawn" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="run_orch" target="cli_iface" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="cli_iface" target="cli_codex" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e18" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="cli_iface" target="cli_gemini" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e19" value="stdout/stderr" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="cli_iface" target="log_transform" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e20" value="parsed logs" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="log_transform" target="svc_event" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e21" value="push" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="svc_event" target="ipc_handlers" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e22" value="write" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#d79b00;fontColor=#000000;fontSize=9;dashed=1;dashPattern=8 4;labelBackgroundColor=#FFFFFF;" parent="1" source="run_orch" target="store_run" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e23" value="write" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#d79b00;fontColor=#000000;fontSize=9;dashed=1;dashPattern=8 4;labelBackgroundColor=#FFFFFF;" parent="1" source="workflow_eng" target="store_workflow" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e24" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="svc_inspector" target="svc_filewatch" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e25" value="child_process.spawn" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="cli_codex" target="ext_codex_cli" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e26" value="child_process.spawn" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#666666;fontColor=#000000;fontSize=9;labelBackgroundColor=#FFFFFF;" parent="1" source="cli_gemini" target="ext_gemini_cli" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e27" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#d79b00;fontColor=#000000;fontSize=9;dashed=1;dashPattern=8 4;labelBackgroundColor=#FFFFFF;" parent="1" source="store_run" target="ext_sqlite" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e28" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=1.5;strokeColor=#d79b00;fontColor=#000000;fontSize=9;dashed=1;dashPattern=8 4;labelBackgroundColor=#FFFFFF;" parent="1" source="store_workflow" target="ext_sqlite" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

@@ -1,60 +1,115 @@
 @startuml
-title Custom Codex Agent - Class Architecture
+title Agent Orchestrator Desktop - System Architecture
 
-package "API Layer" {
-    class api_routes {
-        +retry_run()
-        +retry_workflow_run()
+package "Renderer Process (React/TypeScript)" as Renderer {
+    rectangle "React Shell" {
+        component "ActivityBar" as AB
+        component "Sidebar" as SB
+        component "MainArea" as MA
+        component "Panel" as PN
+        component "ChatSidepanel" as CH
+    }
+
+    rectangle "State & IPC" {
+        component "Zustand Stores" as ZS
+        component "IPC Hooks" as IH
+    }
+
+    rectangle "Views" {
+        component "OrgView" as OV
+        component "DashboardView" as DV
+        component "ConsoleView" as CV
+        component "WorkflowView" as WV
+        component "InspectorView" as IV
+    }
+
+    AB ---> SB
+    SB ---> MA
+    PN ---> MA
+    CH ---> MA
+    OV --> ZS
+    DV --> ZS
+    CV --> ZS
+    WV --> ZS
+    IV --> ZS
+    ZS --> IH
+}
+
+package "Main Process (Node.js/TypeScript)" as Main {
+    rectangle "IPC Handlers" {
+        component "run-handlers" as RH
+        component "workflow-handlers" as WH
+        component "inspector-handlers" as IH
+    }
+
+    rectangle "Services" {
+        component "ConfigReader" as CR
+        component "EventBroker" as EB
+        component "DashboardService" as DS
+        component "InspectorService" as IS
+        component "BackupService" as BS
+        component "FileWatcher" as FW
+    }
+
+    rectangle "CLI Adapters" {
+        component "EngineAdapter (interface)" as EA
+        component "CodexEngine" as CE
+        component "GeminiEngine" as GE
+        component "OpenCodeEngine" as OC
+        component "ClaudeCodeEngine" as CC
+    }
+
+    note right of OC
+      Phase 5
+    end note
+    note right of CC
+      Phase 5
+    end note
+
+    rectangle "Stores" {
+        component "RunStore" as RS
+        component "WorkflowStore" as WS
     }
 }
 
-package "Core Services" {
-    class RunOrchestrator {
-        - _settings: AppSettings
-        - _store: RunStore
-        - _engine_factory: EngineAdapterFactory
-        +create_run(engine)
-        +retry_run(run_id, engine)
-    }
-
-    class WorkflowOrchestrator {
-        - _run_orchestrator: RunOrchestrator
-        +create_workflow_run(engine)
-        +retry_workflow_run(engine)
-    }
-
-    class RunStore {
-        +create_run(engine)
-        +get_run(run_id)
-    }
+package "Worker Threads" as WT {
+    component "RunOrchestrator" as RO
+    component "WorkflowEngine" as WE
 }
 
-package "Engine Abstraction" {
-    class EngineAdapterFactory {
-        - _default: EngineType
-        +get_adapter(engine_name)
-    }
+Renderer --> Main : contextBridge (IPC)
+Main --> IH : ipcMain.handle()
+IH --> RH
+IH --> WH
+IH --> IS
+RH --> RO
+WH --> WE
+RO --> EA
+RO --> RS
+WE --> WS
+EA --> CE
+EA --> GE
+EA --> OC
+EA --> CC
+RO --> EB
+WE --> EB
+RH --> CR
+RH --> DS
+IS --> FW
+IS --> BS
 
-    interface EngineAdapter {
-        +execute_run(prompt)
-    }
+note top of Renderer
+  Security: contextIsolation=true
+  nodeIntegration=false
+  sandbox=true
+  NO direct fs/child_process
+end note
 
-    class GeminiEngineAdapter implements EngineAdapter
-    class CodexEngineAdapter implements EngineAdapter
-}
-
-package "Configuration" {
-    class AppSettings {
-        +default_engine: EngineType
-    }
-}
-
-api_routes --> RunOrchestrator
-api_routes --> WorkflowOrchestrator
-WorkflowOrchestrator --> RunOrchestrator
-RunOrchestrator --> RunStore
-RunOrchestrator --> EngineAdapterFactory
-EngineAdapterFactory --> EngineAdapter
-RunOrchestrator --> AppSettings
+note top of Main
+  Trusted process
+  ALLOWED_COMMANDS = ['codex', 'gemini']
+  Shell injection prevention
+  spawn() only, shell: false
+end note
 
 @enduml

@@ -1,0 +1,1934 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="aurora">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Orchestrator — Design System Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN TOKENS — Aurora Dark Theme
+   Planning.md §17.4 Color System
+   ============================================================ */
+:root[data-theme="aurora"] {
+  --bg-primary: #0d0d1a;
+  --bg-secondary: #1a1a2e;
+  --bg-tertiary: #16213e;
+  --bg-surface: #1e1e36;
+  --bg-overlay: rgba(0,0,0,0.5);
+  --text-primary: #e0e0ff;
+  --text-secondary: #a0a0cc;
+  --text-tertiary: #7070aa;
+  --text-inverse: #0d0d1a;
+  --accent-primary: #a855f7;
+  --accent-secondary: #c084fc;
+  --accent-tertiary: #e9d5ff;
+  --accent-border: #7c3aed;
+  --border-primary: #2a2a4a;
+  --border-secondary: #1f1f3a;
+  --status-success: #22c55e;
+  --status-warning: #f59e0b;
+  --status-error: #ef4444;
+  --status-info: #3b82f6;
+  --status-running: #a855f7;
+  --focus-ring: rgba(168,85,247,0.4);
+  --selection-bg: rgba(168,85,247,0.15);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --font-ui: 'Inter', 'SF Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'DM Mono', 'SF Mono', monospace;
+
+  --activity-bar-w: 48px;
+  --sidebar-w: 260px;
+  --chat-w: 320px;
+  --status-bar-h: 22px;
+  --panel-min-h: 120px;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-ui);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ============================================================
+   APP SHELL
+   Planning.md §17.1 Layout & §17.2 VS Code Reference
+   ============================================================ */
+.app-shell {
+  display: grid;
+  height: 100vh;
+  grid-template-columns: var(--activity-bar-w) var(--sidebar-w) 1fr var(--chat-w);
+  grid-template-rows: 1fr var(--panel-min-h) var(--status-bar-h);
+  grid-template-areas:
+    "activity sidebar main chat"
+    "activity panel   panel panel"
+    "status  status  status status";
+}
+
+/* ============================================================
+   ACTIVITY BAR — 48px fixed
+   Planning.md §17.2, GAP #5
+   ============================================================ */
+.activity-bar {
+  grid-area: activity;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-secondary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-2) 0;
+  gap: var(--space-1);
+}
+
+.activity-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 150ms ease-out;
+  position: relative;
+}
+
+.activity-icon:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+
+.activity-icon.active {
+  color: var(--accent-primary);
+}
+
+.activity-icon.active::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: var(--accent-primary);
+  border-radius: 0 2px 2px 0;
+}
+
+.activity-icon .badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--status-error);
+  font-size: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+}
+
+.activity-bar-spacer {
+  flex: 1;
+}
+
+/* ============================================================
+   SIDEBAR
+   Planning.md §17.5 Typography
+   ============================================================ */
+.sidebar {
+  grid-area: sidebar;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-secondary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-tabs {
+  display: flex;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-primary);
+  gap: var(--space-4);
+}
+
+.sidebar-tab {
+  padding: var(--space-2) 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 150ms ease-out;
+}
+
+.sidebar-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+.sidebar-section-header {
+  padding: var(--space-3) var(--space-4) var(--space-1);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+/* ============================================================
+   TREE VIEW (Organization / Inspector)
+   ============================================================ */
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 80ms ease;
+}
+
+.tree-item:hover {
+  background: var(--bg-surface);
+}
+
+.tree-item.active {
+  background: var(--selection-bg);
+  color: var(--accent-tertiary);
+}
+
+.tree-item .icon {
+  width: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+.tree-item .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: auto;
+}
+
+.tree-item .status-dot.online { background: var(--status-success); }
+.tree-item .status-dot.offline { background: var(--text-tertiary); }
+.tree-item .status-dot.running { background: var(--status-running); animation: pulse 1.5s infinite; }
+
+.tree-item .chevron {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  transition: transform 150ms ease;
+}
+
+.tree-item .chevron.open {
+  transform: rotate(90deg);
+}
+
+.tree-children {
+  padding-left: var(--space-4);
+}
+
+/* ============================================================
+   MAIN AREA
+   ============================================================ */
+.main-area {
+  grid-area: main;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.main-toolbar {
+  display: flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--border-secondary);
+  gap: var(--space-2);
+  min-height: 36px;
+}
+
+.main-toolbar .title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.main-toolbar .subtitle {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-left: var(--space-2);
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ============================================================
+   EMPTY STATES — Planning.md §17.8
+   ============================================================ */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.empty-state .illustration {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.empty-state h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.empty-state p {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.empty-state .btn-cta {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.empty-state .btn-cta:hover {
+  background: var(--accent-secondary);
+}
+
+/* ============================================================
+   CONSOLE VIEW — xterm.js + Run Config
+   ============================================================ */
+.run-config {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.run-config-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.run-config label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  min-width: 70px;
+}
+
+.run-config select,
+.run-config input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.run-config select:focus,
+.run-config input:focus {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.btn-run {
+  padding: var(--space-2) var(--space-5);
+  background: var(--status-success);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btn-run:hover {
+  filter: brightness(1.15);
+  box-shadow: var(--shadow-md);
+}
+
+.terminal-output {
+  background: #0a0a14;
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: var(--space-4);
+  min-height: 240px;
+  color: #22c55e;
+  overflow-y: auto;
+}
+
+.terminal-output .line { white-space: pre-wrap; word-break: break-all; }
+.terminal-output .prompt { color: #22c55e; }
+.terminal-output .output { color: #a0a0cc; }
+.terminal-output .error { color: #ef4444; }
+.terminal-output .cursor::after {
+  content: '▊';
+  animation: blink 1s step-end infinite;
+  color: #22c55e;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* ============================================================
+   DASHBOARD VIEW — Metrics Cards
+   ============================================================ */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.metric-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  cursor: pointer;
+}
+
+.metric-card:hover {
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-md);
+}
+
+.metric-card .metric-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+}
+
+.metric-card .metric-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-card .metric-change {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.metric-card .metric-change.up { color: var(--status-success); }
+.metric-card .metric-change.down { color: var(--status-error); }
+
+.mini-chart {
+  height: 48px;
+  margin-top: var(--space-2);
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.mini-chart .bar {
+  flex: 1;
+  background: var(--accent-primary);
+  border-radius: 1px 1px 0 0;
+  opacity: 0.6;
+  transition: opacity 150ms ease;
+}
+
+.mini-chart .bar:hover { opacity: 1; }
+
+/* ============================================================
+   WORKFLOW VIEW — SVG Canvas
+   ============================================================ */
+.workflow-canvas {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-height: 300px;
+}
+
+.workflow-canvas svg {
+  width: 100%;
+  height: 100%;
+}
+
+.workflow-node {
+  fill: var(--bg-surface);
+  stroke: var(--border-primary);
+  stroke-width: 1.5;
+  rx: 8;
+  ry: 8;
+  transition: stroke 150ms ease;
+  cursor: pointer;
+}
+
+.workflow-node:hover {
+  stroke: var(--accent-primary);
+  filter: drop-shadow(0 0 8px var(--focus-ring));
+}
+
+.workflow-node.active {
+  stroke: var(--accent-primary);
+  stroke-width: 2;
+}
+
+.workflow-edge {
+  stroke: var(--border-primary);
+  stroke-width: 1.5;
+  fill: none;
+  marker-end: url(#arrowhead);
+}
+
+.workflow-edge.completed {
+  stroke: var(--status-success);
+}
+
+/* ============================================================
+   INSPECTOR VIEW — Monaco-style
+   ============================================================ */
+.inspector-split {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  flex: 1;
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  height: 100%;
+}
+
+.file-browser {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 80ms ease;
+}
+
+.file-item:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.file-item .name { flex: 1; }
+.file-item .lang {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.code-editor {
+  background: #0a0a14;
+  padding: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-x: auto;
+  overflow-y: auto;
+  color: var(--text-primary);
+}
+
+.code-editor .line-number {
+  display: inline-block;
+  width: 32px;
+  text-align: right;
+  margin-right: var(--space-3);
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.code-editor .keyword { color: #c084fc; }
+.code-editor .string { color: #22c55e; }
+.code-editor .comment { color: #7070aa; font-style: italic; }
+.code-editor .type { color: #3b82f6; }
+.code-editor .func { color: #f59e0b; }
+
+/* ============================================================
+   PANEL — Terminal / Output / Events / Problems
+   Planning.md §17.2, GAP #4 (resize handles)
+   ============================================================ */
+.panel {
+  grid-area: panel;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-bottom: 1px solid var(--border-primary);
+  min-height: 28px;
+  background: var(--bg-tertiary);
+}
+
+.panel-tab {
+  padding: var(--space-1) var(--space-3);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.panel-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.panel-tab .count {
+  background: var(--bg-surface);
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.panel-content .event-entry {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border-secondary);
+  display: flex;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+}
+
+.panel-content .event-entry .time {
+  color: var(--text-tertiary);
+  min-width: 70px;
+}
+
+/* Resize handle — GAP #4 */
+.panel-resize-handle {
+  height: 4px;
+  background: transparent;
+  cursor: ns-resize;
+  position: absolute;
+  top: -2px;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle:active {
+  background: var(--accent-primary);
+}
+
+/* ============================================================
+   CHAT SIDEPANEL
+   Planning.md GAP #2 (all views accessible)
+   ============================================================ */
+.chat-sidepanel {
+  grid-area: chat;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-header {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.chat-msg {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 90%;
+}
+
+.chat-msg.user {
+  background: var(--accent-primary);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-msg.agent {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  align-self: flex-start;
+  border-bottom-left-radius: 2px;
+  border: 1px solid var(--border-primary);
+}
+
+.chat-input {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-primary);
+}
+
+.chat-input input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.chat-input input:focus {
+  outline: none;
+  border-color: var(--accent-border);
+}
+
+.chat-input button {
+  padding: var(--space-2) var(--space-3);
+  background: var(--accent-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 150ms ease;
+}
+
+.chat-input button:hover {
+  background: var(--accent-secondary);
+}
+
+/* ============================================================
+   STATUS BAR — 22px (GAP #1)
+   Planning.md §17.3 GAP #1
+   ============================================================ */
+.status-bar {
+  grid-area: status;
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  font-size: 12px;
+  color: var(--text-secondary);
+  gap: var(--space-4);
+}
+
+.status-bar .left,
+.status-bar .right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.status-bar .right {
+  margin-left: auto;
+}
+
+.status-engine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.status-engine .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.status-engine .dot.online { background: var(--status-success); }
+.status-engine .dot.offline { background: var(--text-tertiary); }
+
+.status-jobs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  background: var(--bg-surface);
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.status-version {
+  color: var(--text-tertiary);
+}
+
+/* ============================================================
+   LOADING STATE
+   ============================================================ */
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-primary);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================================
+   VIEW SELECTOR — toggles between views
+   ============================================================ */
+.view-selector {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.view-btn {
+  padding: var(--space-1) var(--space-3);
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all 150ms ease;
+}
+
+.view-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+
+.view-btn.active {
+  color: var(--accent-primary);
+  background: var(--selection-bg);
+}
+
+/* View containers */
+.view { display: none; }
+.view.active { display: flex; flex-direction: column; flex: 1; }
+
+/* ============================================================
+   LOADING STATE DEMO (for Dashboard)
+   ============================================================ */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-secondary) 50%, var(--bg-surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-card {
+  height: 100px;
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================================
+   TOOLTIP — Planning.md §17.7
+   ============================================================ */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 11px;
+  border-radius: 3px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+  border: 1px solid var(--border-primary);
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+}
+
+/* ============================================================
+   RESPONSIVE — minimal handling for 1024px
+   Planning.md §17.6, responsive reminder
+   ============================================================ */
+@media (max-width: 1024px) {
+  .app-shell {
+    grid-template-columns: var(--activity-bar-w) var(--sidebar-w) 1fr;
+    grid-template-areas:
+      "activity sidebar main"
+      "activity panel   panel"
+      "status  status  status";
+  }
+  .chat-sidepanel { display: none; }
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-primary); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ===== ACTIVITY BAR ===== -->
+  <nav class="activity-bar">
+    <div class="activity-icon active" data-tooltip="Organization (Cmd+1)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    </div>
+    <div class="activity-icon" data-tooltip="Dashboard (Cmd+2)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    </div>
+    <div class="activity-icon" data-tooltip="Console (Cmd+3)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+    </div>
+    <div class="activity-icon" data-tooltip="Workflow (Cmd+4)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+    </div>
+    <div class="activity-icon" data-tooltip="Inspector (Cmd+5)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <div class="activity-bar-spacer"></div>
+    <div class="activity-icon" data-tooltip="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </div>
+  </nav>
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside class="sidebar">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active">Agents</div>
+      <div class="sidebar-tab">System</div>
+    </div>
+    <div class="sidebar-content">
+      <div class="sidebar-section-header">Running</div>
+      <div class="tree-item active">
+        <span class="chevron open">&#9654;</span>
+        <span class="icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </span>
+        <span>codex-agent</span>
+        <span class="status-dot running"></span>
+      </div>
+      <div class="tree-children">
+        <div class="tree-item">
+          <span class="icon" style="font-size:10px;">&#128196;</span>
+          <span>run-418</span>
+          <span class="status-dot running"></span>
+        </div>
+        <div class="tree-item">
+          <span class="icon" style="font-size:10px;">&#128196;</span>
+          <span>run-417</span>
+          <span class="status-dot online"></span>
+        </div>
+      </div>
+      <div class="sidebar-section-header" style="margin-top: var(--space-3);">Idle</div>
+      <div class="tree-item">
+        <span class="chevron">&#9654;</span>
+        <span class="icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </span>
+        <span>gemini-agent</span>
+        <span class="status-dot online"></span>
+      </div>
+      <div class="tree-item">
+        <span class="chevron">&#9654;</span>
+        <span class="icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </span>
+        <span>opencode-agent (P5)</span>
+        <span class="status-dot offline"></span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN AREA ===== -->
+  <main class="main-area">
+    <div class="view-selector">
+      <button class="view-btn active" data-view="console">Console</button>
+      <button class="view-btn" data-view="dashboard">Dashboard</button>
+      <button class="view-btn" data-view="workflow">Workflow</button>
+      <button class="view-btn" data-view="inspector">Inspector</button>
+      <button class="view-btn" data-view="org">Organization</button>
+      <button class="view-btn" data-view="empty">Empty States</button>
+    </div>
+
+    <!-- Console View -->
+    <div class="view active" id="view-console">
+      <div class="main-toolbar">
+        <span class="title">Console</span>
+        <span class="subtitle">codex-agent</span>
+      </div>
+      <div class="main-content">
+        <div class="run-config">
+          <div class="run-config-row">
+            <label>Engine</label>
+            <select>
+              <option>Codex CLI (openai-codex)</option>
+              <option selected>Gemini CLI (google-gemini)</option>
+              <option disabled>OpenCode CLI (Phase 5)</option>
+              <option disabled>ClaudeCode CLI (Phase 5)</option>
+            </select>
+          </div>
+          <div class="run-config-row">
+            <label>Workspace</label>
+            <input type="text" value="/Users/user/projects/my-app" placeholder="Workspace path">
+          </div>
+          <div class="run-config-row">
+            <label>Prompt</label>
+            <input type="text" value="Refactor the authentication module to use JWT tokens" placeholder="Enter prompt...">
+            <button class="btn-run">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run
+            </button>
+          </div>
+        </div>
+        <div class="terminal-output">
+          <div class="line"><span class="prompt">$</span> gemini -p "Refactor auth module to use JWT" --workspace /Users/user/projects/my-app</div>
+          <div class="line output">[2026-05-14 14:32:18] Initializing Gemini Engine v2.1.0...</div>
+          <div class="line output">[2026-05-14 14:32:19] Loading project context...</div>
+          <div class="line output">[2026-05-14 14:32:21] Analyzing auth module dependencies...</div>
+          <div class="line output">[2026-05-14 14:32:24] Generating JWT implementation...</div>
+          <div class="line output">  ✓ Created src/auth/jwt.ts</div>
+          <div class="line output">  ✓ Updated src/auth/middleware.ts</div>
+          <div class="line output">  ✓ Updated src/config/index.ts</div>
+          <div class="line output">[2026-05-14 14:32:28] Running tests...</div>
+          <div class="line output">  ✓ 12 passed, 0 failed</div>
+          <div class="line"><span class="prompt">$</span> <span class="cursor"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard View -->
+    <div class="view" id="view-dashboard">
+      <div class="main-toolbar">
+        <span class="title">Dashboard</span>
+        <span class="subtitle">Last 7 days</span>
+      </div>
+      <div class="main-content">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Total Runs</div>
+            <div class="metric-value">247</div>
+            <div class="metric-change up">&#9650; 12% vs last week</div>
+            <div class="mini-chart">
+              <div class="bar" style="height:65%"></div>
+              <div class="bar" style="height:45%"></div>
+              <div class="bar" style="height:80%"></div>
+              <div class="bar" style="height:55%"></div>
+              <div class="bar" style="height:90%"></div>
+              <div class="bar" style="height:70%"></div>
+              <div class="bar" style="height:85%"></div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-value">94%</div>
+            <div class="metric-change up">&#9650; 3% vs last week</div>
+            <div class="mini-chart">
+              <div class="bar" style="height:88%; background:var(--status-success)"></div>
+              <div class="bar" style="height:92%; background:var(--status-success)"></div>
+              <div class="bar" style="height:96%; background:var(--status-success)"></div>
+              <div class="bar" style="height:90%; background:var(--status-success)"></div>
+              <div class="bar" style="height:95%; background:var(--status-success)"></div>
+              <div class="bar" style="height:98%; background:var(--status-success)"></div>
+              <div class="bar" style="height:94%; background:var(--status-success)"></div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Avg Duration</div>
+            <div class="metric-value">1.2m</div>
+            <div class="metric-change down">&#9660; 8% slower</div>
+            <div class="mini-chart">
+              <div class="bar" style="height:40%; background:var(--status-warning)"></div>
+              <div class="bar" style="height:55%; background:var(--status-warning)"></div>
+              <div class="bar" style="height:35%; background:var(--status-warning)"></div>
+              <div class="bar" style="height:60%; background:var(--status-warning)"></div>
+              <div class="bar" style="height:45%; background:var(--status-warning)"></div>
+              <div class="bar" style="height:50%; background:var(--status-warning)"></div>
+              <div class="bar" style="height:55%; background:var(--status-warning)"></div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Engine Usage</div>
+            <div class="metric-value">64%</div>
+            <div class="metric-change up">Gemini dominant</div>
+            <div class="mini-chart">
+              <div class="bar" style="height:70%; background:var(--status-info)"></div>
+              <div class="bar" style="height:60%; background:var(--status-info)"></div>
+              <div class="bar" style="height:75%; background:var(--status-info)"></div>
+              <div class="bar" style="height:55%; background:var(--status-info)"></div>
+              <div class="bar" style="height:80%; background:var(--status-info)"></div>
+              <div class="bar" style="height:65%; background:var(--status-info)"></div>
+              <div class="bar" style="height:70%; background:var(--status-info)"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workflow View -->
+    <div class="view" id="view-workflow">
+      <div class="main-toolbar">
+        <span class="title">Workflow</span>
+        <span class="subtitle">deploy-pipeline</span>
+      </div>
+      <div class="main-content" style="flex:1;">
+        <div class="run-config-row" style="margin-bottom: var(--space-3);">
+          <select style="flex: 0 0 auto; padding: var(--space-2) var(--space-3); background: var(--bg-surface); border: 1px solid var(--border-primary); border-radius: var(--radius-sm); color: var(--text-primary); font-size:13px;">
+            <option>deploy-pipeline</option>
+            <option>code-review-flow</option>
+            <option>test-generator</option>
+          </select>
+          <button class="btn-run" style="background: var(--accent-primary);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Run Workflow
+          </button>
+        </div>
+        <div class="workflow-canvas">
+          <svg viewBox="0 0 600 280">
+            <defs>
+              <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#2a2a4a"/>
+              </marker>
+              <marker id="arrowhead-completed" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#22c55e"/>
+              </marker>
+            </defs>
+
+            <!-- Edge connections -->
+            <path class="workflow-edge completed" d="M120,50 L280,50" marker-end="url(#arrowhead-completed)"/>
+            <path class="workflow-edge completed" d="M120,50 L120,170 L280,170" marker-end="url(#arrowhead-completed)"/>
+            <path class="workflow-edge" d="M440,50 L440,170 L280,170" marker-end="url(#arrowhead)"/>
+            <path class="workflow-edge" d="M440,50 L520,140" marker-end="url(#arrowhead)"/>
+
+            <!-- Step 1: Lint -->
+            <g transform="translate(40, 20)">
+              <rect class="workflow-node active" x="0" y="0" width="160" height="60"/>
+              <text x="80" y="25" text-anchor="middle" fill="#e0e0ff" font-size="12" font-weight="600">Lint & Format</text>
+              <text x="80" y="43" text-anchor="middle" fill="#22c55e" font-size="11">&#10003; Completed</text>
+            </g>
+
+            <!-- Step 2: Test -->
+            <g transform="translate(40, 140)">
+              <rect class="workflow-node" x="0" y="0" width="160" height="60" stroke="#22c55e"/>
+              <text x="80" y="25" text-anchor="middle" fill="#e0e0ff" font-size="12" font-weight="600">Run Tests</text>
+              <text x="80" y="43" text-anchor="middle" fill="#22c55e" font-size="11">&#10003; 12/12 passed</text>
+            </g>
+
+            <!-- Step 3: Build -->
+            <g transform="translate(280, 20)">
+              <rect class="workflow-node" x="0" y="0" width="160" height="60" stroke="#22c55e" stroke-dasharray="4,3"/>
+              <text x="80" y="25" text-anchor="middle" fill="#e0e0ff" font-size="12" font-weight="600">Build</text>
+              <text x="80" y="43" text-anchor="middle" fill="#a0a0cc" font-size="11">Pending...</text>
+            </g>
+
+            <!-- Step 4: Deploy -->
+            <g transform="translate(280, 140)">
+              <rect class="workflow-node" x="0" y="0" width="160" height="60" fill="#1e1e36" opacity="0.5"/>
+              <text x="80" y="25" text-anchor="middle" fill="#7070aa" font-size="12" font-weight="600">Deploy</text>
+              <text x="80" y="43" text-anchor="middle" fill="#7070aa" font-size="11">Awaiting Build</text>
+            </g>
+
+            <!-- Step 5: Notify -->
+            <g transform="translate(440, 20)">
+              <rect class="workflow-node" x="0" y="0" width="160" height="60" fill="#1e1e36" opacity="0.5"/>
+              <text x="80" y="25" text-anchor="middle" fill="#7070aa" font-size="12" font-weight="600">Notify</text>
+              <text x="80" y="43" text-anchor="middle" fill="#7070aa" font-size="11">Awaiting Deploy</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector View -->
+    <div class="view" id="view-inspector">
+      <div class="main-toolbar">
+        <span class="title">Inspector</span>
+        <span class="subtitle">skills/code-review/SKILL.md</span>
+      </div>
+      <div class="main-content" style="flex:1;">
+        <div class="inspector-split">
+          <div class="file-browser">
+            <div class="file-item"><span class="name" style="font-weight:600;">agents/</span></div>
+            <div class="file-item" style="padding-left:24px;"><span class="name">codex-agent</span><span class="lang">dir</span></div>
+            <div class="file-item" style="padding-left:24px;"><span class="name">gemini-agent</span><span class="lang">dir</span></div>
+            <div class="file-item" style="padding-left:24px;"><span class="name">opencode-agent</span><span class="lang">dir</span></div>
+            <div class="file-item"><span class="name" style="font-weight:600;">skills/</span></div>
+            <div class="file-item" style="padding-left:24px;"><span class="name">code-review</span><span class="lang">dir</span></div>
+            <div class="file-item active" style="padding-left:36px;"><span class="name">SKILL.md</span><span class="lang">md</span></div>
+            <div class="file-item" style="padding-left:24px;"><span class="name">deploy</span><span class="lang">dir</span></div>
+            <div class="file-item" style="padding-left:24px;"><span class="name">test-gen</span><span class="lang">dir</span></div>
+            <div class="file-item" style="padding-left:24px;"><span class="name">refactor</span><span class="lang">dir</span></div>
+          </div>
+          <div class="code-editor">
+            <div><span class="line-number">1</span><span class="comment"># Code Review Skill</span></div>
+            <div><span class="line-number">2</span></div>
+            <div><span class="line-number">3</span><span class="keyword">description</span>: <span class="string">"Automated code review for PRs"</span></div>
+            <div><span class="line-number">4</span><span class="keyword">triggers</span>:</div>
+            <div><span class="line-number">5</span>  - <span class="string">"review this PR"</span></div>
+            <div><span class="line-number">6</span>  - <span class="string">"code review"</span></div>
+            <div><span class="line-number">7</span></div>
+            <div><span class="line-number">8</span><span class="keyword">steps</span>:</div>
+            <div><span class="line-number">9</span>  - <span class="func">analyze_diff</span>()</div>
+            <div><span class="line-number">10</span>  - <span class="func">check_sql_safety</span>()</div>
+            <div><span class="line-number">11</span>  - <span class="func">check_llm_boundary</span>()</div>
+            <div><span class="line-number">12</span>  - <span class="func">generate_report</span>()</div>
+            <div><span class="line-number">13</span></div>
+            <div><span class="line-number">14</span><span class="keyword">output</span>: <span class="type">ReviewReport</span></div>
+            <div><span class="line-number">15</span><span class="keyword">severity</span>: <span class="string">"critical | high | medium | low"</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Organization View — actual 77 agents, 12 departments -->
+    <div class="view" id="view-org">
+      <div class="main-toolbar">
+        <span class="title">Organization</span>
+        <span class="subtitle">77 Agents · 110 Skills · 12 Departments</span>
+      </div>
+      <div class="main-content" style="gap:0; padding:0;">
+        <!-- Org header stats -->
+        <div style="display:flex; gap:var(--space-3); padding:var(--space-3) var(--space-4); border-bottom:1px solid var(--border-primary); flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:var(--space-2); font-size:12px; color:var(--text-secondary);">
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:var(--accent-border); color:white; font-weight:700; font-size:11px; border:2px solid var(--accent-primary);">P</span>
+            <span>PC Owner (dolpaks)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:var(--space-2); font-size:12px; color:var(--text-secondary);">
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:var(--accent-primary); color:white; font-weight:700; font-size:11px;">R</span>
+            <span>Router Agent (&#xBE44;&#xC11C;&#xC2E4;)</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:var(--space-2); font-size:12px; color:var(--text-secondary);">
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; background:var(--bg-surface); color:var(--text-primary); font-weight:600; font-size:11px; border:1px solid var(--border-primary);">12</span>
+            <span>Departments</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:var(--space-2); font-size:12px; color:var(--text-secondary);">
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; background:var(--bg-surface); color:var(--text-primary); font-weight:600; font-size:11px; border:1px solid var(--border-primary);">77</span>
+            <span>Agents</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:var(--space-2); font-size:12px; color:var(--text-secondary);">
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; background:var(--bg-surface); color:var(--text-primary); font-weight:600; font-size:11px; border:1px solid var(--border-primary);">110</span>
+            <span>Skills</span>
+          </div>
+        </div>
+
+        <!-- Org canvas — scrollable horizontal + vertical -->
+        <div style="overflow:auto; flex:1; padding:var(--space-4);" id="org-canvas">
+          <div style="display:flex; flex-direction:column; gap:var(--space-3); position:relative;">
+
+          <!-- Row 0: PC Owner (top) -->
+          <div style="display:flex; justify-content:center; margin-bottom:var(--space-1);">
+            <div style="width:280px; text-align:center; padding:var(--space-4) var(--space-5); background:linear-gradient(135deg, #2a1a4e, #1a1a3e); border-radius:var(--radius-lg); border:2px solid var(--accent-border); position:relative; box-shadow:var(--shadow-md), 0 0 30px rgba(168,85,247,0.1);">
+              <div style="font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--accent-secondary); margin-bottom:4px;">이 PC의 주인</div>
+              <div style="font-size:18px; font-weight:700; color:white;">dolpaks</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-top:2px;">System Owner</div>
+              <div style="display:flex; justify-content:center; gap:var(--space-2); margin-top:var(--space-2);">
+                <span style="background:var(--bg-surface); padding:2px 10px; border-radius:10px; font-size:10px; color:var(--text-secondary);">&#x1F3E0; 최고 의사결정권자</span>
+              </div>
+              <div style="position:absolute; bottom:-12px; left:50%; transform:translateX(-50%); width:2px; height:12px; background:var(--accent-border);"></div>
+            </div>
+          </div>
+
+          <!-- Row 1: CEO -->
+          <div style="display:flex; justify-content:center; margin-bottom:var(--space-1);">
+            <div style="width:240px; text-align:center; padding:var(--space-3) var(--space-4); background:var(--bg-surface); border-radius:var(--radius-lg); border:1px solid var(--border-primary); position:relative; box-shadow:var(--shadow-sm);">
+              <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--accent-secondary); margin-bottom:2px;">대표이사</div>
+              <div style="font-size:14px; font-weight:600; color:var(--text-primary);">CEO</div>
+              <div style="font-size:11px; color:var(--text-tertiary); margin-top:2px;">총괄 의사결정</div>
+              <div style="display:flex; justify-content:center; gap:4px; margin-top:var(--space-2);">
+                <span style="background:var(--bg-secondary); padding:2px 8px; border-radius:10px; font-size:9px; color:var(--text-tertiary);">&#x1F578; 경영 총괄</span>
+              </div>
+              <div style="position:absolute; bottom:-12px; left:50%; transform:translateX(-50%); width:2px; height:12px; background:var(--border-primary);"></div>
+            </div>
+          </div>
+
+          <!-- Row 2: Secretariat / Router Agent (between CEO and teams) -->
+          <div style="display:flex; justify-content:center; margin-bottom:var(--space-2);">
+            <div class="org-node router" style="width:220px; text-align:center; padding:var(--space-3) var(--space-4); background:var(--bg-surface); border:1px solid var(--accent-border); border-radius:var(--radius-lg); cursor:pointer; transition:all 150ms ease; position:relative; box-shadow:var(--shadow-md);"
+                 onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+              <div style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,0.7); margin-bottom:2px;">비서실</div>
+              <div style="font-size:14px; font-weight:700; color:white;">router-agent</div>
+              <div style="font-size:11px; color:rgba(255,255,255,0.8); margin-top:2px;">Keyword Router · 111 routes</div>
+              <div style="display:flex; justify-content:center; gap:4px; margin-top:var(--space-2);">
+                <span style="background:rgba(255,255,255,0.2); padding:2px 8px; border-radius:10px; font-size:9px; color:white;">&#x1F504; 대기</span>
+              </div>
+              <div style="position:absolute; bottom:-10px; left:50%; transform:translateX(-50%); width:2px; height:10px; background:var(--accent-primary); opacity:0.5;"></div>
+            </div>
+          </div>
+
+          <!-- Row 3: Department clusters (wrapping grid) -->
+          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); gap:var(--space-3); padding:var(--space-1) 0;">
+
+            <!-- Executive Office -->
+            <div class="org-department" style="flex: 0 0 360px;">
+              <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                <span style="font-size:11px; color:var(--text-tertiary); transition:transform 150ms ease;">&#x25BC;</span>
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F3E0; 경영진</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Executive</span>
+                <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">2</span>
+              </div>
+              <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">advanced-statistical-analysis-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4CA; 통계 분석 담당</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary); white-space:nowrap;">1 skill</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">founder-dashboard-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4C8; 매출 및 가입 관리</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary); white-space:nowrap;">1 skill</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Strategic Planning -->
+            <div class="org-department" style="flex: 0 0 360px;">
+              <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                <span style="font-size:11px; color:var(--text-tertiary); transition:transform 150ms ease;">&#x25BC;</span>
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F9E0; 전략 기획팀</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Strategic Planning</span>
+                <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">5</span>
+              </div>
+              <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">contract-review-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4DC; 계약 전략 검토</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">interactive-planning-doc-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4DD; 전략기획 매니저</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-running); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-autoplan-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x2699;&#xFE0F; 자동 기획 파이프라인</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-office-hours-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4A1; 전략 기획 고문</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Engineering -->
+            <div class="org-department" style="flex: 0 0 360px;">
+              <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                <span style="font-size:11px; color:var(--text-tertiary); transition:transform 150ms ease;">&#x25BC;</span>
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F4BB; 개발팀</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Engineering</span>
+                <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">5</span>
+              </div>
+              <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">agent-harness-engineering-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F527; 개발 담당</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">program-from-planning-doc-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4A0; 서비스 구현 매니저</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">requirements-code-check-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F50D; 요구사항 코드 체크</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">springboot-patterns-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4E6; 개발 담당</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-warning); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">sop-automation-runbook-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x2699;&#xFE0F; 자동화 런북</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quality -->
+            <div class="org-department" style="flex: 0 0 360px;">
+              <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                <span style="font-size:11px; color:var(--text-tertiary); transition:transform 150ms ease;">&#x25BC;</span>
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F50D; 품질 검증팀</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Quality</span>
+                <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">13</span>
+              </div>
+              <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">polyglot-code-review-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F50D; 코드 품질 리뷰어</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-investigate-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F50D; 장애 원인 분석가</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-qa-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x2705; 품질 통합 테스트</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-review-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F50D; 사전 병합 리뷰어</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div style="text-align:center; padding:var(--space-1); font-size:10px; color:var(--text-tertiary); border-top:1px dashed var(--border-secondary); margin-top:var(--space-1);">+ 9 more agents</div>
+              </div>
+            </div>
+
+            <!-- Content Assets -->
+            <div class="org-department" style="flex: 0 0 360px;">
+              <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                <span style="font-size:11px; color:var(--text-tertiary); transition:transform 150ms ease;">&#x25BC;</span>
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F4F7; 콘텐츠 자산팀</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Content Assets</span>
+                <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">8</span>
+              </div>
+              <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">doc-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4C4; 문서 담당</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">imagegen-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F5BC;&#xFE0F; 이미지 생성</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">pdf-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4C4; PDF 처리</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">pptx-generator-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4CA; 발표자료 제작</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div style="text-align:center; padding:var(--space-1); font-size:10px; color:var(--text-tertiary); border-top:1px dashed var(--border-secondary); margin-top:var(--space-1);">+ 4 more agents</div>
+              </div>
+            </div>
+
+            <!-- Platform Support -->
+            <div class="org-department" style="flex: 0 0 360px;">
+              <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                <span style="font-size:11px; color:var(--text-tertiary); transition:transform 150ms ease;">&#x25BC;</span>
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F6E0;&#xFE0F; 플랫폼 지원팀</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Platform Support</span>
+                <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">17</span>
+              </div>
+              <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">skill-creator-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4A0; 스킬 개발</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-cso-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F6E1;&#xFE0F; 보안 최고 책임자</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-context-save-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4BE; 컨텍스트 백업</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-context-restore-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4BE; 컨텍스트 복구</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div style="text-align:center; padding:var(--space-1); font-size:10px; color:var(--text-tertiary); border-top:1px dashed var(--border-secondary); margin-top:var(--space-1);">+ 13 more agents</div>
+              </div>
+            </div>
+
+            <!-- Platform Operations -->
+            <div class="org-department" style="flex: 0 0 360px;">
+              <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                <span style="font-size:11px; color:var(--text-tertiary); transition:transform 150ms ease;">&#x25BC;</span>
+                <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F680; 플랫폼 운영팀</span>
+                <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Platform Ops</span>
+                <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">10</span>
+              </div>
+              <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">run-all-sh-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x25B6;&#xFE0F; 실행 오퍼레이터</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-ship-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F6A2; 릴리스 매니저</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-retro-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4CA; 주간 개발 회고</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div class="org-agent" onmouseover="this.style.borderColor='var(--accent-primary)'" onmouseout="this.style.borderColor='var(--border-primary)'" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); cursor:pointer; transition:all 150ms ease; background:var(--bg-secondary);">
+                  <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:500; color:var(--text-primary);">gstack-scrape-agent</div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">&#x1F50D; 데이터 추출</div>
+                  </div>
+                  <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                </div>
+                <div style="text-align:center; padding:var(--space-1); font-size:10px; color:var(--text-tertiary); border-top:1px dashed var(--border-secondary); margin-top:var(--space-1);">+ 6 more agents</div>
+              </div>
+            </div>
+
+            <div class="org-department" style="flex: 0 0 360px;">
+                <div class="dept-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2) var(--space-3); background:var(--bg-surface); border-radius:var(--radius-md) var(--radius-md) 0 0; border:1px solid var(--border-primary); cursor:pointer; user-select:none;">
+                  <span style="font-size:11px; color:var(--text-tertiary);">&#x25BC;</span>
+                  <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--accent-secondary);">&#x1F4B0; 마케팅/영업/CS</span>
+                  <span style="margin-left:auto; font-size:10px; color:var(--text-tertiary);">Sales · CS</span>
+                  <span style="background:var(--bg-secondary); padding:0 7px; border-radius:8px; font-size:10px; color:var(--text-secondary);">4</span>
+                </div>
+                <div class="dept-body" style="border:1px solid var(--border-primary); border-top:none; border-radius:0 0 var(--radius-md) var(--radius-md); padding:var(--space-2); display:flex; flex-direction:column; gap:var(--space-1);">
+                  <div class="org-agent" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); background:var(--bg-secondary);">
+                    <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:12px; font-weight:500; color:var(--text-primary);">competitor-watch-agent</div>
+                      <div style="font-size:10px; color:var(--text-tertiary);">&#x1F50D; 경쟁 분석</div>
+                    </div>
+                    <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                  </div>
+                  <div class="org-agent" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); background:var(--bg-secondary);">
+                    <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:12px; font-weight:500; color:var(--text-primary);">proposal-estimate-builder-agent</div>
+                      <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4B0; 제안 견적</div>
+                    </div>
+                    <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                  </div>
+                  <div class="org-agent" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); background:var(--bg-secondary);">
+                    <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:12px; font-weight:500; color:var(--text-primary);">customer-support-playbook-agent</div>
+                      <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4AC; 고객 지원</div>
+                    </div>
+                    <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                  </div>
+                  <div class="org-agent" style="display:flex; align-items:center; gap:var(--space-2); padding:var(--space-2); border:1px solid var(--border-primary); border-radius:var(--radius-sm); background:var(--bg-secondary);">
+                    <span style="width:6px; height:6px; border-radius:50%; background:var(--status-success); flex-shrink:0;"></span>
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:12px; font-weight:500; color:var(--text-primary);">invoice-tax-workflow-agent</div>
+                      <div style="font-size:10px; color:var(--text-tertiary);">&#x1F4B3; 정산 관리</div>
+                    </div>
+                    <span style="font-size:9px; background:var(--bg-surface); padding:1px 6px; border-radius:3px; color:var(--text-tertiary);">1</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Summary card -->
+              <div style="flex: 0 0 360px; padding:var(--space-3); background:linear-gradient(135deg, var(--bg-surface), var(--bg-tertiary)); border:1px solid var(--border-primary); border-radius:var(--radius-lg); display:flex; flex-direction:column; justify-content:center; gap:var(--space-2);">
+                <div style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-tertiary);">Agent Fleet Summary</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-2);">
+                  <div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">Router</div>
+                    <div style="font-size:16px; font-weight:700; color:var(--accent-primary);">1</div>
+                  </div>
+                  <div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">Departments</div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-primary);">12</div>
+                  </div>
+                  <div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">Agents</div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-primary);">77</div>
+                  </div>
+                  <div>
+                    <div style="font-size:10px; color:var(--text-tertiary);">Skills</div>
+                    <div style="font-size:16px; font-weight:700; color:var(--text-primary);">110</div>
+                  </div>
+                </div>
+                <div style="font-size:10px; color:var(--text-tertiary); padding-top:var(--space-1); border-top:1px solid var(--border-primary);">
+                  각 에이전트는 1개의 스킬에 전담 매핑. Router가 111개 키워드로 라우팅.
+                </div>
+              </div>
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty States Demo -->
+    <div class="view" id="view-empty">
+      <div class="main-toolbar">
+        <span class="title">Empty State Examples</span>
+        <span class="subtitle">Planning.md §17.8</span>
+      </div>
+      <div class="main-content" style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-4);">
+        <!-- Console Empty -->
+        <div class="empty-state" style="border:1px solid var(--border-primary); border-radius:var(--radius-lg);">
+          <div class="illustration">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </div>
+          <h3>Select an engine to begin</h3>
+          <p>Choose an AI engine from the dropdown below and enter your prompt to start a new run.</p>
+          <button class="btn-cta">Configure Engine</button>
+        </div>
+        <!-- Dashboard Empty -->
+        <div class="empty-state" style="border:1px solid var(--border-primary); border-radius:var(--radius-lg);">
+          <div class="illustration">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          </div>
+          <h3>No runs yet</h3>
+          <p>Run your first agent to see performance metrics, success rates, and execution history.</p>
+          <button class="btn-cta">Run your first agent</button>
+        </div>
+        <!-- Workflow Empty -->
+        <div class="empty-state" style="border:1px solid var(--border-primary); border-radius:var(--radius-lg);">
+          <div class="illustration">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>
+          </div>
+          <h3>No workflows defined</h3>
+          <p>Create a multi-step workflow to automate complex tasks across multiple AI agents.</p>
+          <button class="btn-cta">Create workflow</button>
+        </div>
+        <!-- Organization Empty -->
+        <div class="empty-state" style="border:1px solid var(--border-primary); border-radius:var(--radius-lg);">
+          <div class="illustration">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3>No agents configured</h3>
+          <p>Install a CLI engine like Codex or Gemini to start orchestrating AI agents.</p>
+          <button class="btn-cta">Configure Codex CLI</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== CHAT SIDEPANEL ===== -->
+  <aside class="chat-sidepanel">
+    <div class="chat-header">
+      <span>AI Chat</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="cursor:pointer; color:var(--text-tertiary);"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </div>
+    <div class="chat-messages">
+      <div class="chat-msg agent">Hello! I'm your AI assistant. How can I help you with the agent orchestration?</div>
+      <div class="chat-msg user">Show me the recent runs for codex-agent</div>
+      <div class="chat-msg agent">codex-agent has 2 active runs right now. Run #418 is currently in progress (started 2 min ago), and run #417 completed successfully with all tests passing. Would you like to see the details for either?</div>
+      <div class="chat-msg agent" style="background:transparent; border:1px dashed var(--border-primary); align-self:flex-start; color:var(--text-tertiary); font-size:12px;">
+        Type a message or ask about agents, workflows, or runs...
+      </div>
+    </div>
+    <div class="chat-input">
+      <input type="text" placeholder="Ask about agents, runs, or workflows...">
+      <button>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===== PANEL ===== -->
+  <section class="panel">
+    <div class="panel-tabs">
+      <div class="panel-tab active">Terminal</div>
+      <div class="panel-tab">Output <span class="count">3</span></div>
+      <div class="panel-tab">Events</div>
+      <div class="panel-tab">Problems <span class="count" style="background:var(--status-error); color:white;">1</span></div>
+    </div>
+    <div class="panel-content" style="display:flex; gap:0;">
+      <div style="flex:2; border-right: 1px solid var(--border-primary); padding-right: var(--space-2);">
+        <div class="line" style="color: #22c55e; font-family: var(--font-mono); font-size: 12px;">
+          <span style="color:var(--text-tertiary);">14:32:28</span> Tests passed: 12/12
+        </div>
+        <div class="line" style="color: #22c55e; font-family: var(--font-mono); font-size: 12px;">
+          <span style="color:var(--text-tertiary);">14:32:28</span> Run completed (duration: 1m 12s)
+        </div>
+      </div>
+      <div style="flex:1; padding-left: var(--space-2);">
+        <div class="event-entry">
+          <span class="time">14:32:28</span>
+          <span style="color: var(--status-success);">&#9679;</span>
+          <span>Run #417 completed</span>
+        </div>
+        <div class="event-entry">
+          <span class="time">14:32:15</span>
+          <span style="color: var(--status-running);">&#9679;</span>
+          <span>Run #418 started</span>
+        </div>
+        <div class="event-entry">
+          <span class="time">14:30:00</span>
+          <span style="color: var(--status-warning);">&#9679;</span>
+          <span>Disk usage warning &gt;85%</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== STATUS BAR ===== -->
+  <footer class="status-bar">
+    <div class="left">
+      <div class="status-engine">
+        <span class="dot online"></span>
+        <span>Codex CLI</span>
+      </div>
+      <div class="status-engine">
+        <span class="dot online"></span>
+        <span>Gemini CLI</span>
+      </div>
+      <div class="status-jobs">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        <span>2 active</span>
+      </div>
+    </div>
+    <div class="right">
+      <span class="status-version">v0.1.0</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+// View toggle
+document.querySelectorAll('.view-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

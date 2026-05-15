@@ -1,0 +1,73 @@
+/**
+ * EngineAdapter - CLI 엔진 어댑터 인터페이스
+ *
+ * 설계 목표:
+ * - CLI 엔진 (Codex, Gemini 등)의 공통 인터페이스 정의
+ * - 각 엔진 어댑터는 이 인터페이스를 구현
+ * - child_process.spawn은 Main Process에서만 수행 (Worker Thread 금지)
+ *
+ * 구현 요구사항:
+ * - spawn(): CLI 프로세스 생성
+ * - terminate(): CLI 프로세스 강제 종료
+ * - validateConnection(): CLI 경로 및 버전 검증
+ *
+ * 보안 요구사항:
+ * - ALLOWED_COMMANDS 목록 사용 (white-list)
+ * - shell: false (shell injection 방지)
+ * - ENV_SANITIZE_BLOCKLIST 적용
+ */
+
+import type { EngineType } from '../../types/ipc-contract';
+
+/**
+ * 엔진 어댑터 공통 인터페이스
+ * 모든 엔진 어댑터가 구현해야 하는 메서드 정의
+ */
+export interface EngineAdapter {
+  /** 엔진 타입 (codex/gemini/opencode/claudecode) */
+  readonly engine: EngineType;
+
+  /**
+   * CLI 프로세스 생성
+   * @param args CLI 인자 (명령줄 인자)
+   * @param env 환경 변수
+   * @returns child_process.ChildProcessWithoutNullStreams
+   */
+  spawn(args: string[], env?: NodeJS.ProcessEnv): ReturnType<typeof import('child_process').spawn>;
+
+  /**
+   * CLI 프로세스 강제 종료
+   * @param pid 종료할 프로세스 PID
+   * @returns 성공 여부
+   */
+  terminate(pid: number): boolean;
+
+  /**
+   * CLI 연결 검증
+   * @param cliPath CLI 실행 파일 경로
+   * @returns 유효성 검증 결과
+   */
+  validateConnection(cliPath: string): Promise<{ valid: boolean; version?: string; error?: string }>;
+}
+
+/**
+ * 엔진 어댑터 팩토리 함수
+ * 엔진 타입에 따라 적절한 어댑터 인스턴스 생성
+ *
+ * @param engine 엔진 타입
+ * @returns EngineAdapter 인스턴스
+ */
+export function createEngineAdapter(engine: EngineType): EngineAdapter {
+  switch (engine) {
+    case 'codex':
+      return new (require('./CodexEngine').CodexEngine)();
+    case 'gemini':
+      return new (require('./GeminiEngine').GeminiEngine)();
+    case 'opencode':
+      return new (require('./OpenCodeEngine').OpenCodeEngine)();
+    case 'claudecode':
+      return new (require('./ClaudeCodeEngine').ClaudeCodeEngine)();
+    default:
+      throw new Error(`Unsupported engine type: ${engine}`);
+  }
+}

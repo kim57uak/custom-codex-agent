@@ -1,4 +1,4 @@
-# Python
+# Python (legacy - will be removed)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -24,6 +24,23 @@ wheels/
 venv/
 ENV/
 
+# Node.js / Electron
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build outputs
+release/
+out/
+dist/
+.electron-vite/
+
+# TypeScript
+*.tsbuildinfo
+*.tsbuildinfo.*
+
 # Databases
 *.sqlite
 *.sqlite3
@@ -40,12 +57,19 @@ Thumbs.db
 
 # Environments
 .env
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Project Specific
 backend/app/static/backups/
 backups/
 temp/
 .gstack/
+backup_org/
+release/

@@ -1,24 +1,35 @@
 @startuml
-title Run Lifecycle State Machine
+title Run Lifecycle State Machine (Worker Thread)
 
-[*] --> Queued : create_run()
-
-state Queued {
+state "Queued" as Queued
+state "Running" as Running {
+    state "Initializing" as Init
+    state "ExecutingCLI" as Exec
+    state "ProcessingOutput" as Proc
+    [*] --> Init
+    Init --> Exec : get_adapter()
+    Exec --> Proc : CLI stdout/stderr stream
+    Proc --> [*] : parse & store result
 }
 
-Queued --> Running : _execute_run()
+state "Completed" as Completed
+state "Failed" as Failed
+state "Canceled" as Canceled
+
+[*] --> Queued : RunOrchestrator.queue()
+Queued --> Running : _execute_run()\n(Worker Thread dispatch)
 Running --> Completed : exit_code == 0
-Running --> Failed : exit_code != 0
-Running --> Canceled : cancel_run()
+Running --> Failed : exit_code != 0\n|| AppError thrown
+Running --> Canceled : cancel_run()\n(send SIGTERM to child)
 
-Completed --> [*]
-Failed --> [*]
-Canceled --> [*]
+Completed --> [*] : publish 'run:completed' via IPC
+Failed --> [*] : publish 'run:failed' via IPC
+Canceled --> [*] : publish 'run:canceled' via IPC
 
-state Running {
-  [*] --> Initializing
-  Initializing --> ExecutingCLI : get_adapter()
-  ExecutingCLI --> ProcessingOutput
-  ProcessingOutput --> [*]
-}
+note top of Running
+  Runs in Worker Thread
+  Main Process receives
+  progress via parentPort.on('message')
+end note
+
 @enduml
