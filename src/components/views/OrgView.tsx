@@ -388,7 +388,9 @@ export const OrgView: React.FC<OrgViewProps> = () => {
 
         {departments.length === 0 && (
           <div className="org-view__canvas-empty">
-            <span className="codicon codicon-symbol-group" style={{ fontSize: '48px' }} />
+            <div className="empty-state__icon">
+              <span className="codicon codicon-symbol-group" />
+            </div>
             <h3>No agents configured</h3>
             <p>Configure agents from the sidebar to build your organization.</p>
           </div>

@@ -225,7 +225,9 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
       <div className="chat-sidepanel__messages">
         {messages.length === 0 && (
           <div className="chat-sidepanel__empty">
-            <span className="codicon codicon-comment" style={{ fontSize: '32px' }} />
+            <div className="empty-state__icon" style={{ width: '80px', height: '80px', fontSize: '32px' }}>
+              <span className="codicon codicon-comment" />
+            </div>
             <p>No messages yet</p>
             <p className="chat-sidepanel__hint">Ask me anything about your agents or workflows.</p>
           </div>

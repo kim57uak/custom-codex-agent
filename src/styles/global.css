@@ -842,6 +842,19 @@ body {
   text-align: center;
 }
 
+.empty-state__icon {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
 .empty-state h3 {
   font-size: var(--font-size-xl);
   font-weight: 600;
@@ -897,6 +910,8 @@ body {
   letter-spacing: 0.5px;
   border-bottom: 2px solid transparent;
   transition: all 150ms ease;
+  line-height: 1;
+  min-height: 44px;
 }
 
 .panel__tab:hover {
@@ -960,7 +975,8 @@ body {
   height: 100%;
   color: var(--text-muted);
   text-align: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  padding: var(--space-3);
 }
 
 /* ==========================================
@@ -1119,7 +1135,8 @@ body {
   height: 100%;
   color: var(--text-muted);
   text-align: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  padding: var(--space-3);
 }
 
 .chat-sidepanel__hint {

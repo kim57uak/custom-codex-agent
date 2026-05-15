@@ -243,7 +243,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
         </div>
         <div className="main-content">
           <div className="empty-state">
-            <div className="illustration">
+            <div className="empty-state__icon">
               <span className="codicon codicon-graph" />
             </div>
             <h3>No runs yet</h3>
