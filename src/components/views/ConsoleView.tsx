@@ -293,7 +293,7 @@ export const ConsoleView: React.FC<ConsoleViewProps> = () => {
   return (
     <div className="console-view">
       <div className="main-toolbar">
-        <span className="title">Console</span>
+        <h1 className="title">Console</h1>
         <span className="subtitle">codex-agent</span>
       </div>
       <div className="main-content">

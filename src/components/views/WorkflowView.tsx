@@ -184,7 +184,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = () => {
     return (
       <div className="workflow-view">
         <div className="main-toolbar">
-          <span className="title">Workflow</span>
+          <h1 className="title">Workflow</h1>
           <span className="subtitle">Loading...</span>
         </div>
         <div className="main-content" style={{ flex: 1 }}>
@@ -201,7 +201,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = () => {
     return (
       <div className="workflow-view">
         <div className="main-toolbar">
-          <span className="title">Workflow</span>
+          <h1 className="title">Workflow</h1>
           <span className="subtitle">Error</span>
         </div>
         <div className="main-content" style={{ flex: 1 }}>
@@ -220,7 +220,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = () => {
     return (
       <div className="workflow-view">
         <div className="main-toolbar">
-          <span className="title">Workflow</span>
+          <h1 className="title">Workflow</h1>
           <span className="subtitle">No workflows</span>
         </div>
         <div className="main-content" style={{ flex: 1 }}>
@@ -238,7 +238,7 @@ export const WorkflowView: React.FC<WorkflowViewProps> = () => {
   return (
     <div className="workflow-view">
       <div className="main-toolbar">
-        <span className="title">Workflow</span>
+        <h1 className="title">Workflow</h1>
         <span className="subtitle">{selectedWorkflow}</span>
       </div>
 

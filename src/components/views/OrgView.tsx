@@ -265,7 +265,7 @@ export const OrgView: React.FC<OrgViewProps> = () => {
     <div className="org-view">
       {/* Main Toolbar */}
       <div className="org-view__toolbar">
-        <span className="org-view__toolbar-title">Organization</span>
+        <h1 className="org-view__toolbar-title">Organization</h1>
         <span className="org-view__toolbar-subtitle">{totalAgents} Agents &middot; {totalDepartments} Departments</span>
       </div>
 

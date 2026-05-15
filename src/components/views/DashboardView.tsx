@@ -221,7 +221,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     return (
       <div className="dashboard-view">
         <div className="main-toolbar">
-          <span className="title">Dashboard</span>
+          <h1 className="title">Dashboard</h1>
           <span className="subtitle">Loading...</span>
         </div>
         <div className="main-content">
@@ -238,7 +238,7 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
     return (
       <div className="dashboard-view">
         <div className="main-toolbar">
-          <span className="title">Dashboard</span>
+          <h1 className="title">Dashboard</h1>
           <span className="subtitle">Last 7 days</span>
         </div>
         <div className="main-content">
@@ -264,10 +264,10 @@ export const DashboardView: React.FC<DashboardViewProps> = () => {
 
   return (
     <div className="dashboard-view">
-      <div className="main-toolbar">
-        <span className="title">Dashboard</span>
-        <span className="subtitle">Overview &amp; last 7 days</span>
-      </div>
+        <div className="main-toolbar">
+          <h1 className="title">Dashboard</h1>
+          <span className="subtitle">Overview &amp; last 7 days</span>
+        </div>
 
       <div className="main-content">
         <div className="metrics-grid">

@@ -58,12 +58,12 @@ export const StatusBar: React.FC<StatusBarProps> = () => {
           </span>
         </div>
         <div className="status-bar__divider" />
-        {ENGINES.map((eng) => (
+        {ENGINES.filter((eng) => eng.id !== selectedEngine).map((eng) => (
           <div
             key={eng.id}
             className="status-bar__item"
             title={`${eng.label} Engine - ${engineStatus[eng.id] ? 'Available' : 'Not found'}`}
-            style={{ opacity: selectedEngine === eng.id ? 1 : 0.5 }}
+            style={{ opacity: 0.5 }}
           >
             <span className={`status-bar__indicator ${checking ? '' : (engineStatus[eng.id] ? 'status-bar__indicator--active' : 'status-bar__indicator--inactive')}`} />
             <span>{eng.label}</span>

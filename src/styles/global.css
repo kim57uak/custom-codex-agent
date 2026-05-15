@@ -428,6 +428,16 @@
    ========================================== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible) {
+  outline: none;
+}
+
 body {
   font-family: var(--font-ui);
   background: var(--bg-primary);
@@ -472,8 +482,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   font-size: 20px;
   color: var(--accent-primary);
 }
@@ -495,8 +505,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -746,6 +756,15 @@ body {
   background-color: var(--bg-primary);
 }
 
+.main-area > * {
+  animation: viewFadeIn 150ms ease-out;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* View Selector - 탭 바 */
 .view-selector {
   display: flex;
@@ -786,7 +805,7 @@ body {
 }
 
 .view-btn {
-  padding: var(--space-1) var(--space-3);
+  padding: 11px var(--space-3);
   font-size: 12px;
   font-weight: 500;
   border: none;
@@ -867,7 +886,7 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
+  padding: 11px var(--space-3);
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -1060,8 +1079,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: none;
   border-radius: 8px;
   background: var(--accent-primary);
@@ -1075,8 +1094,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -1118,30 +1137,7 @@ body {
   color: var(--text-tertiary);
 }
 
-.chat-sidepanel__send {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  background-color: var(--accent-primary);
-  color: #ffffff;
-  border-radius: 8px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 150ms ease;
-}
 
-.chat-sidepanel__send:hover:not(:disabled) {
-  background-color: var(--accent-secondary);
-  transform: scale(1.05);
-}
-
-.chat-sidepanel__send:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
 
 /* ==========================================
    Chat Message Blocks (2) - Chat Sidepanel
@@ -1177,7 +1173,7 @@ body {
 }
 
 .chat-msg--assistant .chat-msg__avatar {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  background: var(--accent-secondary);
   color: #fff;
   font-size: 10px;
 }
