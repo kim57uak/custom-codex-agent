@@ -671,6 +671,14 @@ body {
   overflow: hidden;
 }
 
+.sidebar-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .sidebar__title {
   font-size: var(--font-size-lg);
   font-weight: 600;
