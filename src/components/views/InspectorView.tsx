@@ -168,9 +168,7 @@ const InspectorSidebar: React.FC = () => {
 
   const [search, setSearch] = useState('');
 
-  const engineFilteredAgents = selectedEngine === 'all'
-    ? agents
-    : agents.filter(a => a.engine === selectedEngine);
+  const engineFilteredAgents = agents.filter(a => a.engine === selectedEngine);
 
   const filteredAgents = engineFilteredAgents.filter(a =>
     a.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -604,6 +602,7 @@ const InspectorView: React.FC = () => {
   const setAgents = useInspectorStore(s => s.setAgents);
   const setSkills = useInspectorStore(s => s.setSkills);
   const setResponse = useInspectorStore(s => s.setResponse);
+  const selectedEngine = useUIStore(s => s.selectedEngine);
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [editContent, setEditContent] = useState<string>('');
   const [originalContent, setOriginalContent] = useState<string>('');
@@ -615,7 +614,7 @@ const InspectorView: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedEngine]);
 
   useEffect(() => {
     if (response) setSelectedFilePath(null);
@@ -627,7 +626,7 @@ const InspectorView: React.FC = () => {
   const loadData = async () => {
     const [agentList, inventory] = await Promise.all([
       ipcInvoke<AgentConfig[]>('agents:list'),
-      ipcInvoke<{ skills: SkillModel[] }>('dashboard:inventory'),
+      ipcInvoke<{ skills: SkillModel[] }>('dashboard:inventory', selectedEngine),
     ]);
     if (agentList) setAgents(agentList);
     if (inventory?.skills) setSkills(inventory.skills);

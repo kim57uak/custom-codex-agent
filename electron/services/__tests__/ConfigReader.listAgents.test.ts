@@ -5,7 +5,7 @@ import path from 'path';
 const CONFIG_READER_FILE = path.resolve(__dirname, '../ConfigReader.ts');
 
 describe('ConfigReader.listAgents() path fix', () => {
-  it('should use SETTINGS.getAgentsRoot instead of hardcoded ~/.gemini/agents path', () => {
+  it('should use SETTINGS.getAgentsRoot instead of hardcoded paths', () => {
     const source = fs.readFileSync(CONFIG_READER_FILE, 'utf-8');
     const listAgentsBody = source.match(
       /listAgents\(\).*?\{[\s\S]*?\n  \}/m
@@ -13,32 +13,25 @@ describe('ConfigReader.listAgents() path fix', () => {
     expect(listAgentsBody).not.toBeNull();
     const body = listAgentsBody![0];
     expect(body).not.toContain("path.join(os.homedir(), '.gemini', 'agents')");
-    expect(body).toContain("SETTINGS.getAgentsRoot('gemini')");
-    expect(body).toContain("SETTINGS.getAgentsRoot('codex')");
+    expect(body).toContain('SETTINGS.getAgentsRoot(engine)');
   });
 
-  it('should use the same agents root as readAgents uses via SETTINGS', () => {
+  it('should use SETTINGS.getAgentsRoot for all engine lookups', () => {
     const source = fs.readFileSync(CONFIG_READER_FILE, 'utf-8');
     const listAgentsBody = source.match(
       /listAgents\(\).*?\{[\s\S]*?\n  \}/m
     );
     expect(listAgentsBody).not.toBeNull();
     const body = listAgentsBody![0];
-
-    const geminiRootMatch = body.match(/SETTINGS\.getAgentsRoot\('gemini'\)/);
-    expect(geminiRootMatch).not.toBeNull();
-    const codexRootMatch = body.match(/SETTINGS\.getAgentsRoot\('codex'\)/);
-    expect(codexRootMatch).not.toBeNull();
+    expect(body).toContain('SETTINGS.getAgentsRoot(engine)');
   });
 
-  it('should scan the correct paths: gemini = ~/.gemini/antigravity/agents, codex = ~/.codex/agents', () => {
+  it('should scan all four engine agent roots (gemini, codex, opencode, claudecode)', () => {
     const source = fs.readFileSync(CONFIG_READER_FILE, 'utf-8');
-    const { SETTINGS } = { SETTINGS: null as any };
-    const expectedGeminiRoot = path.join('.gemini', 'antigravity', 'agents');
-    const expectedCodexRoot = path.join('.codex', 'agents');
-
-    expect(source).toContain("SETTINGS.getAgentsRoot('gemini')");
-    expect(source).toContain("SETTINGS.getAgentsRoot('codex')");
+    expect(source).toContain("'gemini'");
+    expect(source).toContain("'codex'");
+    expect(source).toContain("'opencode'");
+    expect(source).toContain("'claudecode'");
 
     const oldHardcodedPattern = "path.join(os.homedir(), '.gemini', 'agents')";
     const oldCodexPattern = "path.join(os.homedir(), '.codex', 'agents')";
@@ -46,10 +39,10 @@ describe('ConfigReader.listAgents() path fix', () => {
     expect(source).not.toContain(oldCodexPattern);
   });
 
-  it('should scan both configured agent roots', () => {
+  it('should scan all configured agent roots via loop', () => {
     const source = fs.readFileSync(CONFIG_READER_FILE, 'utf-8');
     const pushCalls = source.match(/discovered\.push\(/g);
     expect(pushCalls).not.toBeNull();
-    expect(pushCalls!.length).toBe(2);
+    expect(pushCalls!.length).toBe(1);
   });
 });

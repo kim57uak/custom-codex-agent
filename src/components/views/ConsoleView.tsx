@@ -67,12 +67,12 @@ export const ConsoleSidebar: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedEngine]);
 
   const loadData = async () => {
     const [agentResult, inventory] = await Promise.all([
       ipcInvoke<{ agents: Array<{ id: string; name: string; engine: string }> }>('config:get-agents'),
-      ipcInvoke<{ skills: Array<{ name: string; path: string; installed: boolean }> }>('dashboard:inventory'),
+      ipcInvoke<{ skills: Array<{ name: string; path: string; installed: boolean }> }>('dashboard:inventory', selectedEngine),
     ]);
     const agentList = agentResult?.agents ?? [];
     setAgents(agentList);
@@ -193,7 +193,7 @@ export const ConsoleView: React.FC<ConsoleViewProps> = () => {
       setAgents(list);
       if (list.length > 0) setSelectedAgentId(list[0]?.id ?? '');
     })();
-  }, []);
+  }, [selectedEngine]);
 
   useEffect(() => {
     if (!terminalRef.current) return;

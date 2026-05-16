@@ -35,7 +35,9 @@ yarn-error.log*
 release/
 out/
 dist/
+.vite/
 .electron-vite/
+make/
 
 # TypeScript
 *.tsbuildinfo

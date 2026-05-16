@@ -169,13 +169,48 @@ export class ConfigReader {
 
   listAgents(): AgentConfig[] {
     const configured = this.data.agents ?? [];
-    const seenIds = new Set(configured.map(a => a.id));
+    const configuredIds = new Set(configured.map(a => a.id));
     const discovered: AgentConfig[] = [];
-    const geminiDir = SETTINGS.getAgentsRoot('gemini');
-    discovered.push(...this.scanAgentDir(geminiDir, 'gemini', seenIds));
-    const codexDir = SETTINGS.getAgentsRoot('codex');
-    discovered.push(...this.scanAgentDir(codexDir, 'codex', seenIds));
+    const engines = ['gemini', 'codex', 'opencode', 'claudecode'] as const;
+    for (const engine of engines) {
+      const engineSeen = new Set(configuredIds);
+      const agentsDir = SETTINGS.getAgentsRoot(engine);
+      let agents = this.scanAgentDir(agentsDir, engine, engineSeen);
+      if (agents.length === 0) {
+        let skillsDir = SETTINGS.getSkillsRoot(engine);
+        agents = this._agentsFromSkills(skillsDir, engine, engineSeen);
+        if (agents.length === 0 && fs.existsSync(SETTINGS.getSkillsRoot('claudecode'))) {
+          agents = this._agentsFromSkills(SETTINGS.getSkillsRoot('claudecode'), engine, engineSeen);
+        }
+      }
+      discovered.push(...agents);
+    }
     return [...configured, ...discovered];
+  }
+
+  private _agentsFromSkills(skillsDir: string, engine: string, seenIds: Set<string>): AgentConfig[] {
+    try {
+      if (!fs.existsSync(skillsDir)) return [];
+      const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+      const agents: AgentConfig[] = [];
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (seenIds.has(entry.name)) continue;
+        const skillFile = path.join(skillsDir, entry.name, 'SKILL.md');
+        if (!fs.existsSync(skillFile)) continue;
+        seenIds.add(entry.name);
+        agents.push({
+          id: `skill-${entry.name}`,
+          name: entry.name,
+          engine: engine as 'gemini' | 'codex' | 'opencode' | 'claudecode',
+          description: `Auto-generated from ${engine} skill`,
+          department: engine,
+        });
+      }
+      return agents;
+    } catch {
+      return [];
+    }
   }
 
   private scanAgentDir(dirPath: string, engine: string, seenIds: Set<string>): AgentConfig[] {
@@ -187,22 +222,31 @@ export class ConfigReader {
         if (!entry.isDirectory()) continue;
         if (seenIds.has(entry.name)) continue;
         const configPath = path.join(dirPath, entry.name, 'config.json');
+        const tomlPath = path.join(dirPath, entry.name, 'agent.toml');
         let name = entry.name;
         let description = '';
         let department = '';
+        let agentEngine = engine;
         try {
           if (fs.existsSync(configPath)) {
             const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
             name = cfg.name ?? entry.name;
             description = cfg.description ?? '';
             department = cfg.department ?? '';
+            if (cfg.engine && typeof cfg.engine === 'string') agentEngine = cfg.engine;
+          } else if (fs.existsSync(tomlPath)) {
+            const cfg = this._parseToml(fs.readFileSync(tomlPath, 'utf-8'));
+            name = (cfg.name as string) ?? entry.name;
+            description = (cfg.description as string) ?? '';
+            department = (cfg.department as string) ?? '';
+            if (cfg.engine && typeof cfg.engine === 'string') agentEngine = cfg.engine as string;
           }
         } catch {}
         seenIds.add(entry.name);
         agents.push({
           id: entry.name,
           name,
-          engine: engine as 'gemini' | 'codex',
+          engine: agentEngine as 'gemini' | 'codex' | 'opencode' | 'claudecode',
           description: description || undefined,
           department: department || undefined,
         });

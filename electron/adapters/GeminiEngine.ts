@@ -49,6 +49,7 @@ export class GeminiEngine implements EngineAdapter {
   /**
    * 환경 변수 살균 처리
    * - ENV_SANITIZE_BLOCKLIST의 모든 키 제거
+   * - packaged 앱에서 node/cli를 찾을 수 있도록 PATH 보강
    * @param env 추가 환경 변수 (선택)
    * @returns 살균된 환경 변수 객체
    */
@@ -57,6 +58,9 @@ export class GeminiEngine implements EngineAdapter {
     for (const key of ENV_SANITIZE_BLOCKLIST) {
       delete baseEnv[key];
     }
+    const extraPaths = ['/opt/homebrew/bin', '/usr/local/bin'];
+    const currentPath = baseEnv.PATH ?? '';
+    baseEnv.PATH = [...extraPaths, currentPath].filter(Boolean).join(':');
     return baseEnv;
   }
 

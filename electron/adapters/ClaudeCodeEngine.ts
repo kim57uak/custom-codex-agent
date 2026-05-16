@@ -41,6 +41,9 @@ export class ClaudeCodeEngine implements EngineAdapter {
     for (const key of ENV_SANITIZE_BLOCKLIST) {
       delete baseEnv[key];
     }
+    const extraPaths = ['/opt/homebrew/bin', '/usr/local/bin'];
+    const currentPath = baseEnv.PATH ?? '';
+    baseEnv.PATH = [...extraPaths, currentPath].filter(Boolean).join(':');
     return baseEnv;
   }
 

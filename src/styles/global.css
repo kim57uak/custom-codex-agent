@@ -390,7 +390,7 @@
 }
 
 /* ==========================================
-   Theme: Black — 순수 블랙 + 화이트 액센트, 미니멀
+   Theme: Black — 순수 블랙 + 실버 액센트, 미니멀
    ========================================== */
 :root[data-theme="black"] {
   --bg-primary: #000000;
@@ -398,29 +398,29 @@
   --bg-tertiary: #141414;
   --bg-surface: #1a1a1a;
   --bg-overlay: rgba(0,0,0,0.7);
-  --text-primary: #ffffff;
-  --text-secondary: #cccccc;
-  --text-tertiary: #888888;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --text-tertiary: #737373;
   --text-inverse: #000000;
-  --accent-primary: #ffffff;
-  --accent-secondary: #e0e0e0;
-  --accent-tertiary: #b0b0b0;
-  --accent-border: #ffffff;
-  --border-primary: #333333;
-  --border-secondary: #222222;
+  --accent-primary: #d4d4d4;
+  --accent-secondary: #a3a3a3;
+  --accent-tertiary: #737373;
+  --accent-border: #525252;
+  --border-primary: #262626;
+  --border-secondary: #1a1a1a;
   --status-success: #4ade80;
   --status-warning: #fbbf24;
   --status-error: #f87171;
-  --status-info: #60a5fa;
-  --status-running: #ffffff;
-  --focus-ring: rgba(255,255,255,0.3);
-  --selection-bg: rgba(255,255,255,0.1);
+  --status-info: #2563eb;
+  --status-running: #d4d4d4;
+  --focus-ring: rgba(212,212,212,0.3);
+  --selection-bg: rgba(212,212,212,0.12);
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.5);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.6);
 }
 
 :root[data-theme="black"] {
-  --bg-highlight: rgba(255,255,255,0.1);
+  --bg-highlight: rgba(212,212,212,0.1);
 }
 
 /* ==========================================

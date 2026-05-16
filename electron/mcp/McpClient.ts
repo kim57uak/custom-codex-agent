@@ -115,8 +115,10 @@ export class McpClient {
 
     return new Promise((resolve, reject) => {
       try {
+        const extraPaths = ['/opt/homebrew/bin', '/usr/local/bin'];
+        const currentPath = process.env.PATH ?? '';
         this.process = spawn(this.config.command, this.config.args ?? [], {
-          env: { ...process.env, ...this.config.env },
+          env: { ...process.env, ...this.config.env, PATH: [...extraPaths, currentPath].filter(Boolean).join(':') },
           shell: false,
           stdio: ['pipe', 'pipe', 'pipe'],
         });

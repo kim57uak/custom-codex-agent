@@ -4,6 +4,8 @@ import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerDMG } from '@electron-forge/maker-dmg';
 import { VitePlugin } from '@electron-forge/plugin-vite';
+import fs from 'fs-extra';
+import path from 'path';
 
 /**
  * Forge 설정 파일
@@ -17,7 +19,16 @@ import { VitePlugin } from '@electron-forge/plugin-vite';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpackDir: 'node_modules/{better-sqlite3,node-pty}',
+    },
+    ignore: (file: string) => {
+      if (!file) return false;
+      if (file.startsWith('/.vite')) return false;
+      if (file.startsWith('/node_modules/better-sqlite3')) return false;
+      if (file.startsWith('/node_modules/node-pty')) return false;
+      return true;
+    },
     name: 'AgentOrchestrator',
     executableName: 'agent-orchestrator',
     appBundleId: 'com.dev.agent-orchestrator',
@@ -78,6 +89,32 @@ const config: ForgeConfig = {
       },
     },
   ],
+  hooks: {
+    postPackage: async (_forgeConfig, options) => {
+      const { outputPaths } = options;
+      for (const output of outputPaths) {
+        const resourcesDir = path.join(output, 'AgentOrchestrator.app', 'Contents', 'Resources');
+        const nodeModulesDir = path.join(resourcesDir, 'node_modules');
+        
+        await fs.remove(nodeModulesDir);
+        await fs.copy(
+          path.join(process.cwd(), 'node_modules'),
+          nodeModulesDir,
+          {
+            recursive: true,
+            filter: (src) => {
+              const name = path.basename(src);
+              if (name === '.bin' || name === '.cache') return false;
+              if (src.includes('/.DS_Store')) return false;
+              return true;
+            },
+          },
+        );
+        
+        console.log(`Copied node_modules to ${output}`);
+      }
+    },
+  },
   plugins: [
     new VitePlugin({
       build: [
