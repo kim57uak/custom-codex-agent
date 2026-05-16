@@ -1,6 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 
+async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
+  if (!(window as any).electronAPI?.invoke) return null;
+  return (window as any).electronAPI.invoke(channel, ...args) as Promise<T>;
+}
+
 /** 뷰 ID 타입 (uiStore와 동기화) */
 type ViewId = 'org' | 'dashboard' | 'console' | 'workflow' | 'inspector';
 
@@ -234,7 +239,7 @@ export const ActivityBar: React.FC<ActivityBarProps> = ({ activeView, onViewChan
                 <button
                   key={e.id}
                   className={`activity-bar__theme-option ${selectedEngine === e.id ? 'active' : ''}`}
-                  onClick={() => { setSelectedEngine(e.id); setEngineOpen(false); }}
+                  onClick={() => { setSelectedEngine(e.id); setEngineOpen(false); ipcInvoke('settings:set-default-engine', e.id); }}
                 >
                   <span style={{ fontWeight: 700, marginRight: 'var(--space-2)' }}>{e.icon}</span>
                   {e.label}

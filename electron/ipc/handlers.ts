@@ -174,10 +174,106 @@ export function registerIpcHandlers(deps: HandlerDeps): void {
     return workflowEngine.skipWorkflowStepAndContinue(p.workflowRunId, p.stepIndex, p.engine);
   });
 
+  ipcMain.handle('workflow:permission-respond', async (_event, data: unknown) => {
+    const p = data as { requestId: string; response: string };
+    if (!p || typeof p.requestId !== 'string' || typeof p.response !== 'string') {
+      throw new Error('requestId and response required');
+    }
+    return runOrchestrator.respondToHitl(p.requestId, p.response);
+  });
+
   ipcMain.handle('workflow:events', async (_event, data: unknown) => {
     const p = data as { workflowRunId: string; limit?: number };
     if (!p || typeof p.workflowRunId !== 'string') throw new Error('workflowRunId required');
     return workflowEngine.getWorkflowEvents(p.workflowRunId, p.limit);
+  });
+
+  ipcMain.handle('workflow:add-step', async (_event, data: unknown) => {
+    const p = data as { workflowRunId: string; agentName: string; prompt?: string };
+    if (!p || typeof p.workflowRunId !== 'string' || typeof p.agentName !== 'string') throw new Error('workflowRunId and agentName required');
+    return workflowEngine.addStepToRun(p.workflowRunId, p.agentName, p.prompt);
+  });
+
+  ipcMain.handle('workflow:remove-step', async (_event, data: unknown) => {
+    const p = data as { workflowRunId: string; stepIndex: number };
+    if (!p || typeof p.workflowRunId !== 'string' || typeof p.stepIndex !== 'number') throw new Error('workflowRunId and stepIndex required');
+    return workflowEngine.removeStepFromRun(p.workflowRunId, p.stepIndex);
+  });
+
+  ipcMain.handle('workflow:update-step-prompt', async (_event, data: unknown) => {
+    const p = data as { workflowRunId: string; stepIndex: number; prompt: string };
+    if (!p || typeof p.workflowRunId !== 'string' || typeof p.stepIndex !== 'number' || typeof p.prompt !== 'string') throw new Error('workflowRunId, stepIndex, and prompt required');
+    return workflowEngine.updateStepPrompt(p.workflowRunId, p.stepIndex, p.prompt);
+  });
+
+  ipcMain.handle('workflow:run-detail', async (_event, workflowRunId: unknown) => {
+    if (typeof workflowRunId !== 'string') throw new Error('workflowRunId must be string');
+    const detail = workflowEngine.getWorkflowRunDetail(workflowRunId);
+    if (!detail) throw new Error('Workflow run not found');
+    return detail;
+  });
+
+  ipcMain.handle('workflow:runs', async (_event, limit?: unknown) => {
+    const l = typeof limit === 'number' ? limit : undefined;
+    return workflowEngine.listWorkflowRuns(l);
+  });
+
+  ipcMain.handle('workflow:agent-profiles', async () => {
+    return workflowEngine.listAgentProfiles();
+  });
+
+  ipcMain.handle('workflow:create-run', async (_event, data: unknown) => {
+    const p = data as { goalPrompt: string; steps: Array<{ agentName: string; prompt: string; title?: string; iconKey?: string; skillName?: string | null }>; sandboxMode?: string | null; approvalPolicy?: string | null; engine?: string | null };
+    if (!p || typeof p.goalPrompt !== 'string' || !Array.isArray(p.steps) || p.steps.length === 0) {
+      throw new Error('goalPrompt and steps required');
+    }
+    const created = await workflowEngine.createWorkflowRun(p.goalPrompt, p.steps, undefined, p.sandboxMode ?? null, p.approvalPolicy ?? null, p.engine);
+    return { workflowRunId: created.workflowRunId };
+  });
+
+  ipcMain.handle('workflow:recommend-and-create', async (_event, data: unknown) => {
+    const p = data as { goalPrompt: string; maxAgents?: number; sandboxMode?: string | null; approvalPolicy?: string | null; engine?: string };
+    if (!p || typeof p.goalPrompt !== 'string') throw new Error('goalPrompt required');
+    let recommendations = await workflowEngine.recommendAgents(p.goalPrompt, p.maxAgents, p.engine);
+    if (recommendations.length === 0) {
+      console.log('[recommend-and-create] recommendAgents returned 0, using keyword scoring fallback');
+      const allProfiles = workflowEngine.listAgentProfiles(p.engine);
+      const scored = allProfiles.map((a) => {
+        const text = [a.name, a.roleLabelKo, a.departmentLabelKo, a.shortDescription, p.goalPrompt].filter(Boolean).join(' ').toLowerCase();
+        const words = p.goalPrompt.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+        const matchCount = words.filter(w => text.includes(w)).length;
+        return { agent: a, score: matchCount };
+      }).sort((a, b) => b.score - a.score);
+      const best = scored.filter(s => s.score > 0).slice(0, p.maxAgents ?? 3);
+      const fallbackAgents = best.length > 0 ? best : scored.slice(0, p.maxAgents ?? 3);
+      if (fallbackAgents.length === 0) {
+        return { recommendations: [], workflowRunId: null };
+      }
+      recommendations = fallbackAgents.map((s) => ({
+        agentName: s.agent.name,
+        skillName: s.agent.skillName,
+        roleLabelKo: s.agent.roleLabelKo,
+        departmentLabelKo: s.agent.departmentLabelKo,
+        iconKey: s.agent.iconKey,
+        reason: s.score > 0 ? `목표와 일치하는 키워드 ${s.score}개 매칭` : '사용 가능한 에이전트',
+        defaultPrompt: p.goalPrompt,
+        shortDescription: s.agent.shortDescription,
+      }));
+    }
+    const steps = recommendations.map((r, i) => ({
+      agentName: r.agentName,
+      prompt: r.defaultPrompt || p.goalPrompt,
+      title: r.reason?.slice(0, 40) || `Step ${i + 1}`,
+      iconKey: r.iconKey || 'bot',
+      skillName: r.skillName,
+    }));
+    const created = await workflowEngine.createWorkflowRun(p.goalPrompt, steps, undefined, p.sandboxMode ?? null, p.approvalPolicy ?? null, p.engine);
+    return { recommendations, workflowRunId: created.workflowRunId };
+  });
+
+  ipcMain.handle('workflow:delete-run', async (_event, workflowRunId: unknown) => {
+    if (typeof workflowRunId !== 'string') throw new Error('workflowRunId required');
+    return workflowEngine.deleteWorkflowRun(workflowRunId);
   });
 
   // ============================================
@@ -522,6 +618,15 @@ export function registerIpcHandlers(deps: HandlerDeps): void {
     return result.filePaths[0] ?? null;
   });
 
+  ipcMain.handle('dialog:open-file', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: '모든 파일', extensions: ['*'] }],
+    });
+    if (result.canceled || result.filePaths.length === 0) return [];
+    return result.filePaths;
+  });
+
   // ============================================
   // FileWatcher 핸들러 (watcher:*)
   // ============================================
@@ -555,6 +660,15 @@ export function registerIpcHandlers(deps: HandlerDeps): void {
 
   ipcMain.handle('watcher:status', async () => {
     return { active: fileWatcher.isActive, paths: fileWatcher.getWatchedPaths() };
+  });
+
+  ipcMain.handle('settings:set-default-engine', async (_event, engine: unknown) => {
+    const validEngines = ['codex', 'gemini', 'opencode', 'claudecode'] as const;
+    if (!engine || typeof engine !== 'string' || !validEngines.includes(engine as any)) {
+      throw new Error('Invalid engine. Must be: codex, gemini, opencode, or claudecode');
+    }
+    SETTINGS.setDefaultEngine(engine as any);
+    return { engine: SETTINGS.defaultEngine };
   });
 }
 

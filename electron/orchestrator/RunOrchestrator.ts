@@ -21,6 +21,17 @@ interface PidInfo {
 
 const ALLOWED_COMMANDS = ['codex', 'gemini'] as const;
 
+/* ── HITL types ──────────────────────────────────── */
+export interface HitlRequestData {
+  id: string;
+  runId: string;
+  agentName: string;
+  message: string;
+  permission: string;
+  stepIndex: number;
+  workflowRunId: string;
+}
+
 const ENV_SANITIZE_BLOCKLIST = [
   'LD_PRELOAD', 'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH',
   'NODE_OPTIONS', 'ELECTRON_RUN_AS_NODE',
@@ -39,11 +50,23 @@ export class RunOrchestrator {
   private runningRuns = new Map<string, RunStatus>();
   private startTimes = new Map<string, number>();
   private activeProcesses = new Map<string, ChildProcess>();
+  private cancelledRunIds = new Set<string>();
   private maxConcurrency: number;
   private semaphoreCount = 0;
   private runQueue: Array<() => void> = [];
   private opencodeServer: ChildProcess | null = null;
   private readonly OPENCODE_PORT = 21789;
+  private hitlPending = new Map<string, HitlRequestData>();
+  private hitlStepContext = new Map<string, { workflowRunId: string; stepIndex: number }>();
+  private outputBuffers = new Map<string, string[]>();
+  private fullOutput = new Map<string, string[]>();
+  private readonly HITL_BUFFER_SIZE = 30;
+  private readonly HITL_PATTERNS = [
+    /allow\s+once/i,
+    /allow\s+always/i,
+    /permission\s+required/i,
+    /reject/i,
+  ];
 
   constructor(deps: { logBuffer: LogBuffer; eventBroker: EventBroker }) {
     this.logBuffer = deps.logBuffer;
@@ -112,6 +135,7 @@ export class RunOrchestrator {
   async createRun(
     agentName: string, prompt: string, workspaceRoot?: string,
     sandboxMode?: string | null, approvalPolicy?: string | null, engine?: string,
+    stepContext?: { workflowRunId?: string; stepIndex?: number },
   ): Promise<RunCreateResult> {
     const effectiveEngine = (engine || SETTINGS.defaultEngine) as EngineType;
     const run = this.runStore.createRun({
@@ -128,6 +152,13 @@ export class RunOrchestrator {
     this.runStore.appendEvent(run.id, 'run:queued', `run queued for agent=${agentName} engine=${effectiveEngine}`);
     this._publishRunEvent(run.id, 'run:queued', `run queued for agent=${agentName} engine=${effectiveEngine}`);
 
+    if (stepContext?.workflowRunId && stepContext.stepIndex !== undefined) {
+      this.hitlStepContext.set(run.id, {
+        workflowRunId: stepContext.workflowRunId,
+        stepIndex: stepContext.stepIndex,
+      });
+    }
+
     this._executeRun(run.id, agentName, prompt, run.workspace, effectiveEngine, sandboxMode, approvalPolicy);
     return { runId: run.id };
   }
@@ -137,6 +168,14 @@ export class RunOrchestrator {
     engine: string, sandboxMode?: string | null, approvalPolicy?: string | null,
   ): Promise<void> {
     await this._acquireSemaphore();
+    if (this.cancelledRunIds.has(runId)) {
+      this.runStore.finishRun(runId, 'cancelled', null, 'cancelled before start');
+      this.runningRuns.set(runId, 'cancelled');
+      this.cancelledRunIds.delete(runId);
+      this._publishRunEvent(runId, 'run:cancelled', 'cancelled while queued');
+      this._releaseSemaphore();
+      return;
+    }
     let proc: ChildProcess | null = null;
     try {
       const updated = this.runStore.markRunning(runId);
@@ -145,8 +184,8 @@ export class RunOrchestrator {
       this.runStore.appendEvent(runId, 'run:started', `run started (engine=${engine})`);
       this._publishRunEvent(runId, 'run:started', `run started (engine=${engine})`);
 
-      const skillContent = this._fetchSkillInfo(agentName, engine);
-      const effectivePrompt = this._buildEffectivePrompt(agentName, prompt, skillContent);
+      const skillInfo = this._fetchSkillInfo(agentName, engine);
+      const effectivePrompt = this._buildEffectivePrompt(agentName, prompt, skillInfo.content, engine);
       const sanitizedEnv = this.sanitizeEnv();
       const cliPath = this.getCliPath(engine as EngineType);
 
@@ -161,40 +200,93 @@ export class RunOrchestrator {
         if (process.env[key]) sanitizedEnv[key] = process.env[key];
       }
 
-      proc = spawn(cliPath, [effectivePrompt], {
+      const includeDirs: string[] = [];
+      if (skillInfo.skillPath) {
+        includeDirs.push(path.dirname(skillInfo.skillPath));
+      }
+      const args = this._buildCliArgs(engine as EngineType, effectivePrompt, sandboxMode, approvalPolicy, includeDirs.length > 0 ? includeDirs : undefined);
+
+      proc = spawn(cliPath, args, {
         env: sanitizedEnv,
         shell: false,
+        detached: true,
         cwd: workspaceRoot ?? this.defaultWorkspaceRoot,
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
       this.pidRegistry.set(proc.pid!, { pid: proc.pid!, runId, engine: engine as EngineType, proc });
       this.activeProcesses.set(runId, proc);
+      // pipe prompt via stdin when engine uses '-' convention
+      const lastArg = args[args.length - 1];
+      if (lastArg === '-') {
+        proc.stdin?.write(effectivePrompt);
+        // keep stdin open for HITL responses (permission prompts)
+        // only end for codex which doesn't need interactive stdin
+        if (engine === 'codex') {
+          proc.stdin?.end();
+        }
+      }
+      // cancel during buffering (race) → kill immediately
+      if (this.cancelledRunIds.has(runId)) {
+        this._killProcTree(proc);
+        this.cancelledRunIds.delete(runId);
+      }
+
+
+      let inactivityTimer: NodeJS.Timeout | null = null;
+      let inactivityKill = false;
+      const INACTIVITY_MS = 120_000;
+      const resetInactivity = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        if (engine === 'opencode') {
+          inactivityTimer = setTimeout(() => {
+            if (proc && !proc.killed) {
+              inactivityKill = true;
+              proc.kill('SIGTERM');
+            }
+          }, INACTIVITY_MS);
+        }
+      };
 
       proc.stdout?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        for (const line of text.split('\n').filter(Boolean)) {
+        const text = this._stripAnsi(data.toString());
+        const lines = text.split('\n').filter(Boolean);
+        for (const line of lines) {
           this.runStore.addEvent(runId, 'run:stdout', line);
           this._publishRunEvent(runId, 'run:stdout', line);
           this.logBuffer.push({
             runId, level: 'info', message: line, timestamp: new Date().toISOString(), raw: line,
           });
         }
+        let out = this.fullOutput.get(runId);
+        if (!out) { out = []; this.fullOutput.set(runId, out); }
+        out.push(...lines);
+        this._detectHitl(runId, lines, agentName);
+        resetInactivity();
       });
 
       proc.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        for (const line of text.split('\n').filter(Boolean)) {
+        const text = this._stripAnsi(data.toString());
+        const lines = text.split('\n').filter(Boolean);
+        for (const line of lines) {
           this.runStore.addEvent(runId, 'run:stderr', line);
+          this._publishRunEvent(runId, 'run:stderr', line);
           this.logBuffer.push({
             runId, level: 'error', message: line, timestamp: new Date().toISOString(), raw: line,
           });
         }
+        let out = this.fullOutput.get(runId);
+        if (!out) { out = []; this.fullOutput.set(runId, out); }
+        out.push(...lines);
+        this._detectHitl(runId, lines, agentName);
+        resetInactivity();
       });
 
       const startTime = Date.now();
       this.startTimes.set(runId, startTime);
+      resetInactivity();
 
-      const timeout = setTimeout(() => {
+      const runTimeout = setTimeout(() => {
         if (proc && !proc.killed) {
           proc.kill('SIGTERM');
           this.runStore.finishRun(runId, 'failed', null, 'run timeout');
@@ -205,14 +297,31 @@ export class RunOrchestrator {
 
       await new Promise<void>((resolve) => {
         proc!.on('close', (code) => {
-          clearTimeout(timeout);
-          const status: RunStatus = code === 0 ? 'completed' : 'failed';
-          const errMsg = code === 0 ? null : `${engine} exited with non-zero code: ${code}`;
-          this.runStore.finishRun(runId, status, code, errMsg);
-          this.runningRuns.set(runId, status);
+          clearTimeout(runTimeout);
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          this.logBuffer.flush().catch(() => {});
+          let status: RunStatus;
+          if (this.cancelledRunIds.has(runId)) {
+            this.cancelledRunIds.delete(runId);
+            this.runStore.finishRun(runId, 'cancelled', null, 'cancelled by user');
+            this.runningRuns.set(runId, 'cancelled');
+            status = 'cancelled';
+          } else if (inactivityKill) {
+            this.runStore.finishRun(runId, 'completed', 0, null);
+            this.runningRuns.set(runId, 'completed');
+            status = 'completed';
+          } else {
+            status = code === 0 ? 'completed' : 'failed';
+            const errMsg = code === 0 ? null : `${engine} exited with non-zero code: ${code}`;
+            this.runStore.finishRun(runId, status, code, errMsg);
+            this.runningRuns.set(runId, status);
+          }
           this.pidRegistry.delete(proc!.pid!);
           this.activeProcesses.delete(runId);
-          this.runStore.addEvent(runId, 'done', { code, status });
+          this.hitlPending.delete(runId);
+          this.hitlStepContext.delete(runId);
+          this.outputBuffers.delete(runId);
+          this.runStore.addEvent(runId, 'done', { code, status: this.runningRuns.get(runId) });
           const durationMs = this.getRunDuration(runId);
           this.eventBroker.pushRunEnded(runId, code ?? -1, durationMs);
           this.startTimes.delete(runId);
@@ -222,11 +331,25 @@ export class RunOrchestrator {
         });
 
         proc!.on('error', (err) => {
-          clearTimeout(timeout);
-          this.runStore.finishRun(runId, 'failed', null, err.message);
-          this.runningRuns.set(runId, 'failed');
+          clearTimeout(runTimeout);
+          if (inactivityTimer) clearTimeout(inactivityTimer);
+          this.logBuffer.flush().catch(() => {});
+          let status: RunStatus;
+          if (this.cancelledRunIds.has(runId)) {
+            this.cancelledRunIds.delete(runId);
+            this.runStore.finishRun(runId, 'cancelled', null, 'cancelled by user');
+            this.runningRuns.set(runId, 'cancelled');
+            status = 'cancelled';
+          } else {
+            this.runStore.finishRun(runId, 'failed', null, err.message);
+            this.runningRuns.set(runId, 'failed');
+            status = 'failed';
+          }
           this.pidRegistry.delete(proc!.pid!);
           this.activeProcesses.delete(runId);
+          this.hitlPending.delete(runId);
+          this.hitlStepContext.delete(runId);
+          this.outputBuffers.delete(runId);
           this.runStore.addEvent(runId, 'error', { message: err.message });
           const durationMs = this.getRunDuration(runId);
           this.eventBroker.pushRunEnded(runId, -1, durationMs);
@@ -246,10 +369,13 @@ export class RunOrchestrator {
   }
 
   cancelRun(runId: string): boolean {
+    this.cancelledRunIds.add(runId);
+
+    // try pidRegistry first
     for (const [pid, info] of this.pidRegistry) {
       if (info.runId === runId) {
         try {
-          process.kill(pid, 'SIGKILL');
+          this._killProcTree(info.proc);
           this.runStore.updateRunStatus(runId, 'cancelled');
           this.runningRuns.set(runId, 'cancelled');
           this.pidRegistry.delete(pid);
@@ -260,7 +386,101 @@ export class RunOrchestrator {
         }
       }
     }
+
+    // try activeProcesses fallback
+    const proc = this.activeProcesses.get(runId);
+    if (proc) {
+      try {
+        this._killProcTree(proc);
+        this.runStore.updateRunStatus(runId, 'cancelled');
+        this.runningRuns.set(runId, 'cancelled');
+        this.activeProcesses.delete(runId);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
     return false;
+  }
+
+  private _killProcTree(proc: ChildProcess): void {
+    if (proc.killed) return;
+    // kill process group (covers grandchildren)
+    if (typeof proc.pid === 'number') {
+      try { process.kill(-proc.pid, 'SIGTERM'); } catch {}
+    }
+    // kill direct child
+    try { proc.kill('SIGKILL'); } catch {}
+  }
+
+  /* ── HITL ──────────────────────────────────────── */
+  private _detectHitl(runId: string, lines: string[], agentName: string): void {
+    if (this.hitlPending.has(runId)) return;
+
+    let buf = this.outputBuffers.get(runId);
+    if (!buf) {
+      buf = [];
+      this.outputBuffers.set(runId, buf);
+    }
+    for (const line of lines) {
+      buf.push(line);
+      if (buf.length > this.HITL_BUFFER_SIZE) buf.shift();
+    }
+    const joined = buf.join(' ');
+
+    const hasChoices = /allow\s+once/i.test(joined) && /reject/i.test(joined);
+    if (!hasChoices) return;
+
+    const context = this.hitlStepContext.get(runId);
+    const id = `hitl_${runId}_${Date.now()}`;
+    const stepIndex = context ? context.stepIndex : -1;
+    const workflowRunId = context ? context.workflowRunId : '';
+    const request: HitlRequestData = {
+      id, runId, agentName,
+      message: buf.slice(-10).join('\n'),
+      permission: 'external_access',
+      stepIndex,
+      workflowRunId,
+    };
+    this.hitlPending.set(runId, request);
+
+    this.eventBroker.pushPermissionRequest({
+      id, runId, agentName,
+      message: buf.slice(-10).join('\n'),
+      permission: 'external_access',
+      stepIndex,
+    });
+    this.runStore.appendEvent(runId, 'run:hitl', `HITL: ${request.message}`);
+  }
+
+  async respondToHitl(requestId: string, response: string): Promise<boolean> {
+    let targetRunId: string | null = null;
+    for (const [runId, req] of this.hitlPending) {
+      if (req.id === requestId) { targetRunId = runId; break; }
+    }
+    if (!targetRunId) return false;
+
+    const proc = this.activeProcesses.get(targetRunId);
+    if (!proc || !proc.stdin || proc.killed) {
+      this.hitlPending.delete(targetRunId);
+      return false;
+    }
+
+    const responseMap: Record<string, string> = {
+      allow_once: 'Allow once\n',
+      allow_always: 'Allow always\n',
+      reject: 'Reject\n',
+    };
+    const payload = responseMap[response] ?? response + '\n';
+    try {
+      proc.stdin.write(payload);
+      this.hitlPending.delete(targetRunId);
+      return true;
+    } catch {
+      this.hitlPending.delete(targetRunId);
+      return false;
+    }
   }
 
   async replyToRun(runId: string, message: string): Promise<boolean> {
@@ -286,6 +506,12 @@ export class RunOrchestrator {
     return this.createRun(record.agentName, record.prompt, ws, record.sandboxMode, record.approvalPolicy, engine);
   }
 
+  popRunOutput(runId: string): string[] {
+    const out = this.fullOutput.get(runId);
+    this.fullOutput.delete(runId);
+    return out ?? [];
+  }
+
   async waitForRun(runId: string): Promise<RunRecord | null> {
     const record = this.runStore.getRun(runId);
     if (!record) return null;
@@ -298,14 +524,14 @@ export class RunOrchestrator {
           resolve(r);
         }
       }, 200);
-      setTimeout(() => { clearInterval(check); resolve(this.runStore.getRun(runId)); }, 30000);
+      setTimeout(() => { clearInterval(check); resolve(this.runStore.getRun(runId)); }, SETTINGS.runTimeoutSeconds * 1000 + 60000);
     });
   }
 
   startRun(options: RunOptions): { runId: string } {
     const agents = this.configReader.listAgents();
     const agent = agents.find(a => a.id === options.agentId);
-    const engine: EngineType = (options.engine ?? agent?.engine ?? 'codex') as EngineType;
+    const engine: EngineType = (options.engine ?? agent?.engine ?? SETTINGS.defaultEngine) as EngineType;
     const sanitizedEnv = this.sanitizeEnv();
     const cliPath = this.getCliPath(engine, agent ? { cliPath: agent.cliPath } : undefined);
     const run = this.runStore.createRun(options as Parameters<typeof this.runStore.createRun>[0]);
@@ -314,8 +540,8 @@ export class RunOrchestrator {
     this.runningRuns.set(run.id, 'running');
 
     const agentName = agent?.name ?? options.agentId;
-    const skillContent = this._fetchSkillInfo(agentName, engine);
-    const effectivePrompt = this._buildEffectivePrompt(agentName, options.prompt, skillContent);
+    const skillInfo = this._fetchSkillInfo(agentName, engine);
+    const effectivePrompt = this._buildEffectivePrompt(agentName, options.prompt, skillInfo.content, engine);
 
     const proc = spawn(cliPath, [effectivePrompt], {
       env: { ...sanitizedEnv, ...agent?.env },
@@ -426,7 +652,8 @@ export class RunOrchestrator {
   }
 
   async chat(message: string, systemPrompt?: string, engine?: string): Promise<string> {
-    const targetEngine = (engine === 'codex' || engine === 'gemini' || engine === 'opencode' || engine === 'claudecode') ? engine : 'gemini';
+    const valid: EngineType[] = ['codex', 'gemini', 'opencode', 'claudecode'];
+    const targetEngine = valid.includes(engine as EngineType) ? (engine as EngineType) : SETTINGS.defaultEngine;
     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${message}` : message;
 
     const binary = this._engineBinary(targetEngine);
@@ -563,8 +790,9 @@ export class RunOrchestrator {
     });
   }
 
-  private _buildEffectivePrompt(agentName: string, prompt: string, skillContent: string | null): string {
-    const header = `You are running from Custom Gemini Agent Execution Console.\nSelected agent: ${agentName}\nFollow the selected agent's role and constraints while completing the request.\n\n`;
+  private _buildEffectivePrompt(agentName: string, prompt: string, skillContent: string | null, engine?: string): string {
+    const engineLabel = engine ?? SETTINGS.defaultEngine;
+    const header = `You are running from Custom ${engineLabel} Agent Execution Console.\nSelected agent: ${agentName}\nFollow the selected agent's role and constraints while completing the request.\n\n`;
     const skillSection = skillContent
       ? `## Agent Workflow Definition\nFollow these instructions strictly:\n\n${skillContent}\n\n---\n\n`
       : '';
@@ -572,20 +800,74 @@ export class RunOrchestrator {
     return `${header}${skillSection}${fileSafety}${prompt}`;
   }
 
-  private _fetchSkillInfo(agentName: string, engine?: string): string | null {
+  private _buildCliArgs(engine: string, prompt: string, sandboxMode?: string | null, approvalPolicy?: string | null, includeDirs?: string[]): string[] {
+    switch (engine) {
+      case 'gemini': {
+        const args: string[] = [];
+        args.push('--output-format', 'text');
+        if (sandboxMode === 'danger-full-access' || approvalPolicy === 'never') {
+          args.push('--approval-mode', 'yolo');
+        } else if (sandboxMode === 'workspace-write' || approvalPolicy === 'on-request') {
+          args.push('--approval-mode', 'auto_edit');
+        } else if (sandboxMode === 'read-only') {
+          args.push('--sandbox', '--approval-mode', 'default');
+        } else {
+          args.push('--approval-mode', 'default');
+        }
+        if (includeDirs) {
+          for (const d of includeDirs) {
+            args.push('--include-directories', d);
+          }
+        }
+        args.push('--prompt', prompt);
+        return args;
+      }
+      case 'codex': {
+        const args: string[] = ['exec'];
+        let forceNoApproval = false;
+        if (approvalPolicy === 'never') {
+          if (sandboxMode === 'workspace-write') {
+            args.push('--full-auto');
+            sandboxMode = undefined;
+          } else if (sandboxMode === 'danger-full-access') {
+            args.push('--dangerously-bypass-approvals-and-sandbox');
+            sandboxMode = undefined;
+          } else if (!sandboxMode) {
+            forceNoApproval = true;
+          }
+        }
+        if (sandboxMode) {
+          args.push('--sandbox', sandboxMode);
+        }
+        if (forceNoApproval) {
+          args.push('--dangerously-bypass-approvals-and-sandbox');
+        }
+        args.push('-');
+        return args;
+      }
+      case 'claudecode':
+        return ['-p', prompt];
+      case 'opencode':
+        return ['-'];
+      default:
+        return [prompt];
+    }
+  }
+
+  private _fetchSkillInfo(agentName: string, engine?: string): { content: string | null; skillPath: string | null } {
     try {
       const agentsRoot = SETTINGS.getAgentsRoot(engine);
       const agentDir = path.join(agentsRoot, agentName);
       const configFile = path.join(agentDir, 'config.json');
-      if (!fs.existsSync(configFile)) return null;
+      if (!fs.existsSync(configFile)) return { content: null, skillPath: null };
       const config = JSON.parse(fs.readFileSync(configFile, 'utf-8'));
       const skillPathStr = config.skill_path;
-      if (!skillPathStr) return null;
+      if (!skillPathStr) return { content: null, skillPath: null };
       const skillPath = path.resolve(skillPathStr.replace(/^~/, require('os').homedir()));
       if (fs.existsSync(skillPath)) {
-        return fs.readFileSync(skillPath, 'utf-8');
+        return { content: fs.readFileSync(skillPath, 'utf-8'), skillPath };
       }
     } catch {}
-    return null;
+    return { content: null, skillPath: null };
   }
 }

@@ -258,6 +258,7 @@ export const WorkflowStepRunSchema = z.object({
   completedAt: z.string().nullable(),
   exitCode: z.number().nullable(),
   errorMessage: z.string().nullable(),
+  attachedFiles: z.array(z.string()).optional(),
 });
 export type WorkflowStepRun = z.infer<typeof WorkflowStepRunSchema>;
 
@@ -272,6 +273,7 @@ export const WorkflowRunSummarySchema = z.object({
   startedAt: z.string().nullable(),
   completedAt: z.string().nullable(),
   errorMessage: z.string().nullable(),
+  engine: z.string().nullable(),
 });
 export type WorkflowRunSummary = z.infer<typeof WorkflowRunSummarySchema>;
 
@@ -281,6 +283,7 @@ export const WorkflowRunDetailSchema = z.object({
   workspaceRoot: z.string(),
   sandboxMode: SandboxModeSchema,
   approvalPolicy: ApprovalPolicySchema,
+  engine: z.string().nullable(),
   status: WorkflowRunStatusSchema,
   currentStepIndex: z.number().nullable(),
   totalSteps: z.number(),
@@ -357,5 +360,14 @@ export type IpcVersionCheck = z.infer<typeof IpcVersionCheckSchema>;
 
 export const IpcChannelSchema = z.record(z.string(), z.string());
 export type IpcChannel = z.infer<typeof IpcChannelSchema>;
+
+export const HitlRequestSchema = z.object({
+  id: z.string(),
+  stepIndex: z.number(),
+  agentName: z.string(),
+  message: z.string(),
+  permission: z.string(),
+});
+export type HitlRequest = z.infer<typeof HitlRequestSchema>;
 
 export const IPC_MIN_VERSION = '1.0.0';

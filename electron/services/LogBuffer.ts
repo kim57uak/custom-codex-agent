@@ -30,7 +30,7 @@ interface LogBufferOptions {
 }
 
 const DEFAULT_MAX_SIZE = 50 * 1024 * 1024;       // 50MB
-const DEFAULT_FLUSH_INTERVAL = 50;                 // 50ms
+const DEFAULT_FLUSH_INTERVAL = 10;                 // 10ms
 const DEFAULT_MAX_LINES = 100;                     // 100줄
 
 /**
@@ -122,7 +122,6 @@ export class LogBuffer {
     // flush 이벤트 발생 (EventBroker.onFlush 핸들러 호출)
     if (entries.length > 0) {
       this.emitter.emit('flush', entries);
-      this.pause();
     }
 
     // flush 타이머 재시작

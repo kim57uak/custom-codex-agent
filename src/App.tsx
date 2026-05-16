@@ -86,8 +86,9 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const showChat = !chatCollapsed && activeView !== 'workflow';
   const gridStyle: React.CSSProperties = {
-    gridTemplateColumns: `var(--activity-bar-w) ${sidebarNeeded ? 'var(--sidebar-w)' : '0px'} 1fr ${chatCollapsed ? '0px' : 'var(--chat-w)'}`,
+    gridTemplateColumns: `var(--activity-bar-w) ${sidebarNeeded ? 'var(--sidebar-w)' : '0px'} 1fr ${showChat ? 'var(--chat-w)' : '0px'}`,
   };
 
   return (

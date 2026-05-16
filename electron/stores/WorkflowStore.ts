@@ -10,6 +10,7 @@ export interface WorkflowRunRecord {
   workspaceRoot: string;
   sandboxMode: string | null;
   approvalPolicy: string | null;
+  engine: string | null;
   status: string;
   currentStepIndex: number | null;
   totalSteps: number;
@@ -130,6 +131,7 @@ export class WorkflowStore {
         { name: 'started_at', def: 'TEXT' },
         { name: 'completed_at', def: 'TEXT' },
         { name: 'error_message', def: 'TEXT' },
+        { name: 'engine', def: 'TEXT' },
         { name: 'sandbox_mode', def: 'TEXT' },
         { name: 'approval_policy', def: 'TEXT' },
         { name: 'skill_name', def: 'TEXT' },
@@ -179,13 +181,13 @@ export class WorkflowStore {
   }
 
   createWorkflowRun(goalPrompt: string, steps: Array<{ agentName: string; prompt: string; title?: string; iconKey?: string; skillName?: string | null }>,
-    workspaceRoot?: string, sandboxMode?: string | null, approvalPolicy?: string | null): WorkflowRunRecord {
+    workspaceRoot?: string, sandboxMode?: string | null, approvalPolicy?: string | null, engine?: string | null): WorkflowRunRecord {
     const id = `wf_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
     this.db.prepare(`
-      INSERT INTO workflow_runs (workflow_run_id, goal_prompt, workspace_root, sandbox_mode, approval_policy, status, current_step_index, total_steps, created_at)
-      VALUES (?, ?, ?, ?, ?, 'draft', NULL, ?, ?)
-    `).run(id, goalPrompt, workspaceRoot ?? '', sandboxMode ?? null, approvalPolicy ?? null, steps.length, now);
+      INSERT INTO workflow_runs (workflow_run_id, goal_prompt, workspace_root, sandbox_mode, approval_policy, engine, status, current_step_index, total_steps, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'draft', NULL, ?, ?)
+    `).run(id, goalPrompt, workspaceRoot ?? '', sandboxMode ?? null, approvalPolicy ?? null, engine ?? null, steps.length, now);
 
     for (let i = 0; i < steps.length; i++) {
       const s = steps[i]!;
@@ -223,6 +225,16 @@ export class WorkflowStore {
     return rows.map(r => this._rowToStep(r));
   }
 
+  addWorkflowStep(workflowRunId: string, step: { agentName: string; prompt: string; title?: string; iconKey?: string; skillName?: string | null }): void {
+    const steps = this.getWorkflowSteps(workflowRunId);
+    const nextIndex = steps.length;
+    this.db.prepare(`
+      INSERT INTO workflow_steps (step_index, workflow_run_id, agent_name, skill_name, icon_key, title, prompt, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'ready')
+    `).run(nextIndex, workflowRunId, step.agentName, step.skillName ?? null, step.iconKey ?? 'bot', step.title ?? `${step.agentName}`, step.prompt);
+    this.db.prepare(`UPDATE workflow_runs SET total_steps = ? WHERE workflow_run_id = ?`).run(nextIndex + 1, workflowRunId);
+  }
+
   updateWorkflowStep(workflowRunId: string, stepIndex: number, updates: Partial<WorkflowStepRecord>): void {
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -244,6 +256,36 @@ export class WorkflowStore {
     if (sets.length === 0) return;
     params.push(workflowRunId, stepIndex);
     this.db.prepare(`UPDATE workflow_steps SET ${sets.join(', ')} WHERE workflow_run_id = ? AND step_index = ?`).run(...params);
+  }
+
+  removeWorkflowStep(workflowRunId: string, stepIndex: number): void {
+    const del = this.db.prepare('DELETE FROM workflow_steps WHERE workflow_run_id = ? AND step_index = ?');
+    const reindex = this.db.prepare('UPDATE workflow_steps SET step_index = ? WHERE workflow_run_id = ? AND step_index = ?');
+    const remaining = this.db.prepare('SELECT step_index FROM workflow_steps WHERE workflow_run_id = ? AND step_index != ? ORDER BY step_index')
+      .all(workflowRunId, stepIndex) as Array<{ step_index: number }>;
+    this.db.transaction(() => {
+      del.run(workflowRunId, stepIndex);
+      for (let i = 0; i < remaining.length; i++) {
+        reindex.run(i, workflowRunId, remaining[i]!.step_index);
+      }
+      this.db.prepare('UPDATE workflow_runs SET total_steps = ?, current_step_index = NULL WHERE workflow_run_id = ?')
+        .run(remaining.length, workflowRunId);
+    })();
+  }
+
+  deleteWorkflowRun(workflowRunId: string): boolean {
+    const run = this.getWorkflowRun(workflowRunId);
+    if (!run) return false;
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM workflow_events WHERE workflow_run_id = ?').run(workflowRunId);
+      this.db.prepare('DELETE FROM workflow_steps WHERE workflow_run_id = ?').run(workflowRunId);
+      this.db.prepare('DELETE FROM workflow_runs WHERE workflow_run_id = ?').run(workflowRunId);
+    })();
+    return true;
+  }
+
+  updateWorkflowRunGoalPrompt(workflowRunId: string, goalPrompt: string): void {
+    this.db.prepare('UPDATE workflow_runs SET goal_prompt = ? WHERE workflow_run_id = ?').run(goalPrompt, workflowRunId);
   }
 
   addWorkflowEvent(workflowRunId: string, eventType: string, message: string, stepIndex?: number | null): WorkflowEventRecord {
@@ -296,6 +338,7 @@ export class WorkflowStore {
       workspaceRoot: row.workspace_root as string,
       sandboxMode: row.sandbox_mode as string | null,
       approvalPolicy: row.approval_policy as string | null,
+      engine: row.engine as string | null,
       status: row.status as string,
       currentStepIndex: row.current_step_index as number | null,
       totalSteps: row.total_steps as number,

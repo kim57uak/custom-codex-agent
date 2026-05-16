@@ -52,6 +52,12 @@ interface UIState {
 
   // 선택된 엔진
   selectedEngine: string;
+
+  // 워크플로 상태
+  selectedWorkflowRunId: string | null;
+  workflowSidebarTab: 'runs' | 'agents';
+  sandboxMode: string;
+  approvalPolicy: string;
 }
 
 /**
@@ -79,6 +85,12 @@ interface UIActions {
 
   // 엔진 액션
   setSelectedEngine: (engine: string) => void;
+
+  // 워크플로 액션
+  setSelectedWorkflowRunId: (id: string | null) => void;
+  setWorkflowSidebarTab: (tab: 'runs' | 'agents') => void;
+  setSandboxMode: (mode: string) => void;
+  setApprovalPolicy: (policy: string) => void;
 }
 
 /** UIStore 전체 타입 */
@@ -100,6 +112,10 @@ const initialState: UIState = {
   activeRunCount: 0,
   appVersion: '0.1.0',
   selectedEngine: 'codex',
+  selectedWorkflowRunId: null,
+  workflowSidebarTab: 'agents',
+  sandboxMode: 'workspace-write',
+  approvalPolicy: 'never',
 };
 
 /**
@@ -139,6 +155,12 @@ export const useUIStore = create<UIStore>()(
 
       // 엔진 액션
       setSelectedEngine: (engine) => set({ selectedEngine: engine }),
+
+      // 워크플로 액션
+      setSelectedWorkflowRunId: (id) => set({ selectedWorkflowRunId: id }),
+      setWorkflowSidebarTab: (tab) => set({ workflowSidebarTab: tab }),
+      setSandboxMode: (mode) => set({ sandboxMode: mode }),
+      setApprovalPolicy: (policy) => set({ approvalPolicy: policy }),
     }),
     {
       name: 'agent-orchestrator-ui',

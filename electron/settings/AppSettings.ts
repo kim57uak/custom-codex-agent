@@ -23,8 +23,20 @@ export class AppSettings {
   readonly opencodeCliExecutable: string;
   readonly claudecodeCliExecutable: string;
   readonly founderName: string;
-  readonly defaultEngine: EngineType;
   readonly workspaceRoot: string;
+  private _defaultEngineOverride: EngineType | null = null;
+
+  get defaultEngine(): EngineType {
+    if (this._defaultEngineOverride) return this._defaultEngineOverride;
+    const env = process.env.CODEX_AGENT_DEFAULT_ENGINE;
+    const valid: EngineType[] = ['codex', 'gemini', 'opencode', 'claudecode'];
+    return valid.includes(env as EngineType) ? (env as EngineType) : 'gemini';
+  }
+
+  setDefaultEngine(engine: EngineType): void {
+    this._defaultEngineOverride = engine;
+  }
+
   readonly workflowRecommendationMaxAgents: number;
   readonly runListLimitDefault = 30;
   readonly runEventListLimitDefault = 100;
@@ -53,7 +65,6 @@ export class AppSettings {
     this.opencodeCliExecutable = process.env.CODEX_AGENT_OPENCODE_CLI || 'opencode';
     this.claudecodeCliExecutable = process.env.CODEX_AGENT_CLAUDE_CLI || 'claude';
     this.founderName = process.env.CODEX_AGENT_FOUNDER_NAME || '대표이사';
-    this.defaultEngine = (process.env.CODEX_AGENT_DEFAULT_ENGINE === 'codex' ? 'codex' : 'gemini');
     this.workspaceRoot = this._envPath('CODEX_AGENT_WORKSPACE_ROOT') || path.resolve('.');
     this.workflowRecommendationMaxAgents = this._envInt('CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS', 6, 1, 12);
     this.backupArchiveNameSuffix = process.env.CODEX_AGENT_BACKUP_ARCHIVE_SUFFIX || '-skills-agents-backup-';

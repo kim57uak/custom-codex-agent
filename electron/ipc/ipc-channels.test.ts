@@ -23,6 +23,8 @@ describe('IPC Channel Contract', () => {
       'watcher:start', 'watcher:stop', 'watcher:add-path', 'watcher:remove-path', 'watcher:status',
       'notification:show',
       'dialog:open-directory',
+      'dialog:open-file',
+      'workflow:permission-respond',
     ];
 
     it('should declare all required invoke channels', () => {
@@ -31,8 +33,8 @@ describe('IPC Channel Contract', () => {
       }
     });
 
-    it('should have 53 invoke channels', () => {
-      expect(channels.length).toBe(53);
+    it('should have 65 invoke channels', () => {
+      expect(channels.length).toBe(65);
     });
 
     it('should use domain:action naming', () => {
@@ -77,6 +79,7 @@ describe('IPC Channel Contract', () => {
       'run:started', 'run:ended',
       'console:clear',
       'workflow:selected',
+      'workflow:event', 'workflow:run-status', 'workflow:permission-request',
     ];
 
     it('should declare all required on channels', () => {
@@ -85,8 +88,8 @@ describe('IPC Channel Contract', () => {
       }
     });
 
-    it('should have 11 on channels', () => {
-      expect(channels.length).toBe(11);
+    it('should have 14 on channels', () => {
+      expect(channels.length).toBe(14);
     });
   });
 });

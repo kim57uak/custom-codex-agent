@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import mermaid from 'mermaid';
 import { useUIStore } from '../../stores/uiStore';
 import { useResizeHandle } from '../../hooks/useResizeHandle';
+import type { WorkflowRecommendedAgent } from '../../../types/ipc-contract';
 
 type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -17,6 +18,24 @@ interface ChatMessage {
 interface ChatSidepanelProps {
   collapsed?: boolean;
   onToggle?: () => void;
+}
+
+const STEP_ICONS: Record<string, string> = {
+  shield: '\u{1F6E1}',
+  'check-circle': '\u2705',
+  'file-text': '\u{1F4C4}',
+  database: '\u{1F4BE}',
+  layout: '\u{1F3A8}',
+  server: '\u{1F5A5}',
+  'play-square': '\u25B6',
+  folder: '\u{1F4C1}',
+  table: '\u{1F4CA}',
+  presentation: '\u{1F4CA}',
+  bot: '\u{1F916}',
+};
+
+function getIcon(iconKey: string | null | undefined): string {
+  return STEP_ICONS[iconKey || 'bot']!;
 }
 
 async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
@@ -124,6 +143,11 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [wfRecommendations, setWfRecommendations] = useState<{
+    goalPrompt: string;
+    agents: WorkflowRecommendedAgent[];
+    workflowRunId: string | null;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatResizeRef = useResizeHandle({
@@ -154,15 +178,29 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
     addMessage('user', userMessage);
 
     try {
-      const result = await ipcInvoke<{ response: string }>('chat:send', {
-        message: userMessage,
-        systemPrompt: SYSTEM_PROMPT,
-        engine: selectedEngine,
-      });
-      if (result?.response) {
-        addMessage('assistant', result.response);
+      const [chatResult, wfResult] = await Promise.all([
+        ipcInvoke<{ response: string }>('chat:send', {
+          message: userMessage,
+          systemPrompt: SYSTEM_PROMPT,
+          engine: selectedEngine,
+        }),
+        ipcInvoke<{ recommendations: WorkflowRecommendedAgent[]; workflowRunId: string | null }>(
+          'workflow:recommend-and-create', { goalPrompt: userMessage, maxAgents: 4, engine: selectedEngine }
+        ),
+      ]);
+
+      if (chatResult?.response) {
+        addMessage('assistant', chatResult.response);
       } else {
         addMessage('system', 'Unable to get a response. Please try again later.');
+      }
+
+      if (wfResult && wfResult.recommendations.length >= 2) {
+        setWfRecommendations({
+          goalPrompt: userMessage,
+          agents: wfResult.recommendations,
+          workflowRunId: wfResult.workflowRunId,
+        });
       }
     } catch {
       addMessage('system', 'An error occurred while sending the message.');
@@ -170,6 +208,17 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
       setIsLoading(false);
     }
   };
+
+  const handleRunWorkflow = useCallback(async () => {
+    if (!wfRecommendations?.workflowRunId) return;
+    await ipcInvoke('workflow:run', wfRecommendations.workflowRunId);
+    addMessage('system', `워크플로 실행을 시작했습니다: ${wfRecommendations.goalPrompt}`);
+    setWfRecommendations(null);
+  }, [wfRecommendations, addMessage]);
+
+  const handleDismissWorkflow = useCallback(() => {
+    setWfRecommendations(null);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -236,6 +285,47 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
         {messages.map((message) => (
           <ChatMessageItem key={message.id} message={message} />
         ))}
+
+        {wfRecommendations && (
+          <div className="chat-msg chat-msg--workflow">
+            <div className="chat-msg__avatar">
+              <span className="codicon codicon-workflow" />
+            </div>
+            <div className="chat-msg__bubble">
+              <div className="chat-msg__header">
+                <span className="chat-msg__role">Workflow</span>
+              </div>
+              <div className="chat-msg__body">
+                <div className="workflow-recommendation">
+                  <div className="workflow-rec-header">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                    <span>추천 워크플로: {wfRecommendations.agents.length}명의 에이전트</span>
+                  </div>
+                  <div className="workflow-rec-agents">
+                    {wfRecommendations.agents.map((agent, i) => (
+                      <div key={`${agent.agentName}-${i}`} className="workflow-rec-agent">
+                        <span className="workflow-rec-agent__icon">{agent.iconKey ? getIcon(agent.iconKey) : '\u{1F916}'}</span>
+                        <div className="workflow-rec-agent__info">
+                          <span className="workflow-rec-agent__name">{agent.agentName}</span>
+                          {agent.reason && <span className="workflow-rec-agent__reason">{agent.reason}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="workflow-rec-actions">
+                    <button className="btn-run" onClick={handleRunWorkflow}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      워크플로 실행
+                    </button>
+                    <button className="btn-dismiss" onClick={handleDismissWorkflow}>취소</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isLoading && (
           <div className="chat-msg chat-msg--loading">

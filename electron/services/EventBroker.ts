@@ -161,6 +161,57 @@ export class EventBroker {
   }
 
   /**
+   * 워크플로 이벤트 푸시 ('workflow:event')
+   * - WorkflowEngine에서 실행 중인 워크플로의 단계별 이벤트를 renderer로 전송
+   */
+  pushWorkflowEvent(event: {
+    eventId: number;
+    workflowRunId: string;
+    stepIndex: number | null;
+    eventType: string;
+    message: string;
+    createdAt: string;
+  }): void {
+    for (const win of this.windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('workflow:event', event);
+      }
+    }
+  }
+
+  /**
+   * 워크플로 실행 상태 변경 푸시 ('workflow:run-status')
+   * - WorkflowEngine에서 워크플로 실행 상태가 변경될 때 renderer로 전송
+   */
+  pushWorkflowRunStatus(workflowRunId: string, status: string, currentStepIndex: number): void {
+    for (const win of this.windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('workflow:run-status', { workflowRunId, status, currentStepIndex });
+      }
+    }
+  }
+
+  /**
+   * HITL 권한 요청 이벤트 푸시 ('workflow:permission-request')
+   * - RunOrchestrator에서 CLI permission 프롬프트 감지 시 renderer로 전송
+   */
+  pushPermissionRequest(data: {
+    id: string;
+    runId: string;
+    agentName: string;
+    message: string;
+    permission: string;
+    stepIndex: number;
+    workflowRunId?: string;
+  }): void {
+    for (const win of this.windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('workflow:permission-request', data);
+      }
+    }
+  }
+
+  /**
    * 파일 변경 이벤트 푸시
    * - FileWatcher 연동 (InspectorService)
    * - 모든 등록된 창으로 'file:change' 채널 전송
