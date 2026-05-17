@@ -10,6 +10,7 @@
  * - spawn(): CLI 프로세스 생성
  * - terminate(): CLI 프로세스 강제 종료
  * - validateConnection(): CLI 경로 및 버전 검증
+ * - buildCliArgs(): 엔진별 CLI 인자 구성
  *
  * 보안 요구사항:
  * - ALLOWED_COMMANDS 목록 사용 (white-list)
@@ -18,6 +19,16 @@
  */
 
 import type { EngineType } from '../../types/ipc-contract';
+import { CodexEngine } from './CodexEngine';
+import { GeminiEngine } from './GeminiEngine';
+import { OpenCodeEngine } from './OpenCodeEngine';
+import { ClaudeCodeEngine } from './ClaudeCodeEngine';
+
+export interface BuildCliArgsOptions {
+  sandboxMode?: string | null;
+  approvalPolicy?: string | null;
+  includeDirs?: string[];
+}
 
 /**
  * 엔진 어댑터 공통 인터페이스
@@ -26,6 +37,9 @@ import type { EngineType } from '../../types/ipc-contract';
 export interface EngineAdapter {
   /** 엔진 타입 (codex/gemini/opencode/claudecode) */
   readonly engine: EngineType;
+
+  /** CLI 바이너리 파일명 (codex/gemini/opencode/claude) */
+  readonly binaryName: string;
 
   /**
    * CLI 프로세스 생성
@@ -48,6 +62,14 @@ export interface EngineAdapter {
    * @returns 유효성 검증 결과
    */
   validateConnection(cliPath: string): Promise<{ valid: boolean; version?: string; error?: string }>;
+
+  /**
+   * 엔진별 CLI 인자 구성
+   * @param prompt 실행할 프롬프트
+   * @param options 추가 옵션 (sandbox, approval, includeDirs)
+   * @returns CLI 인자 배열
+   */
+  buildCliArgs(prompt: string, options?: BuildCliArgsOptions): string[];
 }
 
 /**
@@ -57,17 +79,15 @@ export interface EngineAdapter {
  * @param engine 엔진 타입
  * @returns EngineAdapter 인스턴스
  */
+const ENGINE_ADAPTERS: Record<EngineType, new () => EngineAdapter> = {
+  codex: CodexEngine,
+  gemini: GeminiEngine,
+  opencode: OpenCodeEngine,
+  claudecode: ClaudeCodeEngine,
+};
+
 export function createEngineAdapter(engine: EngineType): EngineAdapter {
-  switch (engine) {
-    case 'codex':
-      return new (require('./CodexEngine').CodexEngine)();
-    case 'gemini':
-      return new (require('./GeminiEngine').GeminiEngine)();
-    case 'opencode':
-      return new (require('./OpenCodeEngine').OpenCodeEngine)();
-    case 'claudecode':
-      return new (require('./ClaudeCodeEngine').ClaudeCodeEngine)();
-    default:
-      throw new Error(`Unsupported engine type: ${engine}`);
-  }
+  const Adapter = ENGINE_ADAPTERS[engine];
+  if (!Adapter) throw new Error(`Unsupported engine type: ${engine}`);
+  return new Adapter();
 }

@@ -10,11 +10,11 @@ describe('IPC Channel Contract', () => {
     const channels = Object.values(IPC_CHANNELS.invoke);
     const expectedChannels = [
       'run:agent', 'run:cancel', 'run:list', 'run:get', 'run:start',
-      'workflow:create', 'workflow:update', 'workflow:delete', 'workflow:list', 'workflow:run', 'workflow:stop',
+      'workflow:create', 'workflow:update', 'workflow:delete', 'workflow:list', 'workflow:run', 'workflow:stop', 'workflow:retry-step',
       'agents:list', 'agents:save', 'agents:delete',
       'config:get', 'config:set', 'config:get-agents',
       'file:read', 'file:write', 'dir:read',
-      'inspector:select-file',
+      'inspector:list', 'inspector:select-file',
       'dashboard:stats', 'dashboard:recent-activity',
       'chat:send',
       'cli:validate',
@@ -33,8 +33,8 @@ describe('IPC Channel Contract', () => {
       }
     });
 
-    it('should have 65 invoke channels', () => {
-      expect(channels.length).toBe(65);
+    it('should have 67 invoke channels', () => {
+      expect(channels.length).toBe(67);
     });
 
     it('should use domain:action naming', () => {

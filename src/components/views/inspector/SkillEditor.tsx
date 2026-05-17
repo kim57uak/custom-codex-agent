@@ -1,0 +1,115 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import type { SkillModel } from '../../../../types/ipc-contract';
+import { ipcInvoke } from '../../../utils/ipc';
+
+export const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
+  const [loading, setLoading] = useState(false);
+  const [content, setContent] = useState<string | null>(null);
+  const [originalContent, setOriginalContent] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadContent();
+  }, [skill.path]);
+
+  const loadContent = async () => {
+    setLoading(true);
+    setError(null);
+    const result = await ipcInvoke<{ content: string }>('file:read', skill.path);
+    if (result) {
+      setContent(result.content);
+      setOriginalContent(result.content);
+    } else {
+      setError('Could not read skill file');
+    }
+    setLoading(false);
+  };
+
+  const handleSave = useCallback(async () => {
+    if (!content) return;
+    setSaving(true);
+    setError(null);
+    setSuccessMsg(null);
+    const result = await ipcInvoke('inspector:save-file', { path: skill.path, content });
+    if (result) {
+      setOriginalContent(content);
+      setSuccessMsg('저장됨');
+      setTimeout(() => setSuccessMsg(null), 2000);
+    } else {
+      setError('저장 실패');
+    }
+    setSaving(false);
+  }, [content, skill.path]);
+
+  const hasChanges = content !== null && originalContent !== null && content !== originalContent;
+
+  return (
+    <div className="inspector-editor">
+      <div className="inspector-editor__hero" style={{ '--hero-accent': 'var(--status-success)' } as React.CSSProperties}>
+        <span className="inspector-editor__hero-badge" style={{ background: 'var(--status-success)' }}>S</span>
+        <div>
+          <h2 className="inspector-editor__hero-title">{skill.name}</h2>
+          <p className="inspector-editor__hero-sub">
+            {skill.installed ? (skill.enabled ? '활성' : '비활성') : '미설치'}
+            {' · '}{skill.path}
+          </p>
+        </div>
+      </div>
+
+      <div className="inspector-editor__body">
+        {loading && (
+          <div className="inspector-editor__loading">
+            <div className="spinner" />
+            <span>Loading skill content...</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="inspector-editor__error">
+            <span className="codicon codicon-error" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {content !== null && !loading && (
+          <>
+            <div className="inspector-editor__toolbar">
+              <span className="inspector-editor__toolbar-label">Skill Definition (Markdown)</span>
+              <div className="inspector-editor__toolbar-actions">
+                {successMsg && <span className="inspector-editor__success">{successMsg}</span>}
+                {hasChanges && (
+                  <button className="inspector-editor__btn inspector-editor__btn--revert" onClick={() => setContent(originalContent)}>
+                    되돌리기
+                  </button>
+                )}
+                <button
+                  className="inspector-editor__btn inspector-editor__btn--save"
+                  disabled={!hasChanges || saving}
+                  onClick={handleSave}
+                >
+                  {saving ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            </div>
+            <div className="inspector-editor__code-area">
+              <textarea
+                className="inspector-editor__code-input"
+                value={content}
+                onChange={e => setContent(e.target.value)}
+                spellCheck={false}
+              />
+            </div>
+          </>
+        )}
+
+        {!content && !loading && !error && (
+          <div className="inspector-editor__empty">
+            <p>No content for this skill.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

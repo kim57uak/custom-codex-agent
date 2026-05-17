@@ -15,6 +15,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import type { AgentConfig } from '../../../types/ipc-contract';
+import { ipcInvoke } from '../../utils/ipc';
 
 const DEPT_META: Record<string, { label: string; deptEn: string; color: string; icon: string }> = {
   '개발팀': { label: 'Engineering', deptEn: 'Engineering', color: 'var(--accent-primary)', icon: 'device-terminal' },
@@ -34,16 +35,6 @@ function getDeptMeta(dept: string): { label: string; deptEn: string; color: stri
     color: 'var(--text-tertiary)',
     icon: 'account',
   };
-}
-
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  try {
-    return await window.electronAPI.invoke(channel, ...args) as T;
-  } catch (err) {
-    console.error(`[IPC Error] ${channel}:`, err);
-    return null;
-  }
 }
 
 interface AgentGroup {

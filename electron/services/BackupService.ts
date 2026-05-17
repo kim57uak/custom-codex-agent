@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import { SETTINGS } from '../settings/AppSettings';
 
 export interface BackupMetadata {
@@ -34,6 +34,24 @@ export class BackupService {
     return { skillsRoot, agentsRoot };
   }
 
+  private _spawnTar(args: string[], cwd?: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const proc = spawn('tar', args, {
+        shell: false,
+        cwd: cwd ?? '/',
+        timeout: 30000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stderr = '';
+      proc.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`tar exited ${code}: ${stderr.slice(0, 200)}`));
+      });
+      proc.on('error', (err) => reject(err));
+    });
+  }
+
   createBackup(type: BackupMetadata['type'] = 'manual', description?: string): BackupMetadata {
     const id = `backup-${Date.now()}`;
     const timestamp = new Date().toISOString();
@@ -56,9 +74,8 @@ export class BackupService {
     const deletedEntryCount = this._purgeDeletedEntries(exists);
 
     if (exists.length > 0) {
-      const tarCmd = `cd / && tar -czf "${archivePath}" ${exists.map(e => `"${e.replace(/^\/+/, '')}"`).join(' ')} 2>/dev/null || true`;
       try {
-        execSync(tarCmd, { timeout: 30000 });
+        this._spawnTar(['-czf', archivePath, ...exists]);
       } catch {
         if (!fs.existsSync(archivePath)) {
           this._fallbackCopy(exists, archivePath.replace('.tar.gz', ''));
@@ -95,9 +112,8 @@ export class BackupService {
 
     let restoredRoots: string[] = [];
     if (archivePath.endsWith('.tar.gz')) {
-      const tarCmd = `tar -xzf "${archivePath}" -C / 2>/dev/null || true`;
       try {
-        execSync(tarCmd, { timeout: 30000 });
+        this._spawnTar(['-xzf', archivePath, '-C', '/']);
         restoredRoots = metadata.includedRoots;
       } catch {
         throw new Error('아카이브 복원에 실패했습니다.');
@@ -216,7 +232,7 @@ export class BackupService {
     const tmpFile = path.join(dir, '.empty');
     fs.writeFileSync(tmpFile, '');
     try {
-      execSync(`cd "${dir}" && tar -czf "${archivePath}" .empty 2>/dev/null`, { timeout: 5000 });
+      this._spawnTar(['-czf', archivePath, '.empty'], dir);
     } catch {
       fs.writeFileSync(archivePath, '');
     } finally {

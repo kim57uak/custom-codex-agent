@@ -1,10 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore';
-
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (!(window as any).electronAPI?.invoke) return null;
-  return (window as any).electronAPI.invoke(channel, ...args) as Promise<T>;
-}
+import { ipcInvoke } from '../../utils/ipc';
 
 /** 뷰 ID 타입 (uiStore와 동기화) */
 type ViewId = 'org' | 'dashboard' | 'console' | 'workflow' | 'inspector';

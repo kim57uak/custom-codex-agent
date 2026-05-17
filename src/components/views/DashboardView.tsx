@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { OverviewResponse, InventoryResponse } from '../../../types/ipc-contract';
+import { ipcInvoke } from '../../utils/ipc';
 
 interface RunRecord {
   id: string;
@@ -20,17 +21,6 @@ interface RunRecord {
   endedAt: string | null;
   durationMs: number | null;
   engine?: string;
-}
-
-/** IPC 헬퍼 */
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  try {
-    return await window.electronAPI.invoke(channel, ...args) as T;
-  } catch (err) {
-    console.error(`[IPC Error] ${channel}:`, err);
-    return null;
-  }
 }
 
 function fmtMs(ms: number): string {

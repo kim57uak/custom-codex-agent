@@ -5,6 +5,7 @@ import mermaid from 'mermaid';
 import { useUIStore } from '../../stores/uiStore';
 import { useResizeHandle } from '../../hooks/useResizeHandle';
 import type { WorkflowRecommendedAgent } from '../../../types/ipc-contract';
+import { ipcInvoke } from '../../utils/ipc';
 
 type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -36,16 +37,6 @@ const STEP_ICONS: Record<string, string> = {
 
 function getIcon(iconKey: string | null | undefined): string {
   return STEP_ICONS[iconKey || 'bot']!;
-}
-
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  try {
-    return await window.electronAPI.invoke(channel, ...args) as T;
-  } catch (err) {
-    console.error(`[IPC Error] ${channel}:`, err);
-    return null;
-  }
 }
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });

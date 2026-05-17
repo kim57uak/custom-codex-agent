@@ -1,17 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore';
+import { ipcInvoke } from '../../utils/ipc';
 
 interface StatusBarProps {}
-
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  try {
-    return await window.electronAPI.invoke(channel, ...args) as T;
-  } catch (err) {
-    console.error(`[IPC Error] ${channel}:`, err);
-    return null;
-  }
-}
 
 const ENGINES = [
   { id: 'codex', label: 'Codex', defaultPath: '/usr/local/bin/codex' },

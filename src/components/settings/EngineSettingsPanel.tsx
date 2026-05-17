@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { ipcInvoke } from '../../utils/ipc';
 
 /** 엔진 설정 타입 */
 interface EngineSettings {
@@ -77,17 +78,6 @@ const ENGINE_DESCRIPTIONS: Record<string, { name: string; description: string; i
     icon: 'comment-discussion',
   },
 };
-
-/** IPC 헬퍼 */
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  try {
-    return await window.electronAPI.invoke(channel, ...args) as T;
-  } catch (err) {
-    console.error(`[IPC Error] ${channel}:`, err);
-    return null;
-  }
-}
 
 /** 엔진 타입 */
 type EngineType = 'codex' | 'gemini' | 'opencode' | 'claudecode';

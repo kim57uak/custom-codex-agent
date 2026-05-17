@@ -367,12 +367,41 @@ export class ConfigReader {
     }
   }
 
+  getEnginePath(engine: string): string | null {
+    const binaryMap: Record<string, string> = {
+      codex: 'codex', gemini: 'gemini', opencode: 'opencode', claudecode: 'claude',
+    };
+    const binary = binaryMap[engine] ?? engine;
+    const searchDirs = [
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      '/home/linuxbrew/.linuxbrew/bin',
+      path.join(os.homedir(), '.nvm', 'versions', 'node', '*', 'bin'),
+      path.join(os.homedir(), '.local', 'bin'),
+    ];
+    const pathDirs = (process.env.PATH ?? '').split(':');
+    const allDirs = [...new Set([...searchDirs, ...pathDirs])];
+    for (const dir of allDirs) {
+      try {
+        const candidate = path.join(dir, binary);
+        if (fs.existsSync(candidate)) {
+          return fs.realpathSync(candidate);
+        }
+      } catch {}
+    }
+    return null;
+  }
+
   getStats(): { totalRuns: number; totalAgents: number; uptime: number } {
     return { totalRuns: 0, totalAgents: this.listAgents().length, uptime: 0 };
   }
 
   isAllowedPath(p: string): boolean {
-    return p.startsWith(os.homedir());
+    try {
+      return fs.realpathSync(p).startsWith(fs.realpathSync(os.homedir()));
+    } catch {
+      return p.startsWith(os.homedir());
+    }
   }
 
   private _readSqlite(dbPath: string, query: string, params: unknown[]): Array<Record<string, unknown>> {

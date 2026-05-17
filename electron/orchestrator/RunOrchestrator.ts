@@ -9,8 +9,10 @@ import { EventBroker } from '../services/EventBroker';
 import { RunStore } from '../stores/RunStore';
 import { ConfigReader } from '../services/ConfigReader';
 import { SETTINGS } from '../settings/AppSettings';
+import { createEngineAdapter } from '../adapters/EngineAdapter';
 import type { RunOptions, RunStatus, EngineType } from '../../types/ipc-contract';
 import type { RunRecord } from '../stores/RunStore';
+import type { BuildCliArgsOptions } from '../adapters/EngineAdapter';
 
 interface PidInfo {
   pid: number;
@@ -19,7 +21,7 @@ interface PidInfo {
   proc: ChildProcess;
 }
 
-const ALLOWED_COMMANDS = ['codex', 'gemini'] as const;
+
 
 /* ── HITL types ──────────────────────────────────── */
 export interface HitlRequestData {
@@ -41,6 +43,8 @@ export interface RunCreateResult {
   runId: string;
 }
 
+export type RunningSubStatus = 'initializing' | 'executing_cli' | 'processing_output';
+
 export class RunOrchestrator {
   private logBuffer: LogBuffer;
   private eventBroker: EventBroker;
@@ -48,6 +52,7 @@ export class RunOrchestrator {
   private configReader: ConfigReader;
   private pidRegistry = new Map<number, PidInfo>();
   private runningRuns = new Map<string, RunStatus>();
+  private runningSubStatuses = new Map<string, RunningSubStatus>();
   private startTimes = new Map<string, number>();
   private activeProcesses = new Map<string, ChildProcess>();
   private cancelledRunIds = new Set<string>();
@@ -116,16 +121,12 @@ export class RunOrchestrator {
     return sanitized;
   }
 
-  private _engineBinary(engine: string): string {
-    const map: Record<string, string> = { codex: 'codex', gemini: 'gemini', opencode: 'opencode', claudecode: 'claude' };
-    return map[engine] ?? engine;
-  }
-
   private getCliPath(engine: EngineType, agentConfig?: { cliPath?: string | undefined }): string {
     if (agentConfig?.cliPath) return agentConfig.cliPath;
-    const binary = this._engineBinary(engine);
-    const pathEnv = process.env.PATH ?? '';
-    for (const dir of pathEnv.split(':')) {
+    const resolved = this.configReader.getEnginePath(engine);
+    if (resolved) return resolved;
+    const binary = createEngineAdapter(engine).binaryName;
+    for (const dir of (process.env.PATH ?? '').split(':')) {
       const candidate = `${dir}/${binary}`;
       try { if (fs.existsSync(candidate)) return candidate; } catch {}
     }
@@ -181,6 +182,7 @@ export class RunOrchestrator {
       const updated = this.runStore.markRunning(runId);
       if (!updated) return;
       this.runningRuns.set(runId, 'running');
+      this._setRunningSubStatus(runId, 'initializing');
       this.runStore.appendEvent(runId, 'run:started', `run started (engine=${engine})`);
       this._publishRunEvent(runId, 'run:started', `run started (engine=${engine})`);
 
@@ -204,7 +206,10 @@ export class RunOrchestrator {
       if (skillInfo.skillPath) {
         includeDirs.push(path.dirname(skillInfo.skillPath));
       }
-      const args = this._buildCliArgs(engine as EngineType, effectivePrompt, sandboxMode, approvalPolicy, includeDirs.length > 0 ? includeDirs : undefined);
+      const adapter = createEngineAdapter(engine as EngineType);
+      const args = adapter.buildCliArgs(effectivePrompt, { sandboxMode, approvalPolicy, includeDirs: includeDirs.length > 0 ? includeDirs : undefined } as BuildCliArgsOptions);
+
+      this._setRunningSubStatus(runId, 'executing_cli');
 
       const resolvedCwd = workspaceRoot || this._extractCwdFromPrompt(effectivePrompt) || this.defaultWorkspaceRoot;
       proc = spawn(cliPath, args, {
@@ -232,6 +237,8 @@ export class RunOrchestrator {
       }
 
 
+      let gotFirstOutput = false;
+
       let inactivityTimer: NodeJS.Timeout | null = null;
       let inactivityKill = false;
       const INACTIVITY_MS = 120_000;
@@ -248,6 +255,10 @@ export class RunOrchestrator {
       };
 
       proc.stdout?.on('data', (data: Buffer) => {
+        if (!gotFirstOutput) {
+          gotFirstOutput = true;
+          this._setRunningSubStatus(runId, 'processing_output');
+        }
         const text = this._stripAnsi(data.toString());
         const lines = text.split('\n').filter(Boolean);
         for (const line of lines) {
@@ -320,6 +331,7 @@ export class RunOrchestrator {
           this.hitlPending.delete(runId);
           this.hitlStepContext.delete(runId);
           this.outputBuffers.delete(runId);
+          this.runningSubStatuses.delete(runId);
           this.runStore.addEvent(runId, 'done', { code, status: this.runningRuns.get(runId) });
           const durationMs = this.getRunDuration(runId);
           this.eventBroker.pushRunEnded(runId, code ?? -1, durationMs);
@@ -349,6 +361,7 @@ export class RunOrchestrator {
           this.hitlPending.delete(runId);
           this.hitlStepContext.delete(runId);
           this.outputBuffers.delete(runId);
+          this.runningSubStatuses.delete(runId);
           this.runStore.addEvent(runId, 'error', { message: err.message });
           const durationMs = this.getRunDuration(runId);
           this.eventBroker.pushRunEnded(runId, -1, durationMs);
@@ -527,85 +540,15 @@ export class RunOrchestrator {
     });
   }
 
-  startRun(options: RunOptions): { runId: string } {
+  async startRun(options: RunOptions): Promise<RunCreateResult> {
     const agents = this.configReader.listAgents();
     const agent = agents.find(a => a.id === options.agentId);
     const engine: EngineType = (options.engine ?? agent?.engine ?? SETTINGS.defaultEngine) as EngineType;
-    const sanitizedEnv = this.sanitizeEnv();
-    const cliPath = this.getCliPath(engine, agent ? { cliPath: agent.cliPath } : undefined);
-    const run = this.runStore.createRun(options as Parameters<typeof this.runStore.createRun>[0]);
-    this.runningRuns.set(run.id, 'queued');
-    this.runStore.updateRunStatus(run.id, 'running');
-    this.runningRuns.set(run.id, 'running');
 
-    const agentName = agent?.name ?? options.agentId;
-    const skillInfo = this._fetchSkillInfo(agentName, engine);
-    const effectivePrompt = this._buildEffectivePrompt(agentName, options.prompt, skillInfo.content, engine);
-
-    const args = this._buildCliArgs(engine, effectivePrompt, options.sandboxMode, options.approvalPolicy);
-    const startCwd = this._extractCwdFromPrompt(effectivePrompt) || this.defaultWorkspaceRoot;
-    const proc = spawn(cliPath, args, {
-      env: { ...sanitizedEnv, ...agent?.env },
-      shell: false,
-      cwd: startCwd,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    this.pidRegistry.set(proc.pid!, { pid: proc.pid!, runId: run.id, engine, proc });
-
-    if (engine === 'codex') {
-      proc.stdin?.write(effectivePrompt);
-      proc.stdin?.end();
-    }
-    if (engine === 'opencode') {
-      proc.stdin?.end();
-    }
-
-    proc.stdout?.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n').filter(Boolean);
-      for (const line of lines) {
-        this.runStore.addEvent(run.id, 'run:stdout', line);
-        this._publishRunEvent(run.id, 'run:stdout', line);
-        this.logBuffer.push({ runId: run.id, source: agentName, level: 'info', message: line, timestamp: new Date().toISOString(), raw: line });
-      }
-    });
-
-    proc.stderr?.on('data', (data: Buffer) => {
-      const lines = data.toString().split('\n').filter(Boolean);
-      for (const line of lines) {
-        this.runStore.addEvent(run.id, 'run:stderr', line);
-        this._publishRunEvent(run.id, 'run:stderr', line);
-        this.logBuffer.push({ runId: run.id, source: agentName, level: 'error', message: line, timestamp: new Date().toISOString(), raw: line });
-      }
-    });
-
-    proc.on('close', (code) => {
-      const status: RunStatus = code === 0 ? 'completed' : 'failed';
-      this.runStore.updateRunStatus(run.id, status);
-      this.runningRuns.set(run.id, status);
-      this.pidRegistry.delete(proc.pid!);
-      this.runStore.addEvent(run.id, 'done', { code, status });
-      const durationMs = this.getRunDuration(run.id);
-      this.eventBroker.pushRunEnded(run.id, code ?? -1, durationMs);
-      this.startTimes.delete(run.id);
-    });
-
-    proc.on('error', (err) => {
-      this.runStore.updateRunStatus(run.id, 'failed', err.message);
-      this.runningRuns.set(run.id, 'failed');
-      this.pidRegistry.delete(proc.pid!);
-      this.runStore.addEvent(run.id, 'error', { message: err.message });
-      const durationMs = this.getRunDuration(run.id);
-      this.eventBroker.pushRunEnded(run.id, -1, durationMs);
-      this.startTimes.delete(run.id);
-    });
-
-    const startTime = Date.now();
-    this.startTimes.set(run.id, startTime);
-    this.runStore.addEvent(run.id, 'start', { pid: proc.pid, engine, cliPath });
-    this.eventBroker.pushRunStarted(run.id, options.agentId);
-
-    return { runId: run.id };
+    return this.createRun(
+      options.agentId, options.prompt, options.workspace,
+      options.sandboxMode, options.approvalPolicy, engine,
+    );
   }
 
   private getRunDuration(runId: string): number {
@@ -675,13 +618,10 @@ export class RunOrchestrator {
     const targetEngine = valid.includes(engine as EngineType) ? (engine as EngineType) : SETTINGS.defaultEngine;
     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${message}` : message;
 
-    const binary = this._engineBinary(targetEngine);
-    const brewPaths: Record<string, string> = { gemini: '/opt/homebrew/bin/gemini', codex: '/opt/homebrew/bin/codex', claude: '/opt/homebrew/bin/claude' };
-    let cliPath = binary;
-    const brewPath = brewPaths[binary];
-    if (brewPath && fs.existsSync(brewPath)) {
-      cliPath = brewPath;
-    } else {
+    const binary = createEngineAdapter(targetEngine).binaryName;
+    let cliPath = this.configReader.getEnginePath(targetEngine);
+    if (!cliPath) {
+      cliPath = binary;
       for (const dir of (process.env.PATH ?? '').split(':')) {
         const candidate = `${dir}/${binary}`;
         try { if (fs.existsSync(candidate)) { cliPath = candidate; break; } } catch {}
@@ -739,8 +679,8 @@ export class RunOrchestrator {
     if (isRunning) return true;
 
     try {
-      const binary = this._engineBinary('opencode');
-      this.opencodeServer = spawn(binary, ['serve', '--port', String(this.OPENCODE_PORT), '--hostname', '127.0.0.1'], {
+      const opencodeCli = this.configReader.getEnginePath('opencode') ?? createEngineAdapter('opencode').binaryName;
+      this.opencodeServer = spawn(opencodeCli, ['serve', '--port', String(this.OPENCODE_PORT), '--hostname', '127.0.0.1'], {
         env: this.sanitizeEnv(),
         shell: false,
         stdio: 'ignore',
@@ -856,6 +796,12 @@ export class RunOrchestrator {
     }
   }
 
+  private _setRunningSubStatus(runId: string, subStatus: RunningSubStatus): void {
+    this.runningSubStatuses.set(runId, subStatus);
+    this.runStore.appendEvent(runId, 'run:sub-status', subStatus);
+    this._publishRunEvent(runId, 'run:sub-status', `sub-status: ${subStatus}`);
+  }
+
   private _publishRunEvent(runId: string, eventType: string, message: string): void {
     this.eventBroker.pushEvent({
       runId,
@@ -883,60 +829,6 @@ export class RunOrchestrator {
       if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
     }
     return null;
-  }
-
-  private _buildCliArgs(engine: string, prompt: string, sandboxMode?: string | null, approvalPolicy?: string | null, includeDirs?: string[]): string[] {
-    switch (engine) {
-      case 'gemini': {
-        const args: string[] = [];
-        args.push('--output-format', 'text');
-        if (sandboxMode === 'danger-full-access' || approvalPolicy === 'never') {
-          args.push('--approval-mode', 'yolo');
-        } else if (sandboxMode === 'workspace-write' || approvalPolicy === 'on-request') {
-          args.push('--approval-mode', 'auto_edit');
-        } else if (sandboxMode === 'read-only') {
-          args.push('--sandbox', '--approval-mode', 'default');
-        } else {
-          args.push('--approval-mode', 'default');
-        }
-        if (includeDirs) {
-          for (const d of includeDirs) {
-            args.push('--include-directories', d);
-          }
-        }
-        args.push('--prompt', prompt);
-        return args;
-      }
-      case 'codex': {
-        const args: string[] = ['exec'];
-        let forceNoApproval = false;
-        if (approvalPolicy === 'never') {
-          if (sandboxMode === 'workspace-write') {
-            args.push('--full-auto');
-            sandboxMode = undefined;
-          } else if (sandboxMode === 'danger-full-access') {
-            args.push('--dangerously-bypass-approvals-and-sandbox');
-            sandboxMode = undefined;
-          } else if (!sandboxMode) {
-            forceNoApproval = true;
-          }
-        }
-        if (sandboxMode) {
-          args.push('--sandbox', sandboxMode);
-        }
-        if (forceNoApproval) {
-          args.push('--dangerously-bypass-approvals-and-sandbox');
-        }
-        args.push('-');
-        return args;
-      }
-      case 'claudecode':
-        return ['-p', prompt];
-      case 'opencode':
-        return ['run', prompt, '--print-logs', '--dangerously-skip-permissions'];
-      default:
-        return [prompt];
-    }
   }
 
   private _fetchSkillInfo(agentName: string, engine?: string): { content: string | null; skillPath: string | null } {

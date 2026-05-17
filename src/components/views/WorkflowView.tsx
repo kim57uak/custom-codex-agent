@@ -4,16 +4,7 @@ import type {
   WorkflowRunSummary, WorkflowRunDetail, WorkflowStepRun,
   WorkflowRecommendedAgent, WorkflowRunStatus,
 } from '../../../types/ipc-contract';
-
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  try {
-    return await window.electronAPI.invoke(channel, ...args) as T;
-  } catch (err) {
-    console.error(`[IPC Error] ${channel}:`, err);
-    return null;
-  }
-}
+import { ipcInvoke } from '../../utils/ipc';
 
 const STEP_ICONS: Record<string, string> = {
   shield: '\u{1F6E1}', 'check-circle': '\u2705', 'file-text': '\u{1F4C4}',

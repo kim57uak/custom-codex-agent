@@ -21,7 +21,7 @@
  * - preload.ts에서 모든 IPC 채널 유효성 검증
  */
 
-import { app, BrowserWindow, ipcMain, dialog, Notification, shell, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, Notification, shell, Tray, Menu, nativeImage, session } from 'electron';
 import path from 'path';
 import { LogBuffer } from './services/LogBuffer';
 import { ConfigReader } from './services/ConfigReader';
@@ -57,8 +57,7 @@ let eventBroker: import('./services/EventBroker').EventBroker | null = null;
  *
  * @returns 살균된 환경 변수 객체
  */
-function sanitizeEnv(): NodeJS.ProcessEnv {
-  const sanitized = { ...process.env };
+function sanitizeEnv(): void {
   const blocklist = [
     'LD_PRELOAD',
     'DYLD_INSERT_LIBRARIES',
@@ -67,9 +66,8 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
     'ELECTRON_RUN_AS_NODE',
   ];
   for (const key of blocklist) {
-    delete sanitized[key];
+    delete process.env[key];
   }
-  return sanitized;
 }
 
 /**
@@ -88,9 +86,7 @@ function sanitizeEnv(): NodeJS.ProcessEnv {
  * - webSecurity: true (same-origin 정책)
  */
 function createWindow(): void {
-  // 환경 변수 살균 (CLI spawn 전에 적용)
-  const env = sanitizeEnv();
-  Object.assign(process.env, env);
+  sanitizeEnv();
 
   mainWindow = new BrowserWindow({
     width: 1400,
@@ -139,6 +135,25 @@ function createWindow(): void {
       shell.openExternal(url);
     }
     return { action: 'deny' };
+  });
+
+  // Content-Security-Policy 설정 (CEO_REVIEW_REPORT.md §3 필수)
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline'; " +
+          "style-src 'self' 'unsafe-inline'; " +
+          "img-src 'self' data:; " +
+          "font-src 'self' data:; " +
+          "connect-src 'self' ws:; " +
+          "frame-src 'none'; " +
+          "object-src 'none'",
+        ],
+      },
+    });
   });
 
   // URL 로드 (개발/프로덕션 분기)

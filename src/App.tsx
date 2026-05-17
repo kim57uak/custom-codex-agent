@@ -24,6 +24,7 @@ import { MainArea } from './components/layout/MainArea';
 import { Panel } from './components/layout/Panel';
 import { StatusBar } from './components/layout/StatusBar';
 import { ChatSidepanel } from './components/ai-chat/ChatSidepanel';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useUIStore } from './stores/uiStore';
 import './styles/global.css';
 
@@ -94,29 +95,41 @@ const App: React.FC = () => {
   return (
     <div className="app-shell" style={gridStyle}>
       {/* Activity Bar (좌측 고정, 48px) */}
-      <ActivityBar
-        activeView={activeView}
-        onViewChange={setActiveView}
-        onToggleSidebar={toggleSidebar}
-        onToggleChat={toggleChat}
-        onSettings={() => setActiveView('inspector')}
-        sidebarVisible={sidebarNeeded}
-      />
+      <ErrorBoundary viewId="activity-bar">
+        <ActivityBar
+          activeView={activeView}
+          onViewChange={setActiveView}
+          onToggleSidebar={toggleSidebar}
+          onToggleChat={toggleChat}
+          onSettings={() => setActiveView('inspector')}
+          sidebarVisible={sidebarNeeded}
+        />
+      </ErrorBoundary>
 
       {/* Sidebar (가변 너비, 250px 기본, collapsible) */}
-      <Sidebar activeView={activeView} />
+      <ErrorBoundary viewId="sidebar">
+        <Sidebar activeView={activeView} />
+      </ErrorBoundary>
 
       {/* Main Area (남은 공간) */}
-      <MainArea activeView={activeView} />
+      <ErrorBoundary viewId="main-area">
+        <MainArea activeView={activeView} />
+      </ErrorBoundary>
 
       {/* Chat Sidepanel (가변 너비, 320px 기본, collapsible) */}
-      <ChatSidepanel collapsed={chatCollapsed} onToggle={toggleChat} />
+      <ErrorBoundary viewId="chat-sidepanel">
+        <ChatSidepanel collapsed={chatCollapsed} onToggle={toggleChat} />
+      </ErrorBoundary>
 
       {/* Panel (하단 고정, 200px 기본) */}
-      <Panel />
+      <ErrorBoundary viewId="panel">
+        <Panel />
+      </ErrorBoundary>
 
       {/* Status Bar (하단 고정, 28px) */}
-      <StatusBar />
+      <ErrorBoundary viewId="status-bar">
+        <StatusBar />
+      </ErrorBoundary>
     </div>
   );
 };

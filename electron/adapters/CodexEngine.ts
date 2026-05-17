@@ -45,6 +45,7 @@ const ALLOWED_COMMANDS = ['codex'];
 export class CodexEngine implements EngineAdapter {
   /** 엔진 타입 */
   readonly engine: EngineType = 'codex';
+  readonly binaryName = 'codex';
 
   /**
    * 환경 변수 살균 처리
@@ -159,5 +160,31 @@ export class CodexEngine implements EngineAdapter {
         resolve({ valid: false, error: String(err) });
       }
     });
+  }
+
+  buildCliArgs(prompt: string, options?: import('./EngineAdapter').BuildCliArgsOptions): string[] {
+    const args: string[] = ['exec'];
+    const { sandboxMode, approvalPolicy } = options ?? {};
+    let forceNoApproval = false;
+    let effectiveSandbox = sandboxMode;
+    if (approvalPolicy === 'never') {
+      if (sandboxMode === 'workspace-write') {
+        args.push('--full-auto');
+        effectiveSandbox = undefined;
+      } else if (sandboxMode === 'danger-full-access') {
+        args.push('--dangerously-bypass-approvals-and-sandbox');
+        effectiveSandbox = undefined;
+      } else if (!sandboxMode) {
+        forceNoApproval = true;
+      }
+    }
+    if (effectiveSandbox) {
+      args.push('--sandbox', effectiveSandbox);
+    }
+    if (forceNoApproval) {
+      args.push('--dangerously-bypass-approvals-and-sandbox');
+    }
+    args.push('-');
+    return args;
   }
 }

@@ -45,6 +45,7 @@ const ALLOWED_COMMANDS = ['gemini'];
 export class GeminiEngine implements EngineAdapter {
   /** 엔진 타입 */
   readonly engine: EngineType = 'gemini';
+  readonly binaryName = 'gemini';
 
   /**
    * 환경 변수 살균 처리
@@ -165,5 +166,26 @@ export class GeminiEngine implements EngineAdapter {
         resolve({ valid: false, error: String(err) });
       }
     });
+  }
+
+  buildCliArgs(prompt: string, options?: import('./EngineAdapter').BuildCliArgsOptions): string[] {
+    const args: string[] = ['--output-format', 'text'];
+    const { sandboxMode, approvalPolicy, includeDirs } = options ?? {};
+    if (sandboxMode === 'danger-full-access' || approvalPolicy === 'never') {
+      args.push('--approval-mode', 'yolo');
+    } else if (sandboxMode === 'workspace-write' || approvalPolicy === 'on-request') {
+      args.push('--approval-mode', 'auto_edit');
+    } else if (sandboxMode === 'read-only') {
+      args.push('--sandbox', '--approval-mode', 'default');
+    } else {
+      args.push('--approval-mode', 'default');
+    }
+    if (includeDirs) {
+      for (const d of includeDirs) {
+        args.push('--include-directories', d);
+      }
+    }
+    args.push('--prompt', prompt);
+    return args;
   }
 }

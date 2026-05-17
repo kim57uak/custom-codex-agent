@@ -14,6 +14,14 @@ export interface InspectorFileModel {
   truncated: boolean;
 }
 
+export interface FileEntry {
+  name: string;
+  path: string;
+  kind: 'file' | 'directory';
+  sizeBytes: number;
+  modifiedAt: string | null;
+}
+
 export interface InspectorResponse {
   agentName: string;
   roleLabelKo: string;
@@ -112,6 +120,69 @@ export class InspectorService {
     } catch (err) {
       console.error(`[InspectorService] loadAgentInspector("${agentName}") failed:`, err);
       return null;
+    }
+  }
+
+  listDirectory(dirPath: string, engine?: string): FileEntry[] {
+    try {
+      const resolved = path.resolve(dirPath);
+      if (!this._isWithinRoot(resolved, engine)) {
+        return [];
+      }
+      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+        return [];
+      }
+      const entries = fs.readdirSync(resolved, { withFileTypes: true });
+      const result: FileEntry[] = [];
+      for (const entry of entries) {
+        try {
+          const fullPath = path.join(resolved, entry.name);
+          const realPath = fs.realpathSync(fullPath);
+          if (!realPath.startsWith(resolved)) {
+            continue;
+          }
+          const stat = fs.statSync(fullPath);
+          result.push({
+            name: entry.name,
+            path: fullPath,
+            kind: entry.isDirectory() ? 'directory' : 'file',
+            sizeBytes: stat.size,
+            modifiedAt: stat.mtime.toISOString(),
+          });
+        } catch {
+          continue;
+        }
+      }
+      return result.sort((a, b) => a.name.localeCompare(b.name));
+    } catch {
+      return [];
+    }
+  }
+
+  resolveSkills(agentName: string, engine?: string): string[] {
+    try {
+      const agentsRaw = this.configReader.readAgents(engine);
+      const agent = agentsRaw.find((a: Record<string, unknown>) => String(a.name) === agentName);
+      if (!agent) return [];
+      const skillPathValue = agent.skill_path ? String(agent.skill_path) : null;
+      if (!skillPathValue) return [];
+      const skillPath = path.resolve(skillPathValue.replace(/^~/, os.homedir()));
+      if (!fs.existsSync(skillPath)) return [];
+      const paths: string[] = [skillPath];
+      const skillDir = path.dirname(skillPath);
+      if (fs.existsSync(skillDir) && fs.statSync(skillDir).isDirectory()) {
+        for (const entry of fs.readdirSync(skillDir)) {
+          if (entry.toLowerCase() === 'skILL.md' || entry.toLowerCase() === 'agent.md') {
+            const candidate = path.join(skillDir, entry);
+            if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+              paths.push(candidate);
+            }
+          }
+        }
+      }
+      return [...new Set(paths)].sort();
+    } catch {
+      return [];
     }
   }
 

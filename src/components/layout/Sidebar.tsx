@@ -12,7 +12,7 @@ import { OrgTree } from '../views/OrgView';
 import { DashboardSidebar } from '../views/DashboardView';
 import { ConsoleSidebar } from '../views/ConsoleView';
 import { WorkflowSidebar } from '../views/WorkflowView';
-import { InspectorSidebar } from '../views/InspectorView';
+import { InspectorSidebar } from '../views/inspector/InspectorSidebar';
 import { useUIStore } from '../../stores/uiStore';
 import { useResizeHandle } from '../../hooks/useResizeHandle';
 

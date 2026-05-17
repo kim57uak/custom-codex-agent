@@ -35,6 +35,7 @@ const ALLOWED_COMMANDS = ['claude'];
 
 export class ClaudeCodeEngine implements EngineAdapter {
   readonly engine: EngineType = 'claudecode';
+  readonly binaryName = 'claude';
 
   private sanitizeEnv(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     const baseEnv = { ...process.env, ...env };
@@ -136,5 +137,9 @@ export class ClaudeCodeEngine implements EngineAdapter {
         resolve({ valid: false, error: String(err) });
       }
     });
+  }
+
+  buildCliArgs(prompt: string, _options?: import('./EngineAdapter').BuildCliArgsOptions): string[] {
+    return ['-p', prompt];
   }
 }

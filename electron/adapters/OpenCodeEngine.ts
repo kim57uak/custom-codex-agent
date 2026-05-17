@@ -30,6 +30,7 @@ const ALLOWED_COMMANDS = ['opencode'];
 
 export class OpenCodeEngine implements EngineAdapter {
   readonly engine: EngineType = 'opencode';
+  readonly binaryName = 'opencode';
 
   private sanitizeEnv(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     const baseEnv = { ...process.env, ...env };
@@ -112,5 +113,9 @@ export class OpenCodeEngine implements EngineAdapter {
         resolve({ valid: false, error: String(err) });
       }
     });
+  }
+
+  buildCliArgs(prompt: string, _options?: import('./EngineAdapter').BuildCliArgsOptions): string[] {
+    return ['run', prompt, '--print-logs', '--dangerously-skip-permissions'];
   }
 }

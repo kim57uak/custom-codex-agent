@@ -18,19 +18,9 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useUIStore } from '../../stores/uiStore';
+import { ipcInvoke } from '../../utils/ipc';
 
 interface ConsoleViewProps {}
-
-/** IPC 헬퍼: 타입 안전 invoke */
-async function ipcInvoke<T>(channel: string, ...args: unknown[]): Promise<T | null> {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  try {
-    return await window.electronAPI.invoke(channel, ...args) as T;
-  } catch (err) {
-    console.error(`[IPC Error] ${channel}:`, err);
-    return null;
-  }
-}
 
 /** 로그 엔트리 타입 */
 interface LogEntry {
