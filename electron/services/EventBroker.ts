@@ -76,11 +76,12 @@ export class EventBroker {
    * @param message 로그 메시지
    * @param raw 원본 출력 (선택적)
    */
-  pushLog(runId: string, level: string, message: string, raw?: string): void {
+  pushLog(runId: string, level: string, message: string, raw?: string, source?: string): void {
     const entry = {
       runId,
       level,
       message,
+      source: source ?? runId,
       timestamp: new Date().toISOString(),
       raw,
     };

@@ -44,9 +44,10 @@ export const Panel: React.FC<PanelProps> = () => {
 
     const handleLogEntry = (entry: LogEntry) => {
       setLogEntries(prev => [...prev.slice(-499), entry]);
-      if (entry.level === 'ERROR' || entry.level === 'WARN') {
+      const upper = entry.level.toUpperCase();
+      if (upper === 'ERROR' || upper === 'WARN') {
         setProblems(prev => {
-          const newProblem = { message: entry.message, severity: entry.level === 'ERROR' ? 'error' : 'warning', file: entry.source };
+          const newProblem = { message: entry.message, severity: upper === 'ERROR' ? 'error' : 'warning', file: entry.source };
           return [...prev, newProblem].slice(-99);
         });
       }
@@ -60,18 +61,24 @@ export const Panel: React.FC<PanelProps> = () => {
       }]);
     };
 
+    const handleRunStarted = () => {
+      setEvents(prev => [...prev.slice(-99), { type: 'run:started', data: 'Run started', time: new Date().toLocaleTimeString() }]);
+    };
+
+    const handleRunEnded = (data: { runId?: string; exitCode?: number }) => {
+      setEvents(prev => [...prev.slice(-99), { type: 'run:ended', data: `Run ${data?.runId ?? '?'} ended with exit code ${data?.exitCode ?? '?'}`, time: new Date().toLocaleTimeString() }]);
+    };
+
     api.on('log:entry', handleLogEntry);
     api.on('run:event', handleRunEvent);
-    api.on('run:started', () => {
-      setEvents(prev => [...prev.slice(-99), { type: 'run:started', data: 'Run started', time: new Date().toLocaleTimeString() }]);
-    });
-    api.on('run:ended', (data: { runId?: string; exitCode?: number }) => {
-      setEvents(prev => [...prev.slice(-99), { type: 'run:ended', data: `Run ${data?.runId ?? '?'} ended with exit code ${data?.exitCode ?? '?'}`, time: new Date().toLocaleTimeString() }]);
-    });
+    api.on('run:started', handleRunStarted);
+    api.on('run:ended', handleRunEnded);
 
     return () => {
       api.off('log:entry', handleLogEntry);
       api.off('run:event', handleRunEvent);
+      api.off('run:started', handleRunStarted);
+      api.off('run:ended', handleRunEnded);
     };
   }, []);
 
@@ -98,7 +105,7 @@ export const Panel: React.FC<PanelProps> = () => {
             ) : (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', lineHeight: 1.6 }}>
                 {logEntries.map((entry, i) => (
-                  <div key={i} style={{ color: entry.level === 'ERROR' ? 'var(--status-error)' : entry.level === 'WARN' ? 'var(--status-warning)' : 'var(--text-secondary)' }}>
+                  <div key={i} style={{ color: entry.level.toUpperCase() === 'ERROR' ? 'var(--status-error)' : entry.level.toUpperCase() === 'WARN' ? 'var(--status-warning)' : 'var(--text-secondary)' }}>
                     <span style={{ color: 'var(--text-tertiary)', marginRight: '8px' }}>{entry.timestamp}</span>
                     <span style={{ color: 'var(--accent-primary)', marginRight: '8px' }}>[{entry.source}]</span>
                     {entry.message}
@@ -119,7 +126,7 @@ export const Panel: React.FC<PanelProps> = () => {
               </div>
             ) : (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', lineHeight: 1.6 }}>
-                {logEntries.filter(e => e.level === 'INFO' || e.level === 'ERROR').map((entry, i) => (
+                {logEntries.filter(e => e.level.toUpperCase() === 'INFO' || e.level.toUpperCase() === 'ERROR').map((entry, i) => (
                   <div key={i}>{entry.message}</div>
                 ))}
                 <div ref={logEndRef} />

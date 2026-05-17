@@ -347,7 +347,7 @@ export class WorkflowEngine {
 
         try {
           console.log(`[workflow]  -> createRun(${step.agentName})`);
-          const created = await this.runOrchestrator.createRun(step.agentName, stepPrompt, undefined, sandboxMode, approvalPolicy, engine ?? undefined, { workflowRunId, stepIndex: i });
+          const created = await this.runOrchestrator.createRun(step.agentName, stepPrompt, record?.workspaceRoot || undefined, sandboxMode, approvalPolicy, engine ?? undefined, { workflowRunId, stepIndex: i });
           this.activeRunIds.set(workflowRunId, created.runId);
           this.workflowStore.updateWorkflowStep(workflowRunId, i, { runId: created.runId, lastEventMessage: 'prompt submitted to engine' });
           console.log(`[workflow]  -> runId=${created.runId}, waiting...`);

@@ -17,6 +17,7 @@ import { EventEmitter } from 'events';
 
 interface LogEntry {
   runId: string;                                   // 실행 ID
+  source?: string;                                 // 에이전트명/소스 (기본: runId)
   level: 'debug' | 'info' | 'warn' | 'error';     // 로그 레벨
   message: string;                                 // 파싱된 로그 메시지
   timestamp: string;                               // ISO 8601 타임스탬프

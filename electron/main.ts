@@ -339,10 +339,13 @@ app.whenReady().then(() => {
   // 시스템 트레이 생성 (Phase 4)
   createTray();
 
-  // macOS: dock 아이콘 클릭 시 창이 없으면 재창성
+  // macOS: dock 아이콘 클릭 시 창이 없으면 재창성 + EventBroker 등록
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+      if (mainWindow && eventBroker) {
+        eventBroker.registerWindow(mainWindow);
+      }
     }
   });
 });

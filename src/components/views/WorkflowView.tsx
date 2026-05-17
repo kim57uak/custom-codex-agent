@@ -175,11 +175,6 @@ const AgentCard: React.FC<AgentCardProps> = ({
           </div>
         </div>
 
-        {(s === 'failed' || s === 'completed') && step.summary && (
-          <div className={`agent-card__output ${s === 'failed' ? 'agent-card__output--err' : 'agent-card__output--ok'}`}>
-            {step.summary}
-          </div>
-        )}
       </div>
     </div>
   );

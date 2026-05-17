@@ -225,7 +225,10 @@ export const ConsoleView: React.FC<ConsoleViewProps> = () => {
 
     const handleLogEntry = (entry: LogEntry) => {
       const levelColors: Record<string, string> = {
-        ERROR: '\x1b[31m', WARN: '\x1b[33m', INFO: '\x1b[36m', DEBUG: '\x1b[90m',
+        error: '\x1b[31m', ERROR: '\x1b[31m',
+        warn: '\x1b[33m', WARN: '\x1b[33m',
+        info: '\x1b[36m', INFO: '\x1b[36m',
+        debug: '\x1b[90m', DEBUG: '\x1b[90m',
       };
       const color = levelColors[entry.level] ?? '\x1b[0m';
       const prefix = `\x1b[90m${entry.timestamp}\x1b[0m [\x1b[33m${entry.source}\x1b[0m]`;

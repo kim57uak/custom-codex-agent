@@ -84,7 +84,7 @@ export class RunOrchestrator {
   private setupLogBufferHandlers(): void {
     this.logBuffer.onFlush((entries) => {
       for (const entry of entries) {
-        this.eventBroker.pushLog(entry.runId, entry.level, entry.message, entry.raw);
+        this.eventBroker.pushLog(entry.runId, entry.level, entry.message, entry.raw, entry.source);
       }
     });
   }
@@ -206,26 +206,25 @@ export class RunOrchestrator {
       }
       const args = this._buildCliArgs(engine as EngineType, effectivePrompt, sandboxMode, approvalPolicy, includeDirs.length > 0 ? includeDirs : undefined);
 
+      const resolvedCwd = workspaceRoot || this._extractCwdFromPrompt(effectivePrompt) || this.defaultWorkspaceRoot;
       proc = spawn(cliPath, args, {
         env: sanitizedEnv,
         shell: false,
-        detached: true,
-        cwd: workspaceRoot ?? this.defaultWorkspaceRoot,
+        cwd: resolvedCwd,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
       this.pidRegistry.set(proc.pid!, { pid: proc.pid!, runId, engine: engine as EngineType, proc });
       this.activeProcesses.set(runId, proc);
-      // pipe prompt via stdin when engine uses '-' convention
+      // pipe prompt via stdin when engine uses '-' convention (codex exec -)
       const lastArg = args[args.length - 1];
-      if (lastArg === '-') {
+      if (engine === 'codex' && lastArg === '-') {
         proc.stdin?.write(effectivePrompt);
-        // keep stdin open for HITL responses (permission prompts)
-        // only end for codex which doesn't need interactive stdin
-        if (engine === 'codex') {
-          proc.stdin?.end();
-        }
+        proc.stdin?.end();
+      } else {
+        proc.stdin?.end();
       }
+      // opencode/gemini/claudecode: prompt in args, stdin reserved for HITL responses
       // cancel during buffering (race) → kill immediately
       if (this.cancelledRunIds.has(runId)) {
         this._killProcTree(proc);
@@ -255,7 +254,7 @@ export class RunOrchestrator {
           this.runStore.addEvent(runId, 'run:stdout', line);
           this._publishRunEvent(runId, 'run:stdout', line);
           this.logBuffer.push({
-            runId, level: 'info', message: line, timestamp: new Date().toISOString(), raw: line,
+            runId, source: agentName, level: 'info', message: line, timestamp: new Date().toISOString(), raw: line,
           });
         }
         let out = this.fullOutput.get(runId);
@@ -272,7 +271,7 @@ export class RunOrchestrator {
           this.runStore.addEvent(runId, 'run:stderr', line);
           this._publishRunEvent(runId, 'run:stderr', line);
           this.logBuffer.push({
-            runId, level: 'error', message: line, timestamp: new Date().toISOString(), raw: line,
+            runId, source: agentName, level: 'error', message: line, timestamp: new Date().toISOString(), raw: line,
           });
         }
         let out = this.fullOutput.get(runId);
@@ -543,21 +542,41 @@ export class RunOrchestrator {
     const skillInfo = this._fetchSkillInfo(agentName, engine);
     const effectivePrompt = this._buildEffectivePrompt(agentName, options.prompt, skillInfo.content, engine);
 
-    const proc = spawn(cliPath, [effectivePrompt], {
+    const args = this._buildCliArgs(engine, effectivePrompt, options.sandboxMode, options.approvalPolicy);
+    const startCwd = this._extractCwdFromPrompt(effectivePrompt) || this.defaultWorkspaceRoot;
+    const proc = spawn(cliPath, args, {
       env: { ...sanitizedEnv, ...agent?.env },
       shell: false,
+      cwd: startCwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     this.pidRegistry.set(proc.pid!, { pid: proc.pid!, runId: run.id, engine, proc });
 
+    if (engine === 'codex') {
+      proc.stdin?.write(effectivePrompt);
+      proc.stdin?.end();
+    }
+    if (engine === 'opencode') {
+      proc.stdin?.end();
+    }
+
     proc.stdout?.on('data', (data: Buffer) => {
-      const line = data.toString();
-      this.logBuffer.push({ runId: run.id, level: 'info', message: line, timestamp: new Date().toISOString(), raw: line });
+      const lines = data.toString().split('\n').filter(Boolean);
+      for (const line of lines) {
+        this.runStore.addEvent(run.id, 'run:stdout', line);
+        this._publishRunEvent(run.id, 'run:stdout', line);
+        this.logBuffer.push({ runId: run.id, source: agentName, level: 'info', message: line, timestamp: new Date().toISOString(), raw: line });
+      }
     });
 
     proc.stderr?.on('data', (data: Buffer) => {
-      const line = data.toString();
-      this.logBuffer.push({ runId: run.id, level: 'error', message: line, timestamp: new Date().toISOString(), raw: line });
+      const lines = data.toString().split('\n').filter(Boolean);
+      for (const line of lines) {
+        this.runStore.addEvent(run.id, 'run:stderr', line);
+        this._publishRunEvent(run.id, 'run:stderr', line);
+        this.logBuffer.push({ runId: run.id, source: agentName, level: 'error', message: line, timestamp: new Date().toISOString(), raw: line });
+      }
     });
 
     proc.on('close', (code) => {
@@ -747,30 +766,86 @@ export class RunOrchestrator {
     }
   }
 
-  private async _opencodeChat(prompt: string): Promise<string> {
-    const httpPost = (host: string, port: number, urlPath: string, body: string, timeoutMs: number): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        const req = httpReq({ hostname: host, port, path: urlPath, method: 'POST', timeout: timeoutMs, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
-          let data = '';
-          res.on('data', (chunk: Buffer) => data += chunk.toString());
-          res.on('end', () => resolve(data));
-        });
-        req.on('error', (err: Error) => reject(err));
-        req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-        req.write(body);
-        req.end();
+  private _httpPost(host: string, port: number, urlPath: string, body: string, timeoutMs: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const req = httpReq({ hostname: host, port, path: urlPath, method: 'POST', timeout: timeoutMs, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, (res) => {
+        let data = '';
+        res.on('data', (chunk: Buffer) => data += chunk.toString());
+        res.on('end', () => resolve(data));
       });
-    };
+      req.on('error', (err: Error) => reject(err));
+      req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+      req.write(body);
+      req.end();
+    });
+  }
 
+  private async _executeRunOpencode(
+    runId: string, agentName: string, prompt: string, _workspaceRoot: string | null,
+  ): Promise<void> {
+    const ready = await this._ensureOpencodeServer();
+    if (!ready) {
+      this.runStore.finishRun(runId, 'failed', null, 'opencode serve not available');
+      this.runningRuns.set(runId, 'failed');
+      this._publishRunEvent(runId, 'run:failed', 'opencode serve not available');
+      return;
+    }
+
+    this.eventBroker.pushRunStarted(runId, agentName);
+    this.startTimes.set(runId, Date.now());
+
+    try {
+      const sessionRes = await this._httpPost('127.0.0.1', this.OPENCODE_PORT, '/session', JSON.stringify({ title: runId }), 5000);
+      const sessionObj = JSON.parse(sessionRes);
+      if (!sessionObj?.id) throw new Error('no session id from opencode serve');
+
+      const msgRes = await this._httpPost('127.0.0.1', this.OPENCODE_PORT, `/session/${sessionObj.id}/message`, JSON.stringify({ parts: [{ type: 'text', text: prompt }] }), 120000);
+      const msg = JSON.parse(msgRes);
+
+      let responseText = '';
+      for (const part of msg.parts || []) {
+        if (part.type === 'text' && part.text) responseText += part.text;
+      }
+
+      if (responseText) {
+        const lines = this._stripAnsi(responseText).split('\n').filter(Boolean);
+        for (const line of lines) {
+          this.runStore.addEvent(runId, 'run:stdout', line);
+          this._publishRunEvent(runId, 'run:stdout', line);
+          this.logBuffer.push({ runId, source: agentName, level: 'info', message: line, timestamp: new Date().toISOString(), raw: line });
+        }
+        let out = this.fullOutput.get(runId);
+        if (!out) { out = []; this.fullOutput.set(runId, out); }
+        out.push(...lines);
+      }
+
+      this.runStore.finishRun(runId, 'completed', 0, null);
+      this.runningRuns.set(runId, 'completed');
+      this.runStore.addEvent(runId, 'done', { code: 0, status: 'completed' });
+      const durationMs = this.getRunDuration(runId);
+      this.eventBroker.pushRunEnded(runId, 0, durationMs);
+      this._publishRunEvent(runId, 'run:completed', 'opencode completed');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.runStore.finishRun(runId, 'failed', null, msg);
+      this.runningRuns.set(runId, 'failed');
+      this.runStore.addEvent(runId, 'done', { code: -1, status: 'failed' });
+      const durationMs = this.getRunDuration(runId);
+      this.eventBroker.pushRunEnded(runId, -1, durationMs);
+      this._publishRunEvent(runId, 'run:failed', `opencode: ${msg}`);
+    }
+  }
+
+  private async _opencodeChat(prompt: string): Promise<string> {
     const ready = await this._ensureOpencodeServer();
     if (!ready) return 'OpenCode server could not be started. Please use Gemini or ClaudeCode engine for chat.';
 
     try {
-      const sessionRes = await httpPost('127.0.0.1', this.OPENCODE_PORT, '/session', JSON.stringify({ title: 'chat' }), 5000);
+      const sessionRes = await this._httpPost('127.0.0.1', this.OPENCODE_PORT, '/session', JSON.stringify({ title: 'chat' }), 5000);
       const sessionObj = JSON.parse(sessionRes);
       if (!sessionObj?.id) return 'Failed to create session on OpenCode server.';
 
-      const msgRes = await httpPost('127.0.0.1', this.OPENCODE_PORT, `/session/${sessionObj.id}/message`, JSON.stringify({ parts: [{ type: 'text', text: prompt }] }), 120000);
+      const msgRes = await this._httpPost('127.0.0.1', this.OPENCODE_PORT, `/session/${sessionObj.id}/message`, JSON.stringify({ parts: [{ type: 'text', text: prompt }] }), 120000);
       const msg = JSON.parse(msgRes);
       for (const part of msg.parts || []) {
         if (part.type === 'text' && part.text) return this._stripAnsi(part.text).trim();
@@ -797,7 +872,17 @@ export class RunOrchestrator {
       ? `## Agent Workflow Definition\nFollow these instructions strictly:\n\n${skillContent}\n\n---\n\n`
       : '';
     const fileSafety = 'If the task requires reading or analyzing a file but the user did not provide an explicit file path and file name, do not proceed with file operations. First ask the user to provide the exact file path and file name.\n\n';
-    return `${header}${skillSection}${fileSafety}${prompt}`;
+    const outputDir = 'When creating output files (analysis results, reports, charts), save them in the same directory as the input files. For example, if input is /path/to/data.csv, write output files to /path/to/ directory.\n\n';
+    return `${header}${skillSection}${fileSafety}${outputDir}${prompt}`;
+  }
+
+  private _extractCwdFromPrompt(prompt: string): string | null {
+    const fileMatch = prompt.match(/[-\w/]+\/([\w-]+\.(csv|json|xlsx?|tsv|parquet))/);
+    if (fileMatch) {
+      const dir = path.dirname(fileMatch[0]);
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+    }
+    return null;
   }
 
   private _buildCliArgs(engine: string, prompt: string, sandboxMode?: string | null, approvalPolicy?: string | null, includeDirs?: string[]): string[] {
@@ -848,7 +933,7 @@ export class RunOrchestrator {
       case 'claudecode':
         return ['-p', prompt];
       case 'opencode':
-        return ['-'];
+        return ['run', prompt, '--print-logs', '--dangerously-skip-permissions'];
       default:
         return [prompt];
     }

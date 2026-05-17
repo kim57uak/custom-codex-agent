@@ -32,6 +32,8 @@ import { ipcRenderer, contextBridge } from 'electron';
  * electronAPI 타입 정의
  * - Renderer에서 window.electronAPI로 접근
  */
+const listenerMap = new Map<string, Map<(...args: unknown[]) => void, (event: Electron.IpcRendererEvent, ...args: unknown[]) => void>>();
+
 const electronAPI = {
   /**
    * IPC invoke (비동기 요청/응답)
@@ -76,9 +78,18 @@ const electronAPI = {
     // ipcRenderer.on()으로 구독
     ipcRenderer.on(channel, listener);
 
+    // callback→listener 매핑 저장 (off()에서 lookup용)
+    let channelMap = listenerMap.get(channel);
+    if (!channelMap) {
+      channelMap = new Map();
+      listenerMap.set(channel, channelMap);
+    }
+    channelMap.set(callback, listener);
+
     // 구독 해제 함수 반환
     return () => {
       ipcRenderer.removeListener(channel, listener);
+      channelMap?.delete(callback);
     };
   },
 
@@ -90,7 +101,12 @@ const electronAPI = {
    * @param callback previously registered listener
    */
   off: (channel: string, callback: (...args: unknown[]) => void): void => {
-    ipcRenderer.removeListener(channel, callback as (...args: unknown[]) => void);
+    const channelMap = listenerMap.get(channel);
+    const listener = channelMap?.get(callback);
+    if (listener) {
+      ipcRenderer.removeListener(channel, listener);
+      channelMap?.delete(callback);
+    }
   },
 
   /**
