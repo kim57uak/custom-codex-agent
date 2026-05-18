@@ -149,6 +149,7 @@ const ENGINES = [
   { id: 'gemini', label: 'Gemini CLI', icon: 'G' },
   { id: 'opencode', label: 'OpenCode CLI', icon: 'O' },
   { id: 'claudecode', label: 'ClaudeCode CLI', icon: 'CC' },
+  { id: 'kiro-cli', label: 'Kiro CLI', icon: 'K' },
 ];
 
 export const ActivityBar: React.FC<ActivityBarProps> = ({ activeView, onViewChange, onToggleSidebar, onToggleChat, onSettings, sidebarVisible = true }) => {

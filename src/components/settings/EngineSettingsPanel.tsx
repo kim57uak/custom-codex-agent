@@ -46,6 +46,13 @@ const DEFAULT_SETTINGS: Record<string, EngineSettings> = {
     proxy: '',
     extraEnv: {},
   },
+  'kiro-cli': {
+    cliPath: '/usr/local/bin/kiro-cli',
+    model: 'default',
+    timeout: 30000,
+    proxy: '',
+    extraEnv: {},
+  },
 };
 
 /** 엔진별 설명 */
@@ -65,10 +72,15 @@ const ENGINE_DESCRIPTIONS: Record<string, { name: string; description: string; i
     description: 'Anthropic Claude Code CLI - Claude Sonnet 4 기반 코딩 어시스턴트',
     icon: 'comment-discussion',
   },
+  'kiro-cli': {
+    name: 'Kiro CLI',
+    description: 'Kiro CLI - AI 코딩 어시스턴트',
+    icon: 'terminal',
+  },
 };
 
 /** 엔진 타입 */
-type EngineType = 'gemini' | 'opencode' | 'claudecode';
+type EngineType = 'gemini' | 'opencode' | 'claudecode' | 'kiro-cli';
 
 interface EngineSettingsPanelProps {
   initialEngine?: EngineType;

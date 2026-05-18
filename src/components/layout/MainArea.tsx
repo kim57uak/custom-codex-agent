@@ -82,11 +82,13 @@ export const MainArea: React.FC<MainAreaProps> = ({ activeView }) => {
   const selectedEngine = useUIStore((s) => s.selectedEngine);
   const engineLabel = selectedEngine === 'gemini' ? 'Gemini CLI' :
     selectedEngine === 'opencode' ? 'OpenCode CLI' :
-    selectedEngine === 'claudecode' ? 'ClaudeCode CLI' : selectedEngine;
+    selectedEngine === 'claudecode' ? 'ClaudeCode CLI' :
+    selectedEngine === 'kiro-cli' ? 'Kiro CLI' : selectedEngine;
   const engineColors: Record<string, string> = {
     gemini: 'var(--status-success)',
     opencode: 'var(--status-info)',
     claudecode: 'var(--status-warning)',
+    'kiro-cli': 'var(--accent-secondary)',
   };
   const engineColor = engineColors[selectedEngine] || 'var(--text-tertiary)';
 

@@ -95,7 +95,8 @@ export const ConsoleSidebar: React.FC = () => {
 
   const engineLabel = selectedEngine === 'gemini' ? 'Gemini CLI' :
     selectedEngine === 'opencode' ? 'OpenCode CLI' :
-    selectedEngine === 'claudecode' ? 'ClaudeCode CLI' : selectedEngine;
+    selectedEngine === 'claudecode' ? 'ClaudeCode CLI' :
+    selectedEngine === 'kiro-cli' ? 'Kiro CLI' : selectedEngine;
 
   return (
     <div className="console-sidebar">

@@ -2,7 +2,7 @@
  * RunOrchestrator — AI 에이전트 실행 오케스트레이터.
  *
  * @what
- * - AI 에이전트 CLI(gemini, opencode, claudecode)를 자식 프로세스로 실행하고 생명주기를 관리합니다.
+ * - AI 에이전트 CLI(gemini, opencode, claudecode, kiro-cli)를 자식 프로세스로 실행하고 생명주기를 관리합니다.
  * - 동시 실행 제한(semaphore), 실행 취소, HITL(Human-In-The-Loop) 감지 및 응답, 실행 타임아웃을 처리합니다.
  *
  * @design
@@ -839,7 +839,7 @@ export class RunOrchestrator {
    * @returns AI 응답 문자열
    */
   async chat(message: string, systemPrompt?: string, engine?: string): Promise<string> {
-    const valid: EngineType[] = ['gemini', 'opencode', 'claudecode'];
+    const valid: EngineType[] = ['gemini', 'opencode', 'claudecode', 'kiro-cli'];
     const targetEngine = valid.includes(engine as EngineType) ? (engine as EngineType) : SETTINGS.defaultEngine;
     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${message}` : message;
 
@@ -860,6 +860,7 @@ export class RunOrchestrator {
     const cliArgs: Record<string, string[]> = {
       gemini: ['-p', fullPrompt],
       claudecode: ['-p', fullPrompt],
+      'kiro-cli': ['chat', '--no-interactive', fullPrompt],
     };
 
     return new Promise((resolve) => {

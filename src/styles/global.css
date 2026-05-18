@@ -1514,6 +1514,10 @@ body {
   color: var(--accent-success);
 }
 
+.org-tree__status--kiro-cli {
+  color: var(--accent-secondary);
+}
+
 /* ==========================================
    Inspector Sidebar
    ========================================== */

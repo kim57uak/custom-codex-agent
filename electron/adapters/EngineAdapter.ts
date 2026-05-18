@@ -2,7 +2,7 @@
  * EngineAdapter - CLI 엔진 어댑터 인터페이스
  *
  * 설계 목표:
- * - CLI 엔진 (Gemini 등)의 공통 인터페이스 정의
+ * - CLI 엔진 (Gemini, kiro-cli 등)의 공통 인터페이스 정의
  * - 각 엔진 어댑터는 이 인터페이스를 구현
  * - child_process.spawn은 Main Process에서만 수행 (Worker Thread 금지)
  *
@@ -22,6 +22,7 @@ import type { EngineType } from '../../types/ipc-contract';
 import { GeminiEngine } from './GeminiEngine';
 import { OpenCodeEngine } from './OpenCodeEngine';
 import { ClaudeCodeEngine } from './ClaudeCodeEngine';
+import { KiroCliEngine } from './KiroCliEngine';
 
 export interface BuildCliArgsOptions {
   /** 샌드박스 모드 (read-only / workspace-write / danger-full-access) */
@@ -37,10 +38,10 @@ export interface BuildCliArgsOptions {
  * 모든 엔진 어댑터가 구현해야 하는 메서드 정의
  */
 export interface EngineAdapter {
-  /** 엔진 타입 (gemini/opencode/claudecode) */
+  /** 엔진 타입 (gemini/opencode/claudecode/kiro-cli) */
   readonly engine: EngineType;
 
-  /** CLI 바이너리 파일명 (gemini/opencode/claude) */
+  /** CLI 바이너리 파일명 (gemini/opencode/claude/kiro-cli) */
   readonly binaryName: string;
 
   /**
@@ -90,6 +91,7 @@ const ENGINE_ADAPTERS: Record<EngineType, new () => EngineAdapter> = {
   gemini: GeminiEngine,
   opencode: OpenCodeEngine,
   claudecode: ClaudeCodeEngine,
+  'kiro-cli': KiroCliEngine,
 };
 
 export function createEngineAdapter(engine: EngineType): EngineAdapter {

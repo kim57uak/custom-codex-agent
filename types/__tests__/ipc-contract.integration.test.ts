@@ -145,6 +145,7 @@ describe('Zod Schema Validation (integration)', () => {
       expect(EngineTypeSchema.parse('gemini')).toBe('gemini');
       expect(EngineTypeSchema.parse('opencode')).toBe('opencode');
       expect(EngineTypeSchema.parse('claudecode')).toBe('claudecode');
+      expect(EngineTypeSchema.parse('kiro-cli')).toBe('kiro-cli');
     });
 
     it('should reject invalid engine', () => {

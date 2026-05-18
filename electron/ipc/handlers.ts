@@ -576,9 +576,9 @@ export function registerIpcHandlers(deps: HandlerDeps): void {
   });
 
   ipcMain.handle('settings:set-default-engine', async (_event, engine: unknown) => {
-    const validEngines = ['gemini', 'opencode', 'claudecode'] as const;
+    const validEngines = ['gemini', 'opencode', 'claudecode', 'kiro-cli'] as const;
     if (!engine || typeof engine !== 'string' || !validEngines.includes(engine as any)) {
-      throw new Error('Invalid engine. Must be: gemini, opencode, or claudecode');
+      throw new Error('Invalid engine. Must be: gemini, opencode, claudecode, or kiro-cli');
     }
     SETTINGS.setDefaultEngine(engine as any);
     return { engine: SETTINGS.defaultEngine };

@@ -23,12 +23,14 @@ const ENGINES = [
   { id: 'gemini', label: 'Gemini', defaultPath: '/usr/local/bin/gemini' },
   { id: 'opencode', label: 'OpenCode', defaultPath: '/usr/local/bin/opencode' },
   { id: 'claudecode', label: 'ClaudeCode', defaultPath: '/usr/local/bin/claude' },
+  { id: 'kiro-cli', label: 'Kiro CLI', defaultPath: '/usr/local/bin/kiro-cli' },
 ];
 
 const ENGINE_COLORS: Record<string, string> = {
   gemini: 'var(--status-success)',
   opencode: 'var(--status-info)',
   claudecode: 'var(--status-warning)',
+  'kiro-cli': 'var(--accent-secondary)',
 };
 
 /**

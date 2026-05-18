@@ -108,7 +108,7 @@ const initialState: UIState = {
   chatCollapsed: false,
   panelExpanded: false,
   theme: 'aurora',
-  activeEngines: ['gemini', 'opencode'],
+  activeEngines: ['gemini', 'opencode', 'kiro-cli'],
   activeRunCount: 0,
   appVersion: '0.1.0',
   selectedEngine: 'gemini',

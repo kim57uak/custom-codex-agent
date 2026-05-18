@@ -8,7 +8,7 @@ import { IPC_CHANNELS, IPC_VERSION } from './ipc-channels';
 
 export { IPC_CHANNELS, IPC_VERSION };
 
-export const EngineTypeSchema = z.enum(['gemini', 'opencode', 'claudecode']);
+export const EngineTypeSchema = z.enum(['gemini', 'opencode', 'claudecode', 'kiro-cli']);
 export type EngineType = z.infer<typeof EngineTypeSchema>;
 
 export const RunStatusSchema = z.enum(['queued', 'running', 'completed', 'failed', 'cancelled']);

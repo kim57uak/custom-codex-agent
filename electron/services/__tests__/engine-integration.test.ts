@@ -7,7 +7,7 @@
  * - EventBroker (이벤트 브로커)
  * 테스트 방식: 통합 테스트 (실제 CLI 바이너리 호출, 실제 파일 시스템 접근)
  * 주요 검증 시나리오:
- * - 3개 엔진(gemini, opencode, claudecode)의 CLI 경로 유효성 및 --version 실행
+ * - 4개 엔진(gemini, opencode, claudecode, kiro-cli)의 CLI 경로 유효성 및 --version 실행
  * - Engine Agent Config 저장 및 조회
  * - Skills 디렉토리 접근 및 SKILL.md 파일 읽기
  * - 엔진 경로 Resolution 로직 (startRun 시나리오)
@@ -27,10 +27,12 @@ describe('Engine Integration Tests', () => {
   let logBuffer: LogBuffer;
   let eventBroker: EventBroker;
 
+  // kiro-cli is optional — may not be installed on all machines
   const ENGINE_PATHS: Record<string, string> = {
     gemini: '/opt/homebrew/bin/gemini',
     opencode: '/Users/dolpaks/.opencode/bin/opencode',
     claudecode: '/Users/dolpaks/.local/bin/claude',
+    'kiro-cli': '/opt/homebrew/bin/kiro-cli',
   };
 
   beforeAll(async () => {
@@ -43,7 +45,7 @@ describe('Engine Integration Tests', () => {
       configReader.saveAgent({
         id: `engine-${engine}`,
         name: `${engine} CLI`,
-        engine: engine as 'gemini' | 'opencode' | 'claudecode',
+        engine: engine as 'gemini' | 'opencode' | 'claudecode' | 'kiro-cli',
         cliPath,
       });
     }
@@ -56,7 +58,7 @@ describe('Engine Integration Tests', () => {
   });
 
   describe('CLI Path Validation', () => {
-    it.each(['gemini', 'opencode', 'claudecode'] as const)('should validate %s CLI path', async (engine) => {
+    it.each(['gemini', 'opencode', 'claudecode', 'kiro-cli'] as const)('should validate %s CLI path', async (engine) => {
       const result = await configReader.validateCliPath(ENGINE_PATHS[engine]!);
       expect(result.valid).toBe(true);
       expect(result.version).toBeTruthy();
@@ -94,6 +96,7 @@ describe('Engine Integration Tests', () => {
         // Check specific version patterns
         if (engine === 'claudecode') expect(result.version).toContain('Claude Code');
         if (engine === 'opencode') expect(result.version).toMatch(/^\d+\.\d+\.\d+/);
+        if (engine === 'kiro-cli') expect(ENGINE_PATHS[engine] && fs.existsSync(ENGINE_PATHS[engine]!)).toBe(true); // kiro-cli은 선택 설치
       }
     });
   });
@@ -140,6 +143,7 @@ describe('Engine Integration Tests', () => {
         { agentId: 'nonexistent', engine: 'gemini', expected: 'gemini' },
         { agentId: 'nonexistent', engine: 'opencode', expected: 'opencode' },
         { agentId: 'nonexistent', engine: 'claudecode', expected: 'claudecode' },
+        { agentId: 'nonexistent', engine: 'kiro-cli', expected: 'kiro-cli' },
       ];
 
       for (const tc of testCases) {

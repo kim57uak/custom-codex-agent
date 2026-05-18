@@ -2,7 +2,7 @@
  * AppSettings — 애플리케이션 전역 설정 싱글톤.
  *
  * @what
- * - 엔진별(gemini, opencode, claudecode) 홈 디렉토리, 실행 제한, CLI 경로,
+ * - 엔진별(gemini, opencode, claudecode, kiro-cli) 홈 디렉토리, 실행 제한, CLI 경로,
  *   작업 공간, 백업 경로 등 모든 전역 설정을 보유합니다.
  * - 환경 변수(CODEX_AGENT_*)로 설정을 오버라이드할 수 있습니다.
  *
@@ -22,7 +22,7 @@ import os from 'os';
 
 
 /** 지원하는 AI 엔진 타입 */
-export type EngineType = 'gemini' | 'opencode' | 'claudecode';
+export type EngineType = 'gemini' | 'opencode' | 'claudecode' | 'kiro-cli';
 
 export class AppSettings {
   /** Gemini 엔진 홈 디렉토리 (기본: ~/.gemini/antigravity) */
@@ -31,6 +31,8 @@ export class AppSettings {
   readonly opencodeHome: string;
   /** Claude Code 엔진 홈 디렉토리 (기본: ~/.claude) */
   readonly claudecodeHome: string;
+  /** kiro-cli 엔진 홈 디렉토리 (기본: ~/.kiro-cli) */
+  readonly kirocliHome: string;
   /** 히스토리 파일명 */
   readonly historyFileName = 'history.jsonl';
   /** 상태 DB 파일명 */
@@ -53,6 +55,8 @@ export class AppSettings {
   readonly opencodeCliExecutable: string;
   /** claude CLI 실행 파일명 */
   readonly claudecodeCliExecutable: string;
+  /** kiro-cli CLI 실행 파일명 */
+  readonly kirocliCliExecutable: string;
   /** 창업자(대표) 이름 */
   readonly founderName: string;
   /** 작업 공간 루트 경로 */
@@ -67,7 +71,7 @@ export class AppSettings {
   get defaultEngine(): EngineType {
     if (this._defaultEngineOverride) return this._defaultEngineOverride;
     const env = process.env.CODEX_AGENT_DEFAULT_ENGINE;
-    const valid: EngineType[] = ['gemini', 'opencode', 'claudecode'];
+    const valid: EngineType[] = ['gemini', 'opencode', 'claudecode', 'kiro-cli'];
     return valid.includes(env as EngineType) ? (env as EngineType) : 'gemini';
   }
 
@@ -112,12 +116,14 @@ export class AppSettings {
     this.geminiHome = this._envPath('CODEX_AGENT_GEMINI_HOME') || path.join(os.homedir(), '.gemini', 'antigravity');
     this.opencodeHome = this._envPath('CODEX_AGENT_OPENCODE_HOME') || path.join(os.homedir(), '.opencode');
     this.claudecodeHome = this._envPath('CODEX_AGENT_CLAUDE_HOME') || path.join(os.homedir(), '.claude');
+    this.kirocliHome = this._envPath('CODEX_AGENT_KIROCLI_HOME') || path.join(os.homedir(), '.kiro-cli');
     this.runMaxConcurrency = this._envInt('CODEX_AGENT_RUN_MAX_CONCURRENCY', 2, 1, 16);
     this.runTimeoutSeconds = this._envInt('CODEX_AGENT_RUN_TIMEOUT_SECONDS', 1800, 30, 86400);
     this.runPromptMaxLength = this._envInt('CODEX_AGENT_RUN_PROMPT_MAX_LENGTH', 12000, 100, 100000);
     this.geminiCliExecutable = process.env.CODEX_AGENT_GEMINI_CLI || 'gemini';
     this.opencodeCliExecutable = process.env.CODEX_AGENT_OPENCODE_CLI || 'opencode';
     this.claudecodeCliExecutable = process.env.CODEX_AGENT_CLAUDE_CLI || 'claude';
+    this.kirocliCliExecutable = process.env.CODEX_AGENT_KIROCLI_CLI || 'kiro-cli';
     this.founderName = process.env.CODEX_AGENT_FOUNDER_NAME || '대표이사';
     this.workspaceRoot = this._envPath('CODEX_AGENT_WORKSPACE_ROOT') || path.resolve('.');
     this.workflowRecommendationMaxAgents = this._envInt('CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS', 6, 1, 12);
@@ -137,6 +143,10 @@ export class AppSettings {
   get claudecodeSkillsRoot(): string { return path.join(this.claudecodeHome, 'skills'); }
   /** claudecode 엔진의 agents 디렉토리 경로 */
   get claudecodeAgentsRoot(): string { return path.join(this.claudecodeHome, 'agents'); }
+  /** kiro-cli 엔진의 skills 디렉토리 경로 */
+  get kirocliSkillsRoot(): string { return path.join(this.kirocliHome, 'skills'); }
+  /** kiro-cli 엔진의 agents 디렉토리 경로 */
+  get kirocliAgentsRoot(): string { return path.join(this.kirocliHome, 'agents'); }
   /** 설정 파일(config.toml) 경로 (gemini 엔진 기준) */
   get configTomlPath(): string { return path.join(this.geminiHome, 'config.toml'); }
   /**
@@ -150,6 +160,7 @@ export class AppSettings {
       case 'gemini': return this.geminiHome;
       case 'opencode': return this.opencodeHome;
       case 'claudecode': return this.claudecodeHome;
+      case 'kiro-cli': return this.kirocliHome;
       default: return this.geminiHome;
     }
   }
@@ -165,6 +176,7 @@ export class AppSettings {
       case 'gemini': return this.geminiSkillsRoot;
       case 'opencode': return this.opencodeSkillsRoot;
       case 'claudecode': return this.claudecodeSkillsRoot;
+      case 'kiro-cli': return this.kirocliSkillsRoot;
       default: return this.geminiSkillsRoot;
     }
   }
@@ -180,6 +192,7 @@ export class AppSettings {
       case 'gemini': return this.geminiAgentsRoot;
       case 'opencode': return this.opencodeAgentsRoot;
       case 'claudecode': return this.claudecodeAgentsRoot;
+      case 'kiro-cli': return this.kirocliAgentsRoot;
       default: return this.geminiAgentsRoot;
     }
   }
@@ -195,6 +208,7 @@ export class AppSettings {
       case 'gemini': return path.join(this.geminiHome, this.historyFileName);
       case 'opencode': return path.join(this.opencodeHome, this.historyFileName);
       case 'claudecode': return path.join(this.claudecodeHome, this.historyFileName);
+      case 'kiro-cli': return path.join(this.kirocliHome, this.historyFileName);
       default: return path.join(this.geminiHome, this.historyFileName);
     }
   }
@@ -210,6 +224,7 @@ export class AppSettings {
       case 'gemini': return path.join(this.geminiHome, this.stateDbName);
       case 'opencode': return path.join(this.opencodeHome, this.stateDbName);
       case 'claudecode': return path.join(this.claudecodeHome, this.stateDbName);
+      case 'kiro-cli': return path.join(this.kirocliHome, this.stateDbName);
       default: return path.join(this.geminiHome, this.stateDbName);
     }
   }
@@ -225,6 +240,7 @@ export class AppSettings {
       case 'gemini': return path.join(this.geminiHome, this.logDbName);
       case 'opencode': return path.join(this.opencodeHome, this.logDbName);
       case 'claudecode': return path.join(this.claudecodeHome, this.logDbName);
+      case 'kiro-cli': return path.join(this.kirocliHome, this.logDbName);
       default: return path.join(this.geminiHome, this.logDbName);
     }
   }
