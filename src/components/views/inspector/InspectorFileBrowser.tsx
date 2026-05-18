@@ -1,7 +1,29 @@
+/**
+ * InspectorFileBrowser — 인스펙터에서 선택된 에이전트의 파일 목록 브라우저.
+ *
+ * 기능:
+ * - AgentInspectorResponse 데이터를 그룹화하여 파일 목록 표시
+ * - 그룹: 설정(config), Skill Definition, 참조 문서, 스크립트, 에셋
+ * - 각 파일 카드: 파일명, 종류 아이콘, 크기, 언어 표시
+ * - 클릭 시 FileEditor로 전달할 파일 선택
+ *
+ * Props:
+ * - response (AgentInspectorResponse): 로드된 에이전트 정보
+ * - selectedFile: 현재 선택된 파일 경로
+ * - onSelectFile: 파일 선택 콜백
+ *
+ * 앱 내 배치:
+ * - InspectorView 메인 영역 좌측 패널 하단
+ * - InspectorSidebar에서 에이전트 선택 시 response 데이터 기반 렌더링
+ */
 import React from 'react';
 import type { AgentInspectorFileModel, AgentInspectorResponse } from '../../../../types/ipc-contract';
 import { detectLanguage, formatBytes, getKindIcon, getFileIcon, FILE_KIND_LABELS } from '../../../utils/inspector';
 
+/**
+ * FileCard — 개별 파일 카드 컴포넌트.
+ * @returns 파일 카드 JSX 요소
+ */
 const FileCard: React.FC<{
   file: AgentInspectorFileModel;
   selected: boolean;
@@ -24,6 +46,10 @@ const FileCard: React.FC<{
   </div>
 );
 
+/**
+ * FileGroup — 파일 그룹(설정/Skill Definition/참조 등) 컴포넌트.
+ * @returns 파일 그룹 JSX 요소
+ */
 const FileGroup: React.FC<{
   title: string;
   icon: string;
@@ -53,6 +79,11 @@ const FileGroup: React.FC<{
   );
 };
 
+/**
+ * InspectorFileBrowser — 인스펙터 파일 목록 브라우저.
+ * 그룹화된 파일 카드 목록 제공.
+ * @returns 파일 브라우저 JSX 요소
+ */
 export const InspectorFileBrowser: React.FC<{
   response: AgentInspectorResponse;
   selectedFile: string | null;

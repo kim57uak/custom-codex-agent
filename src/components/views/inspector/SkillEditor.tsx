@@ -1,7 +1,31 @@
+/**
+ * SkillEditor — 스킬(Skill Definition Markdown) 편집 컴포넌트.
+ *
+ * 기능:
+ * - 선택된 스킬의 Markdown 내용을 읽어와 텍스트 에디터로 표시
+ * - 내용 수정, 저장, 되돌리기 기능
+ * - 스킬 상태(설치/활성/비활성) 및 경로 정보 헤더 표시
+ *
+ * Props:
+ * - skill (SkillModel): 편집할 스킬 모델 (name, path, installed, enabled)
+ *
+ * State:
+ * - content/originalContent: 편집 내용 및 변경 감지
+ * - saving/error/successMsg: 저장 상태 관리
+ *
+ * 앱 내 배치:
+ * - InspectorView에서 selectedSkill이 있을 때 메인 영역에 렌더링
+ * - InspectorSidebar의 Skills 탭에서 스킬 선택 시 활성화
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import type { SkillModel } from '../../../../types/ipc-contract';
 import { ipcInvoke } from '../../../utils/ipc';
 
+/**
+ * SkillEditor — 스킬(Skill Definition Markdown) 편집 컴포넌트.
+ * Markdown 내용 읽기, 편집, 저장, 되돌리기 기능 제공.
+ * @returns 스킬 에디터 JSX 요소
+ */
 export const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
   const [loading, setLoading] = useState(false);
   const [content, setContent] = useState<string | null>(null);
@@ -14,6 +38,7 @@ export const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
     loadContent();
   }, [skill.path]);
 
+  /** 스킬 파일 내용 로드 */
   const loadContent = async () => {
     setLoading(true);
     setError(null);
@@ -27,6 +52,7 @@ export const SkillEditor: React.FC<{ skill: SkillModel }> = ({ skill }) => {
     setLoading(false);
   };
 
+  /** 스킬 내용 저장 */
   const handleSave = useCallback(async () => {
     if (!content) return;
     setSaving(true);

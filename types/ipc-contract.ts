@@ -1,3 +1,8 @@
+/**
+ * Zod schemas and inferred TypeScript types defining the complete IPC contract
+ * between the Electron main process and renderer — agent configs, workflow runs,
+ * dashboard metrics, inspector data, and file-change events.
+ */
 import { z } from 'zod';
 import { IPC_CHANNELS, IPC_VERSION } from './ipc-channels';
 

@@ -1,3 +1,19 @@
+/**
+ * 엔진(Engine) 통합 테스트
+ *
+ * 테스트 대상:
+ * - ConfigReader (CLI 경로 검증, 에이전트 설정, 디렉토리/파일 읽기)
+ * - LogBuffer (엔진 로그 버퍼링/플러시)
+ * - EventBroker (이벤트 브로커)
+ * 테스트 방식: 통합 테스트 (실제 CLI 바이너리 호출, 실제 파일 시스템 접근)
+ * 주요 검증 시나리오:
+ * - 4개 엔진(codex, gemini, opencode, claudecode)의 CLI 경로 유효성 및 --version 실행
+ * - Engine Agent Config 저장 및 조회
+ * - Skills 디렉토리 접근 및 SKILL.md 파일 읽기
+ * - 엔진 경로 Resolution 로직 (startRun 시나리오)
+ * - LogBuffer push/flush 동작 및 콜백
+ * - 경로 탐색(Traversal) 방어 및 홈 디렉토리 내 파일 읽기
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import os from 'os';
 import path from 'path';

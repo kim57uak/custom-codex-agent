@@ -1,3 +1,18 @@
+/**
+ * StatusBar — 앱 하단 상태 표시줄 컴포넌트.
+ *
+ * 기능:
+ * - 현재 선택된 엔진 표시 (색상 인디케이터 + 이름)
+ * - 다른 엔진들의 CLI 유효성 상태 표시 (Available/Not found)
+ * - 활성 에이전트 실행 수 표시
+ * - 앱 버전 정보 표시
+ *
+ * Props: 없음 (Zustand store에서 모든 상태 읽음)
+ *
+ * 앱 내 배치:
+ * - 전체 앱 레이아웃의 최하단 footer
+ * - App.tsx의 Layout 컴포넌트 내부에 위치
+ */
 import React, { useState, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { ipcInvoke } from '../../utils/ipc';
@@ -18,6 +33,11 @@ const ENGINE_COLORS: Record<string, string> = {
   claudecode: 'var(--status-warning)',
 };
 
+/**
+ * StatusBar — 앱 하단 상태 표시줄.
+ * 선택된 엔진, CLI 유효성 상태, 활성 에이전트 수, 앱 버전 표시.
+ * @returns 상태 표시줄 JSX 요소
+ */
 export const StatusBar: React.FC<StatusBarProps> = () => {
   const activeRunCount = useUIStore((s) => s.activeRunCount);
   const appVersion = useUIStore((s) => s.appVersion);

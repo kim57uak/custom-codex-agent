@@ -47,6 +47,11 @@ interface RunEndedData {
  * ConsoleSidebar - 사이드바용 Console 컴포넌트
  * 에이전트 선택 및 실행 설정 (엔진은 ActivityBar 전역에서 선택)
  */
+/**
+ * ConsoleSidebar — 사이드바용 Console 컴포넌트.
+ * 에이전트 선택 및 실행 설정 (엔진은 ActivityBar 전역에서 선택).
+ * @returns 콘솔 사이드바 JSX 요소
+ */
 export const ConsoleSidebar: React.FC = () => {
   const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
   const [skills, setSkills] = useState<Array<{ name: string; path: string }>>([]);
@@ -59,6 +64,7 @@ export const ConsoleSidebar: React.FC = () => {
     loadData();
   }, [selectedEngine]);
 
+  /** 에이전트 및 스킬 목록 로드 */
   const loadData = async () => {
     const [agentResult, inventory] = await Promise.all([
       ipcInvoke<{ agents: Array<{ id: string; name: string; engine: string }> }>('config:get-agents'),
@@ -74,11 +80,13 @@ export const ConsoleSidebar: React.FC = () => {
     }
   };
 
+  /** 워크스페이스 디렉토리 선택 다이얼로그 열기 */
   const handleBrowseWorkspace = async () => {
     const dir = await ipcInvoke<string>('dialog:open-directory');
     if (dir) setWorkspace(dir);
   };
 
+  /** 에이전트 실행 시작 */
   const handleRun = async () => {
     const agentId = selectedAgentId || agents[0]?.id || '';
     if (!agentId) return;
@@ -165,6 +173,11 @@ export const ConsoleSidebar: React.FC = () => {
 
 /**
  * ConsoleView - 메인 콘솔 뷰 (xterm.js 터미널)
+ */
+/**
+ * ConsoleView — 메인 콘솔 뷰 (xterm.js 터미널).
+ * 실시간 로그 출력 및 에이전트 실행 설정 UI 제공.
+ * @returns 콘솔 뷰 JSX 요소
  */
 export const ConsoleView: React.FC<ConsoleViewProps> = () => {
   const terminalRef = useRef<HTMLDivElement>(null);
@@ -268,11 +281,13 @@ export const ConsoleView: React.FC<ConsoleViewProps> = () => {
     };
   }, []);
 
+  /** 워크스페이스 디렉토리 선택 다이얼로그 열기 */
   const handleBrowseWorkspace = async () => {
     const dir = await ipcInvoke<string>('dialog:open-directory');
     if (dir) setWorkspace(dir);
   };
 
+  /** 에이전트 실행 시작 (워크스페이스 필수) */
   const handleRun = async () => {
     if (!workspace) {
       if (terminal.current) {

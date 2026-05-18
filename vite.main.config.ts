@@ -1,3 +1,7 @@
+/**
+ * Vite config for the Electron main process bundle. Externalises Electron,
+ * better-sqlite3, and node-pty so they remain Node.js runtime requires.
+ */
 import { defineConfig } from 'vite';
 
 export default defineConfig({

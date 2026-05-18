@@ -1,3 +1,16 @@
+/**
+ * 컴포넌트 4-상태 패턴 및 채팅/레이아웃 일괄 검증 테스트
+ *
+ * 테스트 대상:
+ * - views/ 디렉토리 내 OrgTree, OrgView, DashboardView, ConsoleView, WorkflowView, InspectorView
+ * - ai-chat/ChatSidepanel.tsx
+ * - layout/ 디렉토리
+ * 테스트 방식: 유닛 테스트 (소스 코드 정적 분석)
+ * 주요 검증 시나리오:
+ * - 각 View 컴포넌트의 4-상태 패턴(loading/empty/error/success) 적용 여부
+ * - ChatSidepanel의 collapsed/loading/empty 메시지 상태 처리
+ * - Layout 컴포넌트 파일 최소 개수 검증
+ */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';

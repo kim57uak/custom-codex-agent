@@ -28,6 +28,7 @@ const DEPT_META: Record<string, { label: string; deptEn: string; color: string; 
   '마케팅/영업/CS': { label: 'Sales · CS', deptEn: 'Sales · CS', color: '#ec4899', icon: 'megaphone' },
 };
 
+/** 부서 메타데이터 조회 (레이블, 색상, 아이콘) */
 function getDeptMeta(dept: string): { label: string; deptEn: string; color: string; icon: string } {
   return DEPT_META[dept] ?? {
     label: dept,
@@ -43,6 +44,10 @@ interface AgentGroup {
 }
 
 /** OrgTreeGroup - 부서별 그룹 (아코디언) */
+/**
+ * OrgTreeGroup — 부서별 에이전트 그룹 (아코디언).
+ * @returns 조직 트리 그룹 JSX 요소
+ */
 const OrgTreeGroup: React.FC<{ group: AgentGroup; selectedId: string | null; onSelect: (agent: AgentConfig) => void }> = ({ group, selectedId, onSelect }) => {
   const [expanded, setExpanded] = useState(true);
   const meta = getDeptMeta(group.dept);
@@ -83,12 +88,18 @@ interface OrgTreeProps {
  * OrgTree - 사이드바용 에이전트 계층 트리
  * 엔진별로 그룹핑된 에이전트 목록 (모든 4개 엔진)
  */
+/**
+ * OrgTree — 사이드바용 에이전트 계층 트리.
+ * 엔진별로 그룹핑된 에이전트 목록 제공.
+ * @returns 조직 트리 JSX 요소
+ */
 export const OrgTree: React.FC<OrgTreeProps> = ({ onSelectAgent }) => {
   const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** 부서별 에이전트 그룹화 */
   function groupByDept(agents: AgentConfig[]): AgentGroup[] {
     const map = new Map<string, AgentConfig[]>();
     for (const agent of agents) {
@@ -101,6 +112,7 @@ export const OrgTree: React.FC<OrgTreeProps> = ({ onSelectAgent }) => {
       .sort((a, b) => a.dept.localeCompare(b.dept));
   }
 
+  /** 에이전트 목록 로드 */
   const loadAgents = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -117,12 +129,14 @@ export const OrgTree: React.FC<OrgTreeProps> = ({ onSelectAgent }) => {
     loadAgents();
   }, [loadAgents]);
 
+  /** 에이전트 선택 핸들러 */
   const handleSelect = (agent: AgentConfig) => {
     setSelectedId(agent.id);
     onSelectAgent?.(agent);
     window.electronAPI?.send('org:agent-selected', agent);
   };
 
+  /** 에이전트 추가 핸들러 */
   const handleAddAgent = () => {
     window.electronAPI?.send('org:add-agent');
   };
@@ -209,6 +223,11 @@ interface OrgViewProps {}
  *       ├── Dept Header (name + count)
  *       └── Agent Cards (status dot + name + description)
  */
+/**
+ * OrgView — 메인 영역용 계층형 조직도.
+ * Founder/CEO/Router 카드와 부서별 에이전트 클러스터를 표시.
+ * @returns 조직 뷰 JSX 요소
+ */
 export const OrgView: React.FC<OrgViewProps> = () => {
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [stats, setStats] = useState<{ totalRuns: number; totalAgents: number }>({ totalRuns: 0, totalAgents: 0 });
@@ -239,6 +258,7 @@ export const OrgView: React.FC<OrgViewProps> = () => {
     })();
   }, []);
 
+  /** 부서 아코디언 접기/펼치기 토글 */
   const toggleDept = (dept: string) => {
     setExpandedDepts(prev => {
       const next = new Set(prev);

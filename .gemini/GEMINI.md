@@ -1,0 +1,1 @@
+/Users/dolpaks/Downloads/project/genius-skills/AGENTS.md

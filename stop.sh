@@ -1,4 +1,7 @@
 #!/bin/bash
+# Graceful process killer for the Agent Orchestrator app.
+# Targets Electron, Vite dev servers on ports 5173-5175, and orphaned
+# .vite node processes, then verifies everything is stopped.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

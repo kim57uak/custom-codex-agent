@@ -1,8 +1,17 @@
+/**
+ * Zustand store managing inspector panel UI state — agents list, skills list,
+ * active tab, selected agent/skill, file viewer state, and loading/error flags.
+ */
 import { create } from 'zustand';
 import type { AgentConfig, AgentModel, SkillModel, AgentInspectorResponse } from '../../types/ipc-contract';
 
+/** 인스펙터 탭 종류 — agents(에이전트 목록) / skills(스킬 목록) */
 type InspectorTab = 'agents' | 'skills';
 
+/**
+ * InspectorStore 인터페이스
+ * 인스펙터 패널의 UI 상태 관리를 위한 Zustand 스토어
+ */
 interface InspectorStore {
   agents: AgentConfig[];
   skills: SkillModel[];

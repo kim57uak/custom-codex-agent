@@ -1,3 +1,7 @@
+/**
+ * Vitest configuration with jsdom environment, React plugin, path aliases,
+ * and 80 % coverage thresholds for statements, branches, functions, lines.
+ */
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';

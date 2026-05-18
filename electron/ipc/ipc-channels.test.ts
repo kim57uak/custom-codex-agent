@@ -1,3 +1,15 @@
+/**
+ * IPC 채널 계약(Contract) 테스트
+ *
+ * 테스트 대상: types/ipc-channels 모듈의 IPC_CHANNELS, IPC_VERSION
+ * 테스트 방식: 유닛 테스트
+ * 주요 검증 시나리오:
+ * - IPC_VERSION이 '1.0.0'으로 선언되어 있는지 검증
+ * - invoke 채널 67개 모두가 domain:action 네이밍 규칙을 따르는지 검증
+ * - send 채널 7개가 모두 선언되어 있는지 검증
+ * - on 채널 14개가 모두 선언되어 있는지 검증
+ * - 각 채널별 필수 채널 목록 포함 여부 검증
+ */
 import { describe, it, expect } from 'vitest';
 import { IPC_CHANNELS, IPC_VERSION } from '../../types/ipc-channels';
 

@@ -168,6 +168,13 @@ export class GeminiEngine implements EngineAdapter {
     });
   }
 
+  /**
+   * 엔진별 CLI 인자 구성
+   * approvalPolicy 및 sandboxMode에 따라 --approval-mode, --sandbox 플래그 설정
+   * @param prompt 실행할 프롬프트
+   * @param options 추가 옵션 (sandbox, approval, includeDirs)
+   * @returns CLI 인자 배열
+   */
   buildCliArgs(prompt: string, options?: import('./EngineAdapter').BuildCliArgsOptions): string[] {
     const args: string[] = ['--output-format', 'text'];
     const { sandboxMode, approvalPolicy, includeDirs } = options ?? {};

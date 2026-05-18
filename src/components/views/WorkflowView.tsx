@@ -1,3 +1,24 @@
+/**
+ * WorkflowView — AI 워크플로 실행 및 관리를 위한 메인 뷰 컴포넌트.
+ *
+ * 기능:
+ * - 사용자 입력(goal prompt)을 받아 워크플로 생성 및 추천
+ * - AgentCard 리스트로 각 에이전트 단계(status/prompt/파일첨부) 관리
+ * - 드래그 앤 드롭으로 에이전트 순서 변경 및 추가
+ * - HITL(Human-In-The-Loop) 승인 요청 처리
+ * - 실행 기록 사이드바(WorkflowSidebar): 실행 목록, 에이전트 프로필, 바로 실행
+ *
+ * Props/State:
+ * - steps (WorkflowStepRun[]): 현재 워크플로 단계들
+ * - goalPrompt: 사용자의 초기 요청 메시지
+ * - runStatus/currentStepIndex: 실행 상태 및 진행 단계
+ * - hitlRequests: 승인 대기 중인 요청 목록
+ * - AttachedFilesMap/globalFiles: 단계별/전역 파일 첨부 관리
+ *
+ * 앱 내 배치:
+ * - ActivityBar의 'workflow' 뷰 ID와 연결된 메인 콘텐츠
+ * - 좌측에 WorkflowSidebar, 우측에 대화형 워크플로 캔버스
+ */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import type {
@@ -13,10 +34,12 @@ const STEP_ICONS: Record<string, string> = {
   presentation: '\u{1F4CA}', bot: '\u{1F916}',
 };
 
+/** 아이콘 키에 해당하는 이모지 문자열 반환 */
 function getIcon(iconKey: string | null | undefined): string {
   return STEP_ICONS[iconKey || 'bot']!;
 }
 
+/** 상태 코드를 한글 레이블로 변환 */
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
     ready: '준비', queued: '대기', running: '실행 중', completed: '완료',
@@ -26,12 +49,14 @@ function statusLabel(status: string): string {
   return map[status] || status;
 }
 
+/** textarea 높이를 내용에 맞게 자동 조절 */
 function autoResize(el: HTMLTextAreaElement | null) {
   if (!el) return;
   el.style.height = 'auto';
   el.style.height = el.scrollHeight + 'px';
 }
 
+/** 상태별 색상 코드 반환 (완료=초록, 실행=파랑, 실패/중단=빨강) */
 function statusColor(status: string): string {
   if (status === 'completed') return '#22c55e';
   if (status === 'running') return '#3b82f6';
@@ -39,6 +64,14 @@ function statusColor(status: string): string {
   return '#6b7280';
 }
 
+/**
+ * HITL(Human-In-The-Loop) 승인 요청 데이터
+ * @property id - 요청 고유 ID
+ * @property stepIndex - 관련 워크플로 단계 인덱스
+ * @property agentName - 요청한 에이전트 이름
+ * @property message - 승인 요청 메시지
+ * @property permission - 요청된 권한
+ */
 interface HitlRequest {
   id: string;
   stepIndex: number;
@@ -47,6 +80,17 @@ interface HitlRequest {
   permission: string;
 }
 
+/**
+ * 에이전트 프로필 정보
+ * @property name - 에이전트 식별자
+ * @property roleLabelKo - 한글 역할명
+ * @property departmentLabelKo - 한글 부서명
+ * @property description - 상세 설명
+ * @property shortDescription - 짧은 설명
+ * @property oneClickPrompt - 원클릭 실행 프롬프트
+ * @property skillName - 연결된 스킬 이름
+ * @property iconKey - 아이콘 키
+ */
 interface AgentProfile {
   name: string; roleLabelKo: string; departmentLabelKo: string;
   description: string; shortDescription: string | null;
@@ -55,6 +99,20 @@ interface AgentProfile {
 
 // ── AI Chat Bubble (Agent Card) ───────────────────
 
+/**
+ * AgentCard 컴포넌트 Props
+ * @property step - 워크플로 단계 실행 데이터
+ * @property index - 단계 인덱스
+ * @property isActive - 현재 활성 단계 여부
+ * @property isWorkflowRunning - 워크플로 실행 중 여부
+ * @property onRun - 단계 실행 콜백
+ * @property onStop - 단계 중지 콜백
+ * @property onRemove - 단계 제거 콜백
+ * @property onPromptChange - 프롬프트 변경 콜백
+ * @property attachedFiles - 첨부 파일 목록
+ * @property onAttachFiles - 파일 첨부 콜백
+ * @property onRemoveFile - 파일 제거 콜백
+ */
 interface AgentCardProps {
   step: WorkflowStepRun;
   index: number;
@@ -69,6 +127,11 @@ interface AgentCardProps {
   onRemoveFile: (index: number, fileIndex: number) => void;
 }
 
+/**
+ * AgentCard — 개별 에이전트 단계 카드 컴포넌트.
+ * 프롬프트 편집, 실행/중지/제거 버튼, 파일 첨부 UI를 포함.
+ * @returns 에이전트 카드 JSX 요소
+ */
 const AgentCard: React.FC<AgentCardProps> = ({
   step, index, isActive, isWorkflowRunning,
   onRun, onStop, onRemove, onPromptChange,
@@ -173,11 +236,21 @@ const AgentCard: React.FC<AgentCardProps> = ({
 
 // ── HITL Card ──────────────────────────────────────
 
+/**
+ * HitlCard 컴포넌트 Props
+ * @property request - HITL 승인 요청 데이터
+ * @property onRespond - 승인 응답 콜백
+ */
 interface HitlCardProps {
   request: HitlRequest;
   onRespond: (id: string, response: 'allow_once' | 'allow_always' | 'reject') => void;
 }
 
+/**
+ * HitlCard — HITL 승인 요청 카드 컴포넌트.
+ * Allow Once / Always / Reject 세 가지 응답 버튼 제공.
+ * @returns HITL 카드 JSX 요소
+ */
 const HitlCard: React.FC<HitlCardProps> = ({ request, onRespond }) => (
   <div className="hitl-card">
     <div className="hitl-card__header">
@@ -203,6 +276,10 @@ const HitlCard: React.FC<HitlCardProps> = ({ request, onRespond }) => (
 
 // ── Connector ───────────────────────────────────────
 
+/**
+ * StepConnector — 워크플로 단계 사이 연결선 컴포넌트.
+ * @returns 연결선 JSX 요소
+ */
 const StepConnector: React.FC<{ done: boolean }> = ({ done }) => (
   <div className={`csc-conn ${done ? 'csc-conn--done' : ''}`}>
     <div className="csc-conn__line" />
@@ -211,6 +288,11 @@ const StepConnector: React.FC<{ done: boolean }> = ({ done }) => (
 
 // ── Main Workflow View ──────────────────────────────
 
+/**
+ * WorkflowView — AI 워크플로 실행 및 관리를 위한 메인 뷰 컴포넌트.
+ * 사용자 입력(goal prompt)을 받아 워크플로 생성, 에이전트 단계 관리, HITL 처리.
+ * @returns 워크플로 뷰 JSX 요소
+ */
 export const WorkflowView: React.FC = () => {
   const selectedRunId = useUIStore((s) => s.selectedWorkflowRunId);
   const setSelectedRunId = useUIStore((s) => s.setSelectedWorkflowRunId);
@@ -234,6 +316,7 @@ export const WorkflowView: React.FC = () => {
   const stepsRef = useRef(steps);
   stepsRef.current = steps;
 
+  /** 선택된 워크플로 실행 상세 정보 로드 */
   const loadRunDetail = useCallback(async (runId: string) => {
     const result = await ipcInvoke<WorkflowRunDetail>('workflow:run-detail', runId);
     if (result) {
@@ -284,6 +367,7 @@ export const WorkflowView: React.FC = () => {
     return () => { unsub1(); unsub2(); unsub3(); };
   }, [selectedRunId, loadRunDetail]);
 
+  /** 사용자 입력(goal prompt) 전송 → 워크플로 추천 및 생성 */
   const handleSend = useCallback(async () => {
     const text = chatInput.trim();
     if (!text || isSending) return;
@@ -308,6 +392,7 @@ export const WorkflowView: React.FC = () => {
     }
   }, [chatInput, isSending, selectedEngine, sandboxMode, approvalPolicy, globalFiles, setSelectedRunId]);
 
+  /** 단계별/전역 첨부 파일을 각 단계 프롬프트에 동기화 */
   const _syncFiles = useCallback(async () => {
     if (!selectedRunId) return;
     if (globalFiles.length > 0) {
@@ -335,6 +420,7 @@ export const WorkflowView: React.FC = () => {
     }
   }, [selectedRunId, globalFiles, attachedFilesMap]);
 
+  /** 전체 워크플로 실행 시작 */
   const handleRun = useCallback(async () => {
     if (!selectedRunId || isRunning) return;
     setIsRunning(true);
@@ -346,11 +432,13 @@ export const WorkflowView: React.FC = () => {
     }
   }, [selectedRunId, isRunning, _syncFiles]);
 
+  /** 전체 워크플로 실행 중지 */
   const handleStop = useCallback(async () => {
     if (!selectedRunId) return;
     await ipcInvoke('workflow:stop', selectedRunId);
   }, [selectedRunId]);
 
+  /** 특정 단계 실행 */
   const handleStepRun = useCallback(async (_stepIndex: number) => {
     if (runStatus === 'running') return;
     setIsRunning(true);
@@ -367,11 +455,13 @@ export const WorkflowView: React.FC = () => {
     }
   }, [selectedRunId, runStatus, _syncFiles, selectedEngine, setSelectedRunId]);
 
+  /** 특정 단계 중지 */
   const handleStepStop = useCallback(async () => {
     if (!selectedRunId) return;
     await ipcInvoke('workflow:stop', selectedRunId);
   }, [selectedRunId]);
 
+  /** 실패/취소된 워크플로 재시도 */
   const handleRetry = useCallback(async () => {
     if (!selectedRunId) return;
     const newId = await ipcInvoke<string | null>('workflow:retry', { workflowRunId: selectedRunId, engine: selectedEngine });
@@ -381,12 +471,14 @@ export const WorkflowView: React.FC = () => {
     }
   }, [selectedRunId, selectedEngine, setSelectedRunId]);
 
+  /** 워크플로에서 특정 단계 제거 */
   const handleRemoveStep = useCallback(async (stepIndex: number) => {
     if (!selectedRunId) return;
     const detail = await ipcInvoke<WorkflowRunDetail>('workflow:remove-step', { workflowRunId: selectedRunId, stepIndex });
     if (detail) setSteps(detail.steps);
   }, [selectedRunId]);
 
+  /** 에이전트 단계 프롬프트 내용 업데이트 */
   const handlePromptChange = useCallback(async (stepIndex: number, prompt: string) => {
     if (!selectedRunId) return;
     const detail = await ipcInvoke<WorkflowRunDetail>('workflow:update-step-prompt', {
@@ -395,6 +487,7 @@ export const WorkflowView: React.FC = () => {
     if (detail) setSteps(detail.steps);
   }, [selectedRunId]);
 
+  /** 특정 단계에 파일 첨부 다이얼로그 열기 */
   const handleAttachFiles = useCallback(async (stepIndex: number) => {
     const paths = await ipcInvoke<string[]>('dialog:open-file');
     if (paths && paths.length > 0) {
@@ -405,6 +498,7 @@ export const WorkflowView: React.FC = () => {
     }
   }, []);
 
+  /** 특정 단계의 첨부 파일 제거 */
   const handleRemoveFile = useCallback((stepIndex: number, fileIndex: number) => {
     setAttachedFilesMap((prev) => {
       const cur = prev[stepIndex] || [];
@@ -413,30 +507,36 @@ export const WorkflowView: React.FC = () => {
     });
   }, []);
 
+  /** 워크플로 전역 파일 첨부 다이얼로그 열기 */
   const handleGlobalAttach = useCallback(async () => {
     const paths = await ipcInvoke<string[]>('dialog:open-file');
     if (paths && paths.length > 0) setGlobalFiles((prev) => [...prev, ...paths]);
   }, []);
 
+  /** 전역 첨부 파일 제거 */
   const handleGlobalRemoveFile = useCallback((index: number) => {
     setGlobalFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  /** HITL 승인 요청에 응답 */
   const handleHitlRespond = useCallback(async (id: string, response: 'allow_once' | 'allow_always' | 'reject') => {
     await ipcInvoke('workflow:permission-respond', { requestId: id, response });
     setHitlRequests((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  /** 드래그 시작 — 단계 순서 변경을 위한 드래그 인덱스 저장 */
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     dragIndex.current = index;
     e.dataTransfer.effectAllowed = 'move';
   }, []);
 
+  /** 드래그 오버 — 드롭 효과 설정 */
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   }, []);
 
+  /** 드롭 — 단계 순서 변경 또는 새 에이전트 추가 */
   const handleDrop = useCallback((e: React.DragEvent, dropIndex: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -457,6 +557,7 @@ export const WorkflowView: React.FC = () => {
     dragIndex.current = null;
   }, [steps, selectedRunId]);
 
+  /** 워크플로 컨테이너 드래그 오버 — 에이전트 드롭 영역 표시 */
   const handleContainerDragOver = useCallback((e: React.DragEvent) => {
     if (e.dataTransfer.types.includes('text/workflow-agent')) {
       e.preventDefault();
@@ -464,6 +565,7 @@ export const WorkflowView: React.FC = () => {
     }
   }, []);
 
+  /** 워크플로 컨테이너에 에이전트 드롭 — 새 단계 추가 */
   const handleContainerDrop = useCallback(async (e: React.DragEvent) => {
     const agentName = e.dataTransfer.getData('text/workflow-agent');
     if (!agentName || !selectedRunId) return;
@@ -474,6 +576,7 @@ export const WorkflowView: React.FC = () => {
     if (detail) setSteps(detail.steps);
   }, [selectedRunId]);
 
+  /** 입력 필드 키보드 이벤트 처리 — Enter 전송, Shift+Enter 줄바꿈 */
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -481,6 +584,7 @@ export const WorkflowView: React.FC = () => {
     }
   }, [handleSend]);
 
+  /** 현재 활성 단계 건너뛰기 */
   const handleSkipStep = useCallback(async () => {
     if (!selectedRunId || currentStepIndex < 0) return;
     await ipcInvoke('workflow:skip-step', { workflowRunId: selectedRunId, stepIndex: currentStepIndex });
@@ -620,6 +724,11 @@ export const WorkflowView: React.FC = () => {
 
 // ── Workflow Sidebar ────────────────────────────────
 
+/**
+ * WorkflowSidebar — 워크플로 실행 기록 및 에이전트 목록 사이드바.
+ * 실행 기록(runs) 탭과 에이전트(agents) 탭으로 구성.
+ * @returns 워크플로 사이드바 JSX 요소
+ */
 export const WorkflowSidebar: React.FC = () => {
   const selectedRunId = useUIStore((s) => s.selectedWorkflowRunId);
   const setSelectedRunId = useUIStore((s) => s.setSelectedWorkflowRunId);
@@ -632,17 +741,20 @@ export const WorkflowSidebar: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [runInfo, setRunInfo] = useState<WorkflowRunDetail | null>(null);
 
+  /** 워크플로 실행 목록 로드 */
   const loadRuns = useCallback(async () => {
     const result = await ipcInvoke<WorkflowRunSummary[]>('workflow:runs');
     if (result) setRuns(result);
   }, []);
 
+  /** 선택된 실행의 상세 정보 로드 */
   const loadRunInfo = useCallback(async () => {
     if (!selectedRunId) { setRunInfo(null); return; }
     const detail = await ipcInvoke<WorkflowRunDetail>('workflow:run-detail', selectedRunId);
     if (detail) setRunInfo(detail);
   }, [selectedRunId]);
 
+  /** 에이전트 프로필 목록 로드 */
   const loadAgents = useCallback(async () => {
     const result = await ipcInvoke<AgentProfile[]>('workflow:agent-profiles');
     if (result && Array.isArray(result)) setAgents(result);
@@ -665,21 +777,25 @@ export const WorkflowSidebar: React.FC = () => {
     return () => unsub();
   }, [loadRuns, loadRunInfo]);
 
+  /** 선택된 실행 기록 삭제 */
   const handleDeleteRun = useCallback(async (runId: string) => {
     const ok = await ipcInvoke<boolean>('workflow:delete-run', runId);
     if (ok && runId === selectedRunId) setSelectedRunId(null);
     loadRuns();
   }, [selectedRunId, setSelectedRunId]);
 
+  /** 워크플로 초기화 — 선택 해제 */
   const handleReset = useCallback(() => {
     setSelectedRunId(null);
     setRunInfo(null);
   }, [setSelectedRunId]);
 
+  /** 새 워크플로 실행 생성 (goal prompt 입력 상태로) */
   const handleCreateRunFromGoal = useCallback(() => {
     setSelectedRunId(null);
   }, [setSelectedRunId]);
 
+  /** 에이전트 원클릭 프롬프트로 바로 워크플로 생성 및 실행 */
   const handleAgentQuickPrompt = useCallback(async (agentName: string, prompt: string) => {
     const ss = useUIStore.getState();
     const result = await ipcInvoke<{ workflowRunId: string }>('workflow:create-run', {
@@ -694,6 +810,7 @@ export const WorkflowSidebar: React.FC = () => {
     }
   }, [setSelectedRunId, setSidebarTab, selectedEngine]);
 
+  /** 에이전트 선택 — 워크플로에 추가하거나 새 실행 생성 */
   const handleAgentClick = useCallback(async (agent: AgentProfile) => {
     if (!selectedRunId) {
       const ss = useUIStore.getState();

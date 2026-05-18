@@ -1,3 +1,15 @@
+/**
+ * 전역 스타일(global.css) 레이아웃 및 테마 검증 테스트
+ *
+ * 테스트 대상: src/styles/global.css
+ * 테스트 방식: 유닛 테스트 (CSS 파일 정적 분석)
+ * 주요 검증 시나리오:
+ * - .app-shell CSS Grid 레이아웃 정의 여부
+ * - grid-template-areas에 activity/sidebar/main/chat/panel/status 영역 포함 여부
+ * - 각 영역별 grid-area 할당 여부
+ * - 10개 테마(aurora, cyber-fusion 등) CSS 변수 정의 여부
+ * - Aurora 테마의 필수 CSS 변수(--bg-primary, --text-primary 등) 포함 여부
+ */
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';

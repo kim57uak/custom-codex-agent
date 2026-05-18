@@ -1,3 +1,16 @@
+/**
+ * InspectorView 컴포넌트 통합 테스트
+ *
+ * 테스트 대상: src/components/views/InspectorView.tsx
+ * 테스트 방식: 유닛 테스트 + React Testing Library 렌더링 테스트
+ * 주요 검증 시나리오:
+ * - IPC 호출 시 engine 파라미터 전달 여부 (소스 코드 분석)
+ * - AgentEditor 렌더링 (에이전트에 스킬 파일이 없는 경우)
+ * - FileBrowser 렌더링 (에이전트에 스킬 파일이 있는 경우)
+ * - loading 상태에서 스피너 표시
+ * - welcome 화면 (에이전트 미선택)
+ * - error 상태에서 오류 메시지 표시
+ */
 import { describe, it, expect, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';

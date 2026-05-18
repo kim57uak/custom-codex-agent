@@ -1,3 +1,19 @@
+/**
+ * ConfigReader 통합 테스트
+ *
+ * 테스트 대상: electron/services/ConfigReader.ts
+ * 테스트 방식: 통합 테스트 (실제 JSON 파일 I/O, 실제 파일 시스템 접근)
+ * 주요 검증 시나리오:
+ * - 에이전트 저장(saveAgent) 및 조회(listAgents)
+ * - 기존 에이전트 업데이트
+ * - 에이전트 삭제(deleteAgent) 및 존재하지 않는 에이전트 삭제 시 false 반환
+ * - 설정 저장(set) 및 조회(get)
+ * - 에이전트 JSON 파일 디스크 Persistence
+ * - 홈 디렉토리 내 파일 읽기
+ * - 경로 탐색(Traversal) 방어 (/etc/passwd 차단)
+ * - Stats 반환(totalRuns, totalAgents 등)
+ * - 디렉토리 목록 조회(listDir)
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import os from 'os';
 import path from 'path';

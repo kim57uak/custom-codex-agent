@@ -1,3 +1,22 @@
+/**
+ * InspectorSidebar — 인스펙터 좌측 사이드바 컴포넌트.
+ *
+ * 기능:
+ * - Agents/Skills 탭 전환으로 목록 표시
+ * - 검색 필터링 (이름/설명 기준)
+ * - Agents: 부서별 그룹화, 엔진 메타 표시, 선택 시 inspector:load-agent IPC 호출
+ * - Skills: 설치 상태(ON/OFF/MISS) 표시, 선택 시 SkillEditor 활성화
+ * - 에이전트 상세 정보 패널(Agent Info) 하단 표시
+ *
+ * Props/State:
+ * - agents/skills/activeTab (Zustand): 전체 데이터 및 탭 상태
+ * - search: 검색어 입력
+ * - response: 현재 로드된 에이전트 응답 데이터 (선택적 하단 표시)
+ *
+ * 앱 내 배치:
+ * - ActivityBar의 'inspector' 뷰에서 좌측 보조 패널
+ * - InspectorView와 함께 렌더링되어 에이전트/스킬 탐색 제공
+ */
 import React, { useState } from 'react';
 import type { AgentConfig, SkillModel, AgentInspectorResponse } from '../../../../types/ipc-contract';
 import { useInspectorStore } from '../../../stores/inspectorStore';
@@ -5,6 +24,11 @@ import { useUIStore } from '../../../stores/uiStore';
 import { ipcInvoke } from '../../../utils/ipc';
 import { getEngineMeta, getDeptColor } from '../../../utils/inspector';
 
+/**
+ * InspectorSidebar — 인스펙터 좌측 사이드바.
+ * Agents/Skills 탭 전환, 검색 필터링, 부서별 그룹화된 에이전트 목록 제공.
+ * @returns 인스펙터 사이드바 JSX 요소
+ */
 export const InspectorSidebar: React.FC = () => {
   const agents = useInspectorStore(s => s.agents);
   const skills = useInspectorStore(s => s.skills);
@@ -42,6 +66,7 @@ export const InspectorSidebar: React.FC = () => {
     groupedAgents[dept].push(agent);
   }
 
+  /** 에이전트 선택 — 인스펙터 데이터 로드 */
   const handleSelectAgent = async (agent: AgentConfig) => {
     setSelectedAgent(agent);
     setSelectedSkill(null);
@@ -57,6 +82,7 @@ export const InspectorSidebar: React.FC = () => {
     }
   };
 
+  /** 스킬 선택 — SkillEditor 활성화 */
   const handleSelectSkill = (skill: SkillModel) => {
     setSelectedSkill(skill);
     setSelectedAgent(null);

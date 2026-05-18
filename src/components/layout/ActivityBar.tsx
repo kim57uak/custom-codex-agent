@@ -1,3 +1,23 @@
+/**
+ * ActivityBar — 앱 좌측 네비게이션 바 컴포넌트 (VS Code 스타일).
+ *
+ * 기능:
+ * - 뷰 전환 버튼: Organization, Dashboard, Console, Workflow, Inspector
+ * - 하단: 사이드바 토글, 채팅 토글, 테마 선택기, 엔진 선택기, 설정 드롭다운
+ * - 각 버튼에 SVG 아이콘 + active indicator 표시
+ * - 외부 클릭 시 드롭다운 자동 닫힘
+ *
+ * Props:
+ * - activeView: 현재 활성화된 뷰 ID
+ * - onViewChange: 뷰 변경 콜백
+ * - onToggleSidebar/onToggleChat: 사이드바/채티 패널 토글
+ * - onSettings: 설정 버튼 콜백
+ * - sidebarVisible: 사이드바 가시성 상태
+ *
+ * 앱 내 배치:
+ * - 전체 앱 레이아웃의 최좌측 고정 바
+ * - App.tsx에서 Layout 컴포넌트 내부에 위치
+ */
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { ipcInvoke } from '../../utils/ipc';
@@ -109,6 +129,7 @@ interface ActivityBarProps {
  * - mockup HTML과 동일한 SVG 아이콘 + left active indicator
  * - 하단 spacer + collapse toggles + settings
  */
+/** 사용 가능한 테마 목록 */
 const THEMES: Array<{ id: string; label: string }> = [
   { id: 'aurora', label: 'Aurora' },
   { id: 'cyber-fusion', label: 'Cyber Fusion' },
@@ -123,6 +144,7 @@ const THEMES: Array<{ id: string; label: string }> = [
   { id: 'black', label: 'Black' },
 ];
 
+/** 사용 가능한 AI 엔진 목록 */
 const ENGINES = [
   { id: 'codex', label: 'Codex CLI', icon: 'C' },
   { id: 'gemini', label: 'Gemini CLI', icon: 'G' },

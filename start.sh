@@ -1,4 +1,7 @@
 #!/bin/bash
+# Stale-process killer + app launcher.
+# Kills leftover Electron/Vite processes on project ports before running
+# `npm run start` to ensure a clean startup.
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

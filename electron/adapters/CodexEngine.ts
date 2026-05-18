@@ -48,120 +48,12 @@ export class CodexEngine implements EngineAdapter {
   readonly binaryName = 'codex';
 
   /**
-   * 환경 변수 살균 처리
-   * - ENV_SANITIZE_BLOCKLIST의 모든 키 제거
-   * @returns 살균된 환경 변수 객체
+   * 엔진별 CLI 인자 구성
+   * approvalPolicy 및 sandboxMode에 따라 적절한 플래그 설정
+   * @param prompt 실행할 프롬프트 (stdin 전달)
+   * @param options 추가 옵션 (sandbox, approval)
+   * @returns CLI 인자 배열
    */
-  private sanitizeEnv(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-    const baseEnv = { ...process.env, ...env };
-    for (const key of ENV_SANITIZE_BLOCKLIST) {
-      delete baseEnv[key];
-    }
-    const extraPaths = ['/opt/homebrew/bin', '/usr/local/bin'];
-    const currentPath = baseEnv.PATH ?? '';
-    baseEnv.PATH = [...extraPaths, currentPath].filter(Boolean).join(':');
-    return baseEnv;
-  }
-
-  /**
-   * CLI 프로세스 생성
-   * - shell: false (shell injection 방지)
-   * - env: 살균된 환경 변수 + 사용자 지정 환경 변수
-   *
-   * @param args CLI 인자 배열
-   * @param env 추가 환경 변수 (선택)
-   * @returns ChildProcess 인스턴스
-   */
-  spawn(args: string[], env?: NodeJS.ProcessEnv): ReturnType<typeof spawn> {
-    const sanitizedEnv = this.sanitizeEnv(env);
-
-    // 절대 경로가 없으면 PATH에서 탐색
-    let cliPath = 'codex';
-    if (args[0] && args[0].startsWith('/')) {
-      cliPath = args[0];
-      args = args.slice(1);
-    }
-
-    return spawn(cliPath, args, {
-      env: sanitizedEnv,
-      shell: false,    // shell injection 방지
-      stdio: ['pipe', 'pipe', 'pipe'],  // stdin/stdout/stderr 모두 pipe
-    });
-  }
-
-  /**
-   * CLI 프로세스 강제 종료
-   * - process.kill(pid, 'SIGKILL') 사용
-   * - zombie 프로세스 방지
-   *
-   * @param pid 종료할 프로세스 PID
-   * @returns 성공 여부
-   */
-  terminate(pid: number): boolean {
-    try {
-      process.kill(pid, 'SIGKILL');
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * CLI 연결 검증
-   * - `codex --version` 명령어 실행
-   * - 5초 타임아웃
-   *
-   * @param cliPath CLI 실행 파일 경로 (선택, 기본값: 'codex')
-   * @returns 유효성 검증 결과
-   */
-  async validateConnection(cliPath?: string): Promise<{ valid: boolean; version?: string; error?: string }> {
-    const pathToCheck = cliPath ?? 'codex';
-
-    return new Promise((resolve) => {
-      try {
-        const proc = spawn(pathToCheck, ['--version'], {
-          env: this.sanitizeEnv(),
-          shell: false,
-          timeout: 5000,
-        });
-
-        let output = '';
-        let errorOutput = '';
-
-        proc.stdout?.on('data', (data: Buffer) => {
-          output += data.toString();
-        });
-
-        proc.stderr?.on('data', (data: Buffer) => {
-          errorOutput += data.toString();
-        });
-
-        proc.on('close', (code) => {
-          if (code === 0 && output.trim()) {
-            resolve({ valid: true, version: output.trim() });
-          } else {
-            resolve({
-              valid: false,
-              error: errorOutput || `Exit code: ${code}`,
-            });
-          }
-        });
-
-        proc.on('error', (err) => {
-          resolve({ valid: false, error: err.message });
-        });
-
-        // 5초 타임아웃
-        setTimeout(() => {
-          proc.kill();
-          resolve({ valid: false, error: 'Timeout (5s)' });
-        }, 5000);
-      } catch (err) {
-        resolve({ valid: false, error: String(err) });
-      }
-    });
-  }
-
   buildCliArgs(prompt: string, options?: import('./EngineAdapter').BuildCliArgsOptions): string[] {
     const args: string[] = ['exec'];
     const { sandboxMode, approvalPolicy } = options ?? {};

@@ -1,8 +1,32 @@
+/**
+ * FileEditor — Monaco 에디터를 이용한 파일 내용 편집 컴포넌트.
+ *
+ * 기능:
+ * - InspectorView에서 선택한 에이전트 설정/스킬 파일 내용을 표시
+ * - Monaco 에디터로 구문 강조, 라인 넘버, 자동 레이아웃 지원
+ * - 변경 사항 감지 및 되돌리기, 저장 UI 제공
+ * - 파일이 너무 큰 경우 truncated 경고 표시
+ *
+ * Props:
+ * - file (AgentInspectorFileModel): 편집할 파일 데이터 (name, path, content, truncated)
+ * - onContentChange: 에디터 내용 변경 콜백
+ * - onSave/saving/hasChanges/successMsg/error: 저장 상태 및 제어
+ * - onRevert: 변경 사항 되돌리기
+ *
+ * 앱 내 배치:
+ * - InspectorView 메인 영역 우측 패널에서 사용
+ * - InspectorFileBrowser에서 파일 선택 시 활성화
+ */
 import React, { useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import type { AgentInspectorFileModel } from '../../../../types/ipc-contract';
 import { detectLanguage, getFileIcon } from '../../../utils/inspector';
 
+/**
+ * FileEditor — Monaco 에디터를 이용한 파일 내용 편집 컴포넌트.
+ * 구문 강조, 변경 감지, 저장/되돌리기 UI 제공.
+ * @returns 파일 에디터 JSX 요소
+ */
 export const FileEditor: React.FC<{
   file: AgentInspectorFileModel;
   onContentChange: (content: string) => void;

@@ -1,3 +1,21 @@
+/**
+ * ConfigReader — 설정/에이전트/스킬 파일 읽기 및 관리 서비스.
+ *
+ * @what
+ * - JSON/Toml 설정 파일, 에이전트 디렉토리, 스킬 디렉토리, SQLite DB, JSONL 히스토리
+ *   등을 읽고 쓰는 통합 파일 시스템 접근 계층입니다.
+ * - 엔진별(gemini, codex, opencode, claudecode) 루트 경로를 기준으로 데이터를 탐색합니다.
+ *
+ * @design
+ * - fs 직접 호출 대신 모든 파일 접근을 이 클래스로 중앙화하여 보안(허용 경로 검사)과
+ *   일관성을 확보합니다.
+ * - 자체 TOML 파서를 내장하여 외부 의존성 없이 agent.toml을 읽습니다.
+ *
+ * @usage
+ *   const reader = new ConfigReader();
+ *   const agents = reader.listAgents();
+ *   const skills = reader.readSkills('gemini');
+ */
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -6,15 +24,24 @@ import Database from 'better-sqlite3';
 import type { AgentConfig } from '../../types/ipc-contract';
 import { SETTINGS } from '../settings/AppSettings';
 
+/** 설정 파일의 최상위 데이터 구조. agents 목록과 settings 키-값 쌍을 포함합니다. */
 interface ConfigData {
+  /** 등록된 에이전트 설정 배열 */
   agents?: AgentConfig[];
+  /** 키-값 형태의 일반 설정 */
   settings?: Record<string, unknown>;
 }
 
 export class ConfigReader {
+  /** 설정 파일의 절대 경로 */
   private configPath: string;
+  /** 메모리에 로드된 설정 데이터 */
   private data: ConfigData = {};
 
+  /**
+   * ConfigReader 인스턴스를 생성합니다.
+   * 설정 디렉토리가 없으면 생성하고 config.json을 로드합니다.
+   */
   constructor() {
     const configDir = path.join(os.homedir(), '.config', 'agent-orchestrator');
     if (!fs.existsSync(configDir)) {
@@ -24,6 +51,10 @@ export class ConfigReader {
     this.load();
   }
 
+  /**
+   * config.json 파일을 디스크에서 읽어 this.data에 로드합니다.
+   * 파일이 없거나 파싱에 실패하면 빈 객체로 초기화합니다.
+   */
   private load(): void {
     try {
       if (fs.existsSync(this.configPath)) {
@@ -35,14 +66,27 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * 현재 this.data를 config.json 파일로 디스크에 저장합니다.
+   */
   private save(): void {
     fs.writeFileSync(this.configPath, JSON.stringify(this.data, null, 2));
   }
 
+  /**
+   * 설정에서 지정된 키의 값을 반환합니다.
+   * @param key - 조회할 설정 키
+   * @returns 키에 해당하는 값, 없으면 undefined
+   */
   get(key: string): unknown {
     return this.data.settings?.[key];
   }
 
+  /**
+   * 설정에 키-값 쌍을 저장하고 즉시 디스크에 씁니다.
+   * @param key - 저장할 설정 키
+   * @param value - 저장할 값
+   */
   set(key: string, value: unknown): void {
     if (!this.data.settings) {
       this.data.settings = {};
@@ -51,6 +95,11 @@ export class ConfigReader {
     this.save();
   }
 
+  /**
+   * 지정된 엔진의 skills 루트와 agents 루트 경로를 반환합니다.
+   * @param engine - 엔진 이름 (기본값: SETTINGS.defaultEngine)
+   * @returns skillsRoot와 agentsRoot를 포함한 객체
+   */
   getEngineRoots(engine?: string): { skillsRoot: string; agentsRoot: string } {
     return {
       skillsRoot: SETTINGS.getSkillsRoot(engine),
@@ -58,6 +107,11 @@ export class ConfigReader {
     };
   }
 
+  /**
+   * 지정된 엔진의 skills 디렉토리에서 SKILL.md 파일이 있는 모든 스킬을 읽습니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns 스킬 이름과 경로 배열 (이름순 정렬)
+   */
   readSkills(engine?: string): Array<{ name: string; path: string }> {
     const { skillsRoot } = this.getEngineRoots(engine);
     if (!fs.existsSync(skillsRoot)) return [];
@@ -74,6 +128,11 @@ export class ConfigReader {
     return skills;
   }
 
+  /**
+   * 지정된 엔진의 agents 디렉토리에서 config.json/agent.toml 파일이 있는 모든 에이전트를 읽습니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns 파싱된 에이전트 설정 객체 배열
+   */
   readAgents(engine?: string): Array<Record<string, unknown>> {
     const { agentsRoot } = this.getEngineRoots(engine);
     if (!fs.existsSync(agentsRoot)) return [];
@@ -109,6 +168,11 @@ export class ConfigReader {
     return agents;
   }
 
+  /**
+   * 지정된 엔진의 router-agent config.json 파일을 읽어 반환합니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns 라우터 설정 객체, 없으면 빈 객체
+   */
   readRouterConfig(engine?: string): Record<string, unknown> {
     const { agentsRoot } = this.getEngineRoots(engine);
     const routerPath = path.join(agentsRoot, 'router-agent', 'config.json');
@@ -120,6 +184,10 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * config.toml에서 활성화된 스킬 경로를 읽어 Set으로 반환합니다.
+   * @returns 활성화된 스킬 디렉토리 경로 Set
+   */
   readEnabledSkillPaths(): Set<string> {
     const configPath = SETTINGS.configTomlPath;
     if (!fs.existsSync(configPath)) return new Set();
@@ -142,31 +210,63 @@ export class ConfigReader {
     return enabled;
   }
 
+  /**
+   * 엔진의 state DB에서 최근 스레드 목록을 조회합니다.
+   * @param limit - 최대 조회 개수 (기본값 10)
+   * @param engine - 엔진 이름 (선택)
+   * @returns 스레드 레코드 배열
+   */
   readRecentThreads(limit = 10, engine?: string): Array<Record<string, unknown>> {
     return this._readSqlite(SETTINGS.getStateDbPath(engine),
       'SELECT id, title, updated_at, agent_role, agent_nickname FROM threads ORDER BY updated_at DESC LIMIT ?',
       [limit]);
   }
 
+  /**
+   * 엔진의 log DB에서 최근 로그 항목을 조회합니다.
+   * @param limit - 최대 조회 개수 (기본값 20)
+   * @param engine - 엔진 이름 (선택)
+   * @returns 로그 레코드 배열
+   */
   readRecentLogs(limit = 20, engine?: string): Array<Record<string, unknown>> {
     return this._readSqlite(SETTINGS.getLogDbPath(engine),
       'SELECT ts, level, target, feedback_log_body FROM logs ORDER BY ts DESC, ts_nanos DESC, id DESC LIMIT ?',
       [limit]);
   }
 
+  /**
+   * 엔진의 JSONL 히스토리 파일 전체를 읽어 배열로 반환합니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns 히스토리 항목 배열
+   */
   readHistory(engine?: string): Array<Record<string, unknown>> {
     return this._readJsonLines(SETTINGS.getHistoryFilePath(engine));
   }
 
+  /**
+   * 엔진의 JSONL 히스토리에서 최근 N개 항목을 역순으로 읽습니다.
+   * @param limit - 최대 조회 개수 (기본값 20)
+   * @param engine - 엔진 이름 (선택)
+   * @returns 최근 히스토리 항목 배열 (최신순)
+   */
   readRecentHistory(limit = 20, engine?: string): Array<Record<string, unknown>> {
     const items = this._readJsonLines(SETTINGS.getHistoryFilePath(engine));
     return items.slice(-limit).reverse();
   }
 
+  /**
+   * 현재 시간의 ISO-8601 문자열을 반환합니다.
+   * @returns ISO-8601 형식의 현재 시각
+   */
   getScanTimestamp(): string {
     return new Date().toISOString();
   }
 
+  /**
+   * 설정된 에이전트와 디스크에서 발견된 모든 에이전트를 병합하여 반환합니다.
+   * 여러 엔진(gemini, codex, opencode, claudecode)을 순회하며 스캔합니다.
+   * @returns 모든 에이전트 설정 배열
+   */
   listAgents(): AgentConfig[] {
     const configured = this.data.agents ?? [];
     const configuredIds = new Set(configured.map(a => a.id));
@@ -188,6 +288,13 @@ export class ConfigReader {
     return [...configured, ...discovered];
   }
 
+  /**
+   * skills 디렉토리의 SKILL.md 파일을 기반으로 에이전트 설정을 생성합니다.
+   * @param skillsDir - 스킬 디렉토리 경로
+   * @param engine - 엔진 이름
+   * @param seenIds - 이미 발견된 에이전트 ID 집합 (중복 방지)
+   * @returns 생성된 에이전트 설정 배열
+   */
   private _agentsFromSkills(skillsDir: string, engine: string, seenIds: Set<string>): AgentConfig[] {
     try {
       if (!fs.existsSync(skillsDir)) return [];
@@ -213,6 +320,13 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * 에이전트 디렉토리를 스캔하여 config.json 또는 agent.toml 파일에서 에이전트 설정을 읽습니다.
+   * @param dirPath - 에이전트 디렉토리 경로
+   * @param engine - 엔진 이름
+   * @param seenIds - 이미 발견된 에이전트 ID 집합 (중복 방지)
+   * @returns 발견된 에이전트 설정 배열
+   */
   private scanAgentDir(dirPath: string, engine: string, seenIds: Set<string>): AgentConfig[] {
     try {
       if (!fs.existsSync(dirPath)) return [];
@@ -257,6 +371,10 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * 에이전트 설정을 저장합니다. 기존 항목은 갱신, 신규 항목은 추가합니다.
+   * @param agent - 저장할 에이전트 설정
+   */
   saveAgent(agent: AgentConfig): void {
     const existing = (this.data.agents ?? []).findIndex(a => a.id === agent.id);
     if (existing >= 0) {
@@ -268,6 +386,11 @@ export class ConfigReader {
     this.save();
   }
 
+  /**
+   * 지정된 ID의 에이전트를 설정에서 제거합니다.
+   * @param agentId - 삭제할 에이전트 ID
+   * @returns 삭제 성공 여부
+   */
   deleteAgent(agentId: string): boolean {
     if (!this.data.agents) return false;
     const idx = this.data.agents.findIndex(a => a.id === agentId);
@@ -277,6 +400,11 @@ export class ConfigReader {
     return true;
   }
 
+  /**
+   * 지정된 파일을 읽어 내용과 언어 정보를 반환합니다. 경로 보안 검사를 수행합니다.
+   * @param filePath - 읽을 파일의 절대/상대 경로
+   * @returns 파일 내용과 추정된 언어, 실패 시 null
+   */
   readFile(filePath: string): { content: string; language: string } | null {
     try {
       const resolved = path.resolve(filePath);
@@ -295,6 +423,12 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * 지정된 디렉토리 목록을 재귀적으로 읽어 트리 구조로 반환합니다.
+   * @param dirPath - 읽을 디렉토리 경로
+   * @param recursive - 하위 디렉토리까지 재귀 탐색 여부
+   * @returns 디렉토리 엔트리 트리, 실패 시 null
+   */
   readDir(dirPath: string, recursive: boolean): ReturnType<typeof this._readDir> | null {
     try {
       return this._readDir(path.resolve(dirPath), recursive);
@@ -303,6 +437,12 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * 내부 재귀 디렉토리 읽기 구현. 경로 보안 검사를 수행합니다.
+   * @param resolved - 확인된 절대 경로
+   * @param recursive - 하위 디렉토리 재귀 탐색 여부
+   * @returns 디렉토리 엔트리 트리, 경로 없으면 null
+   */
   private _readDir(resolved: string, recursive: boolean): { entries: Array<{ name: string; path: string; type: 'file' | 'directory'; children?: Array<{ name: string; path: string; type: 'file' | 'directory' }> }> } | null {
     if (!this.isAllowedPath(resolved)) throw new Error('Path traversal detected');
     if (!fs.existsSync(resolved)) return null;
@@ -322,6 +462,12 @@ export class ConfigReader {
     return { entries };
   }
 
+  /**
+   * 지정된 경로에 파일을 씁니다. 경로 보안 검사를 수행하고 필요시 상위 디렉토리를 생성합니다.
+   * @param filePath - 쓸 파일의 경로
+   * @param content - 파일에 쓸 내용
+   * @returns 쓰기 성공 여부
+   */
   writeFile(filePath: string, content: string): boolean {
     try {
       const resolved = path.resolve(filePath);
@@ -335,6 +481,11 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * 지정된 디렉토리의 파일/폴더 이름 목록을 반환합니다. 디렉토리에는 '/' 접미사를 붙입니다.
+   * @param dirPath - 조회할 디렉토리 경로
+   * @returns 엔트리 이름 배열 (실패 시 null)
+   */
   listDir(dirPath: string): string[] | null {
     try {
       const resolved = path.resolve(dirPath);
@@ -346,6 +497,11 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * CLI 실행 파일의 유효성을 검증합니다. --version 플래그로 실행 가능 여부와 버전을 확인합니다.
+   * @param cliPath - 검증할 CLI 실행 파일 경로
+   * @returns 유효성, 버전, 오류 메시지를 포함한 객체
+   */
   async validateCliPath(cliPath: string): Promise<{ valid: boolean; version?: string; error?: string }> {
     if (!cliPath) return { valid: false, error: 'CLI path is required' };
     const resolved = path.resolve(cliPath);
@@ -367,6 +523,12 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * 엔진 이름에 해당하는 CLI 실행 파일의 절대 경로를 검색하여 반환합니다.
+   * 여러 표준 경로(/opt/homebrew/bin, /usr/local/bin 등)와 PATH를 순회합니다.
+   * @param engine - 엔진 이름 (codex, gemini, opencode, claudecode)
+   * @returns CLI 실행 파일의 절대 경로, 없으면 null
+   */
   getEnginePath(engine: string): string | null {
     const binaryMap: Record<string, string> = {
       codex: 'codex', gemini: 'gemini', opencode: 'opencode', claudecode: 'claude',
@@ -392,10 +554,19 @@ export class ConfigReader {
     return null;
   }
 
+  /**
+   * 기본 통계 정보를 반환합니다. 현재는 총 에이전트 수만 실제로 계산합니다.
+   * @returns 총 실행 수, 총 에이전트 수, 업타임을 포함한 통계 객체
+   */
   getStats(): { totalRuns: number; totalAgents: number; uptime: number } {
     return { totalRuns: 0, totalAgents: this.listAgents().length, uptime: 0 };
   }
 
+  /**
+   * 주어진 경로가 허용된 경로(사용자 홈 디렉토리 내)인지 확인합니다.
+   * @param p - 검증할 파일 경로
+   * @returns 허용된 경로면 true
+   */
   isAllowedPath(p: string): boolean {
     try {
       return fs.realpathSync(p).startsWith(fs.realpathSync(os.homedir()));
@@ -404,6 +575,13 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * SQLite DB에 읽기 전용으로 연결하여 쿼리를 실행하고 결과를 반환합니다.
+   * @param dbPath - SQLite 데이터베이스 파일 경로
+   * @param query - 실행할 SQL 쿼리
+   * @param params - 쿼리 바인딩 파라미터
+   * @returns 쿼리 결과 레코드 배열
+   */
   private _readSqlite(dbPath: string, query: string, params: unknown[]): Array<Record<string, unknown>> {
     if (!fs.existsSync(dbPath)) return [];
     try {
@@ -416,6 +594,11 @@ export class ConfigReader {
     }
   }
 
+  /**
+   * JSONL(Newline-delimited JSON) 파일을 읽어 각 줄을 파싱하여 배열로 반환합니다.
+   * @param filePath - JSONL 파일 경로
+   * @returns 파싱된 JSON 객체 배열
+   */
   private _readJsonLines(filePath: string): Array<Record<string, unknown>> {
     if (!fs.existsSync(filePath)) return [];
     const items: Array<Record<string, unknown>> = [];
@@ -428,6 +611,11 @@ export class ConfigReader {
     return items;
   }
 
+  /**
+   * 최소 TOML 파서. 중첩 섹션 및 기본 타입(문자열, 숫자, boolean)을 지원합니다.
+   * @param raw - 파싱할 TOML 원본 문자열
+   * @returns 파싱된 객체
+   */
   private _parseToml(raw: string): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     let currentSection: Record<string, unknown> = result;

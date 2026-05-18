@@ -1,3 +1,19 @@
+/**
+ * E2E (End-to-End) 통합 테스트
+ *
+ * 테스트 대상: Electron 애플리케이션 전체
+ * 테스트 방식: E2E (Playwright Electron, 실제 앱 실행 및 조작)
+ * 주요 검증 시나리오:
+ * - 앱 실행 후 app-shell Grid 레이아웃 표시 및 5개 영역 가시성 확인
+ * - Activity Bar 아이콘 개수(5개 이상) 확인
+ * - 사이드바 탭 및 콘텐츠 영역 렌더링
+ * - Panel 탭 전환 (4개 탭, 컨텐츠 영역 전환)
+ * - Status Bar 버전 정보 표시
+ * - View 전환 (org/dashboard/console/workflow/inspector)
+ * - window.electronAPI의 invoke/send/on 메서드 노출 확인
+ * - 실제 IPC 핸들러 호출 (agents:list, dashboard:stats, chat:send, cli:validate, workflow:list, dir:read, dashboard:recent-activity)
+ * - 유효하지 않은 IPC 채널 호출 시 에러 처리
+ */
 import { _electron as electron, test, expect } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 

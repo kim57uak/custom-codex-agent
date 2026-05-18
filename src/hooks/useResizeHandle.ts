@@ -1,8 +1,16 @@
+/**
+ * React hook providing a draggable resize handle for horizontal or vertical
+ * panel splitting. Returns a ref callback to attach to the handle element.
+ */
 import { useEffect, useRef, useCallback, useState } from 'react';
 
+/** 리사이즈 핸들 옵션 */
 interface UseResizeOptions {
+  /** 리사이즈 방향 (가로/세로) */
   direction: 'horizontal' | 'vertical';
+  /** 드래그 델타 값 콜백 */
   onResize: (delta: number) => void;
+  /** 방향 반전 여부 */
   invert?: boolean;
 }
 

@@ -1,3 +1,21 @@
+/**
+ * WorkflowEngine — 다단계 워크플로우 실행 엔진.
+ *
+ * @what
+ * - 여러 AI 에이전트를 순차적으로 실행하는 워크플로우를 생성, 실행, 취소, 재시도합니다.
+ * - 사용자 목표에 적합한 에이전트를 LLM 추천 또는 키워드 스코어링으로 자동 선택합니다.
+ *
+ * @design
+ * - 각 단계(step)는 RunOrchestrator.createRun()을 호출하여 개별 Run으로 실행됩니다.
+ * - 이전 단계 결과를 carryOverSummary로 다음 단계 컨텍스트에 주입합니다.
+ * - SQLite(WorkflowStore)에 모든 상태를 영구 저장합니다.
+ *
+ * @usage
+ *   const engine = new WorkflowEngine({ runOrchestrator, eventBroker });
+ *   const agents = await engine.recommendAgents(goalPrompt);
+ *   const { workflowRunId } = await engine.createWorkflowRun(goalPrompt, steps);
+ *   await engine.runWorkflowRun(workflowRunId);
+ */
 import { EventBroker } from '../services/EventBroker';
 import { RunOrchestrator } from './RunOrchestrator';
 import { WorkflowStore } from '../stores/WorkflowStore';
@@ -5,8 +23,16 @@ import { ConfigReader } from '../services/ConfigReader';
 import { SETTINGS } from '../settings/AppSettings';
 import type { Workflow, WorkflowNode, WorkflowEdge, WorkflowRecommendedAgent, WorkflowStepRun, WorkflowRunDetail, WorkflowRunSummary } from '../../types/ipc-contract';
 
+/**
+ * 워크플로우 실행 상태를 나타내는 타입.
+ * draft(초안), queued(대기 중), running(실행 중), completed(완료), failed(실패), cancelled(취소).
+ */
 type WorkflowStatus = 'draft' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
+/**
+ * 워크플로우 실행 중 메모리 내 실행 컨텍스트.
+ * 현재 단계 인덱스, 완료된 단계 집합, 단계별 결과 및 이월 요약을 보관합니다.
+ */
 interface WorkflowContext {
   workflowRunId: string;
   status: WorkflowStatus;
@@ -37,14 +63,26 @@ Rules:
 Respond with a JSON array: [{"agentName": string, "reason": string, "defaultPrompt": string}]`;
 
 export class WorkflowEngine {
+  /** RunOrchestrator 인스턴스: 각 워크플로우 단계를 개별 Run으로 실행합니다. */
   private runOrchestrator: RunOrchestrator;
+  /** 이벤트 브로커: 워크플로우/단계 상태 변경 이벤트를 구독자에게 전파합니다. */
   private eventBroker: EventBroker;
+  /** SQLite WorkflowStore: 워크플로우 실행 상태를 영구 저장/조회합니다. */
   private workflowStore: WorkflowStore;
+  /** ConfigReader: 에이전트/스킬/라우터 설정을 읽어옵니다. */
   private configReader: ConfigReader;
+  /** 현재 실행 중인 워크플로우의 컨텍스트 맵 (workflowRunId → WorkflowContext). */
   private runningWorkflows = new Map<string, WorkflowContext>();
+  /** 현재 실행 중인 워크플로우의 최상위 Promise 맵 (workflowRunId → Promise). */
   private workflowTasks = new Map<string, Promise<void>>();
+  /** 워크플로우 단계가 현재 할당된 Run의 ID 맵 (workflowRunId → runId). */
   private activeRunIds = new Map<string, string>();
 
+  /**
+   * WorkflowEngine을 초기화합니다.
+   * @param deps.runOrchestrator - 개별 Run 실행을 위임할 RunOrchestrator
+   * @param deps.eventBroker - 이벤트 전파에 사용할 EventBroker
+   */
   constructor(deps: { runOrchestrator: RunOrchestrator; eventBroker: EventBroker }) {
     this.runOrchestrator = deps.runOrchestrator;
     this.eventBroker = deps.eventBroker;
@@ -52,22 +90,49 @@ export class WorkflowEngine {
     this.configReader = new ConfigReader();
   }
 
+  /**
+   * 새 워크플로우 템플릿을 생성합니다.
+   * @param workflow - 생성할 워크플로우 데이터
+   * @returns 생성된 워크플로우
+   */
   createWorkflow(workflow: Workflow): Workflow {
     return this.workflowStore.createWorkflow(workflow);
   }
 
+  /**
+   * 기존 워크플로우 템플릿을 업데이트합니다.
+   * @param workflow - 업데이트할 워크플로우 데이터
+   * @returns 업데이트된 워크플로우, 없으면 null
+   */
   updateWorkflow(workflow: Workflow): Workflow | null {
     return this.workflowStore.updateWorkflow(workflow);
   }
 
+  /**
+   * 워크플로우 템플릿을 삭제합니다.
+   * @param workflowId - 삭제할 워크플로우 ID
+   * @returns 삭제 성공 여부
+   */
   deleteWorkflow(workflowId: string): boolean {
     return this.workflowStore.deleteWorkflow(workflowId);
   }
 
+  /**
+   * 모든 워크플로우 템플릿 목록을 반환합니다.
+   * @returns 워크플로우 배열
+   */
   listWorkflows(): Workflow[] {
     return this.workflowStore.listWorkflows();
   }
 
+  /**
+   * 사용자 목표에 적합한 AI 에이전트를 추천합니다.
+   * 우선 LLM 추천을 시도하고, 실패 시 키워드 스코어링 기반 폴백 추천을 반환합니다.
+   * @param goalPrompt - 사용자 목표 문장
+   * @param maxAgents - 최대 추천 에이전트 수 (기본값: SETTINGS.workflowRecommendationMaxAgents)
+   * @param engine - 사용할 엔진 (gemini, codex, opencode, claudecode)
+   * @returns 추천 에이전트 배열
+   */
   async recommendAgents(goalPrompt: string, maxAgents?: number, engine?: string): Promise<WorkflowRecommendedAgent[]> {
     const limit = maxAgents ?? SETTINGS.workflowRecommendationMaxAgents;
     const inventory = this._buildInventory(engine);
@@ -89,6 +154,17 @@ export class WorkflowEngine {
     return this._fallbackRecommendation(goalPrompt, limit, inventory);
   }
 
+  /**
+   * 워크플로우 실행 레코드를 생성하고 대기열에 등록합니다.
+   * 생성된 레코드는 'draft' 상태이며, runWorkflowRun() 호출로 실행됩니다.
+   * @param goalPrompt - 워크플로우 목표 문장
+   * @param steps - 실행할 단계 목록 (agentName, prompt, title, iconKey, skillName)
+   * @param workspaceRoot - 작업 디렉터리 경로
+   * @param sandboxMode - 샌드박스 모드 (read-only / workspace-write / danger-full-access)
+   * @param approvalPolicy - 승인 정책 (untrusted / on-request / never)
+   * @param engine - 사용할 엔진
+   * @returns 생성된 워크플로우 실행 ID
+   */
   async createWorkflowRun(
     goalPrompt: string,
     steps: Array<{ agentName: string; prompt: string; title?: string; iconKey?: string; skillName?: string | null }>,
@@ -99,6 +175,13 @@ export class WorkflowEngine {
     return { workflowRunId: record.workflowRunId };
   }
 
+  /**
+   * 등록된 워크플로우 실행을 순차적으로 시작합니다.
+   * 중복 실행을 방지하고, 각 단계를 RunOrchestrator.createRun()으로 실행합니다.
+   * @param workflowRunId - 실행할 워크플로우 실행 ID
+   * @returns 워크플로우 실행 ID
+   * @throws 워크플로우 실행 레코드가 없거나 draft 상태가 아닌 경우
+   */
   async runWorkflowRun(workflowRunId: string): Promise<string> {
     if (this.runningWorkflows.has(workflowRunId)) {
       console.log(`[workflow] ${workflowRunId} already running, ignoring duplicate call`);
@@ -127,6 +210,12 @@ export class WorkflowEngine {
     return workflowRunId;
   }
 
+  /**
+   * 실행 중인 워크플로우를 취소합니다.
+   * 현재 활성 Run을 취소하고, 모든 단계를 취소 상태로 기록합니다.
+   * @param workflowRunId - 취소할 워크플로우 실행 ID
+   * @returns 취소 성공 여부 (실행 중이 아니면 false)
+   */
   async cancelWorkflowRun(workflowRunId: string): Promise<boolean> {
     const context = this.runningWorkflows.get(workflowRunId);
     if (!context) return false;
@@ -152,6 +241,13 @@ export class WorkflowEngine {
     return true;
   }
 
+  /**
+   * 완료 또는 실패한 워크플로우를 처음부터 재시도합니다.
+   * 동일한 단계 입력으로 새 워크플로우 실행을 생성하고 바로 실행합니다.
+   * @param workflowRunId - 재시도할 워크플로우 실행 ID
+   * @param engine - 재시도에 사용할 엔진 (기본값: 기존 엔진)
+   * @returns 새 워크플로우 실행 ID, 실패 시 null
+   */
   async retryWorkflowRun(workflowRunId: string, engine?: string): Promise<string | null> {
     const record = this.workflowStore.getWorkflowRun(workflowRunId);
     if (!record) return null;
@@ -164,6 +260,14 @@ export class WorkflowEngine {
     return created.workflowRunId;
   }
 
+  /**
+   * 실패한 워크플로우를 특정 단계부터 재시도합니다.
+   * 지정된 단계부터 끝까지만 새 워크플로우로 생성하며, 이전 단계의 요약을 carryOver로 주입합니다.
+   * @param workflowRunId - 재시도할 워크플로우 실행 ID
+   * @param stepIndex - 재시작할 단계 인덱스
+   * @param engine - 재시도에 사용할 엔진
+   * @returns 새 워크플로우 실행 ID, 실패 시 null
+   */
   async retryWorkflowRunFromStep(workflowRunId: string, stepIndex: number, engine?: string): Promise<string | null> {
     const record = this.workflowStore.getWorkflowRun(workflowRunId);
     if (!record) return null;
@@ -180,6 +284,14 @@ export class WorkflowEngine {
     return created.workflowRunId;
   }
 
+  /**
+   * 현재 실행 중인 단계를 건너뛰고 다음 단계를 계속 실행합니다.
+   * 건너뛴 단계는 'skipped' 상태로 기록됩니다.
+   * @param workflowRunId - 대상 워크플로우 실행 ID
+   * @param stepIndex - 건너뛸 단계 인덱스
+   * @param engine - 계속 실행에 사용할 엔진
+   * @returns 워크플로우 실행 ID, 조건 불일치 시 null
+   */
   async skipWorkflowStepAndContinue(workflowRunId: string, stepIndex: number, engine?: string): Promise<string | null> {
     const context = this.runningWorkflows.get(workflowRunId);
     if (!context) return null;
@@ -196,15 +308,31 @@ export class WorkflowEngine {
     return workflowRunId;
   }
 
+  /**
+   * 워크플로우 실행 레코드를 조회합니다.
+   * @param workflowRunId - 조회할 실행 ID
+   * @returns 워크플로우 실행 레코드 또는 null
+   */
   getWorkflowRun(workflowRunId: string) {
     return this.workflowStore.getWorkflowRun(workflowRunId);
   }
 
+  /**
+   * 워크플로우 실행 레코드를 삭제합니다.
+   * 현재 실행 중인 워크플로우는 삭제할 수 없습니다.
+   * @param workflowRunId - 삭제할 실행 ID
+   * @returns 삭제 성공 여부 (실행 중이면 false)
+   */
   deleteWorkflowRun(workflowRunId: string): boolean {
     if (this.runningWorkflows.has(workflowRunId)) return false;
     return this.workflowStore.deleteWorkflowRun(workflowRunId);
   }
 
+  /**
+   * 워크플로우 실행 상세 정보(레코드 + 단계 목록)를 반환합니다.
+   * @param workflowRunId - 조회할 실행 ID
+   * @returns 상세 정보 객체 또는 null
+   */
   getWorkflowRunDetail(workflowRunId: string): WorkflowRunDetail | null {
     const record = this.workflowStore.getWorkflowRun(workflowRunId);
     if (!record) return null;
@@ -227,6 +355,11 @@ export class WorkflowEngine {
     };
   }
 
+  /**
+   * 워크플로우의 모든 실행 단계를 반환합니다.
+   * @param workflowRunId - 조회할 실행 ID
+   * @returns 워크플로우 단계 배열
+   */
   getWorkflowSteps(workflowRunId: string): WorkflowStepRun[] {
     const records = this.workflowStore.getWorkflowSteps(workflowRunId);
     return records.map(r => ({
@@ -237,6 +370,12 @@ export class WorkflowEngine {
     }));
   }
 
+  /**
+   * 워크플로우 실행 목록을 최신순으로 반환합니다.
+   * goalPrompt는 미리보기 길이로 잘라서 표시합니다.
+   * @param limit - 최대 조회 개수
+   * @returns 워크플로우 실행 요약 배열
+   */
   listWorkflowRuns(limit?: number): WorkflowRunSummary[] {
     const records = this.workflowStore.listWorkflowRuns(limit);
     return records.map(r => ({
@@ -251,10 +390,22 @@ export class WorkflowEngine {
     }));
   }
 
+  /**
+   * 워크플로우 실행 중 발생한 이벤트 목록을 반환합니다.
+   * @param workflowRunId - 조회할 실행 ID
+   * @param limit - 최대 조회 개수
+   * @returns 이벤트 배열
+   */
   getWorkflowEvents(workflowRunId: string, limit?: number) {
     return this.workflowStore.getWorkflowEvents(workflowRunId, limit);
   }
 
+  /**
+   * 등록된 모든 에이전트의 프로필 정보를 반환합니다.
+   * 각 에이전트에 아이콘 키를 순차적으로 할당합니다.
+   * @param engine - 에이전트 설정을 읽어올 엔진
+   * @returns 에이전트 프로필 배열 (이름, 역할, 부서, 설명, 아이콘 등)
+   */
   listAgentProfiles(engine?: string): Array<{ name: string; roleLabelKo: string; departmentLabelKo: string; description: string; shortDescription: string | null; oneClickPrompt: string | null; skillName: string | null; iconKey: string; }> {
     const inventory = this._buildInventory(engine);
     const iconKeys = ['bot', 'shield', 'check-circle', 'file-text', 'database', 'layout', 'server', 'play-square', 'folder', 'table', 'presentation'];
@@ -270,6 +421,12 @@ export class WorkflowEngine {
     }));
   }
 
+  /**
+   * 워크플로우 실행에서 특정 단계를 제거합니다.
+   * @param workflowRunId - 대상 실행 ID
+   * @param stepIndex - 제거할 단계 인덱스
+   * @returns 업데이트된 워크플로우 상세 또는 null
+   */
   async removeStepFromRun(workflowRunId: string, stepIndex: number): Promise<WorkflowRunDetail | null> {
     const record = this.workflowStore.getWorkflowRun(workflowRunId);
     if (!record) return null;
@@ -278,6 +435,13 @@ export class WorkflowEngine {
     return this.getWorkflowRunDetail(workflowRunId);
   }
 
+  /**
+   * 워크플로우 단계의 프롬프트를 업데이트합니다.
+   * @param workflowRunId - 대상 실행 ID
+   * @param stepIndex - 수정할 단계 인덱스
+   * @param prompt - 새 프롬프트 내용
+   * @returns 업데이트된 워크플로우 상세 또는 null
+   */
   async updateStepPrompt(workflowRunId: string, stepIndex: number, prompt: string): Promise<WorkflowRunDetail | null> {
     const record = this.workflowStore.getWorkflowRun(workflowRunId);
     if (!record) return null;
@@ -285,6 +449,14 @@ export class WorkflowEngine {
     return this.getWorkflowRunDetail(workflowRunId);
   }
 
+  /**
+   * 워크플로우 실행에 새 단계를 추가합니다.
+   * 에이전트의 oneClickPrompt가 있으면 기본 프롬프트로 사용합니다.
+   * @param workflowRunId - 대상 실행 ID
+   * @param agentName - 추가할 에이전트 이름
+   * @param prompt - 단계 프롬프트 (생략 시 에이전트 기본 프롬프트 사용)
+   * @returns 업데이트된 워크플로우 상세 또는 null
+   */
   async addStepToRun(workflowRunId: string, agentName: string, prompt?: string): Promise<WorkflowRunDetail | null> {
     const record = this.workflowStore.getWorkflowRun(workflowRunId);
     if (!record) return null;
@@ -309,6 +481,16 @@ export class WorkflowEngine {
     return this.getWorkflowRunDetail(workflowRunId);
   }
 
+  /**
+   * 각 워크플로우 단계에 전달할 컨텍스트가 포함된 프롬프트를 구성합니다.
+   * 워크플로우 목표, 현재 단계 번호, 이전 단계 요약을 주입합니다.
+   * @param goalPrompt - 워크플로우 전체 목표
+   * @param stepIndex - 현재 단계 인덱스
+   * @param totalSteps - 전체 단계 수
+   * @param instructionPrompt - 해당 단계의 실행 지시문
+   * @param carryoverSummaries - 이전 단계 실행 요약 배열
+   * @returns 구성된 전체 프롬프트 문자열
+   */
   private _buildStepPrompt(goalPrompt: string, stepIndex: number, totalSteps: number, instructionPrompt: string, carryoverSummaries: string[]): string {
     const previousContext = carryoverSummaries.length > 0
       ? carryoverSummaries.slice(-4).map(s => `- ${s}`).join('\n')
@@ -324,6 +506,17 @@ export class WorkflowEngine {
     );
   }
 
+  /**
+   * 워크플로우의 모든 단계를 순차적으로 실행합니다.
+   * 각 단계는 RunOrchestrator.createRun()으로 실행되고, 결과에 따라 carryOverSummary를 누적합니다.
+   * 단계 실패 또는 전체 예외 발생 시 워크플로우를 실패 처리합니다.
+   * @param workflowRunId - 실행 ID
+   * @param steps - 실행할 단계 목록
+   * @param context - 워크플로우 실행 컨텍스트
+   * @param engine - 사용할 엔진
+   * @param sandboxMode - 샌드박스 모드
+   * @param approvalPolicy - 승인 정책
+   */
   private async _executeStepsSequentially(workflowRunId: string, steps: Array<{ stepIndex: number; agentName: string; prompt: string }>, context: WorkflowContext, engine?: string | null, sandboxMode?: string | null, approvalPolicy?: string | null): Promise<void> {
     try {
       this.workflowStore.updateWorkflowRunStatus(workflowRunId, 'running', 0);
@@ -428,6 +621,16 @@ export class WorkflowEngine {
     }
   }
 
+  /**
+   * 중단된 워크플로우 실행을 남은 단계부터 계속 진행합니다.
+   * skipWorkflowStepAndContinue 호출 후 남은 단계를 이어서 실행합니다.
+   * @param workflowRunId - 실행 ID
+   * @param steps - 전체 단계 목록
+   * @param context - 워크플로우 실행 컨텍스트
+   * @param engine - 사용할 엔진
+   * @param sandboxMode - 샌드박스 모드
+   * @param approvalPolicy - 승인 정책
+   */
   private _continueExecution(workflowRunId: string, steps: Array<{ stepIndex: number; agentName: string; prompt: string }>, context: WorkflowContext, engine?: string | null, sandboxMode?: string | null, approvalPolicy?: string | null): void {
     const remaining = steps.filter(s => !context.completedStepIndices.has(s.stepIndex));
     const task = this._executeStepsSequentially(workflowRunId, remaining, context, engine, sandboxMode, approvalPolicy);
@@ -435,6 +638,13 @@ export class WorkflowEngine {
     task.finally(() => this.workflowTasks.delete(workflowRunId));
   }
 
+  /**
+   * 에이전트 목록에 스킬 설명과 에이전트 요약을 추가하여 프로필을 확장합니다.
+   * 검색 가능한 텍스트(searchableText)도 함께 구성합니다.
+   * @param agents - 원본 에이전트 설정 배열
+   * @param engine - 설정을 읽어올 엔진
+   * @returns 확장된 에이전트 프로필 배열
+   */
   private _buildAgentProfiles(agents: Array<Record<string, unknown>>, engine?: string): Array<Record<string, unknown>> {
     return agents.map(a => {
       const name = String(a.name || 'unknown');
@@ -457,6 +667,12 @@ export class WorkflowEngine {
     });
   }
 
+  /**
+   * 스킬 파일에서 description 메타데이터를 읽어 반환합니다.
+   * SKILL.md의 front-matter에서 description 필드를 추출합니다.
+   * @param skillPath - 스킬 파일 경로 (~ 확장자 지원)
+   * @returns 스킬 설명 문자열, 없으면 빈 문자열
+   */
   private _readSkillDescription(skillPath: string): string {
     try {
       const fs = require('fs');
@@ -474,6 +690,12 @@ export class WorkflowEngine {
     }
   }
 
+  /**
+   * 에이전트의 agent.md 파일에서 요약 정보를 읽어 반환합니다.
+   * @param agentName - 에이전트 이름
+   * @param engine - 에이전트 루트 경로를 결정할 엔진
+   * @returns agent.md 내용 (최대 1200자), 없으면 빈 문자열
+   */
   private _readAgentSummary(agentName: string, engine?: string): string {
     try {
       const fs = require('fs');
@@ -487,6 +709,12 @@ export class WorkflowEngine {
     }
   }
 
+  /**
+   * LLM 추천용 에이전트 카탈로그 문자열을 구성합니다.
+   * 각 에이전트의 이름, 스킬명, 부서, 역할, 설명을 구조화된 텍스트로 포맷팅합니다.
+   * @param agents - 확장된 에이전트 프로필 배열
+   * @returns LLM 프롬프트에 주입할 카탈로그 문자열
+   */
   private _buildRichCatalog(agents: Array<Record<string, unknown>>): string {
     return agents.map(a => {
       const name = String(a.name || '');
@@ -500,6 +728,15 @@ export class WorkflowEngine {
     }).join('\n');
   }
 
+  /**
+   * LLM CLI를 통해 에이전트 추천을 요청합니다.
+   * 템플릿 프롬프트에 카탈로그와 목표를 주입하고, LLM 응답을 JSON으로 파싱합니다.
+   * @param goalPrompt - 사용자 목표 문장
+   * @param catalog - 에이전트 카탈로그 문자열
+   * @param maxAgents - 최대 추천 수
+   * @param engine - 사용할 LLM 엔진
+   * @returns 추천 에이전트 배열 (파싱 실패 시 빈 배열)
+   */
   private async _recommendViaCli(
     goalPrompt: string, catalog: string, maxAgents: number, engine?: string,
   ): Promise<WorkflowRecommendedAgent[]> {
@@ -527,6 +764,15 @@ export class WorkflowEngine {
     }
   }
 
+  /**
+   * LLM 추천 결과가 최대 개수에 미치지 못할 때 폴백 추천으로 부족분을 채웁니다.
+   * 중복 추천을 방지하기 위해 이미 추천된 에이전트는 제외합니다.
+   * @param goalPrompt - 사용자 목표 문장
+   * @param recommendations - LLM 추천 결과 배열
+   * @param allProfiles - 전체 에이전트 프로필
+   * @param maxAgents - 최대 추천 수
+   * @returns 완성된 추천 에이전트 배열
+   */
   private _completeRecommendations(
     goalPrompt: string,
     recommendations: WorkflowRecommendedAgent[],
@@ -544,6 +790,14 @@ export class WorkflowEngine {
     return [...recommendations, ...supplements].slice(0, maxAgents);
   }
 
+  /**
+   * LLM 추천 실패 시 키워드 스코어링 기반으로 에이전트를 추천합니다.
+   * 목표 문장과 에이전트 설명의 TF-IDF 유사도를 계산하여 상위 에이전트를 선택합니다.
+   * @param goalPrompt - 사용자 목표 문장
+   * @param limit - 최대 추천 수
+   * @param inventory - 스킬 및 에이전트 인벤토리
+   * @returns 스코어 기반 추천 에이전트 배열
+   */
   private _fallbackRecommendation(
     goalPrompt: string, limit: number,
     inventory: { skills: Array<{ name: string }>; agents: Array<Record<string, unknown>> },
@@ -606,6 +860,13 @@ export class WorkflowEngine {
     프로젝트: ['project'], 작업: ['task', 'job'],
   };
 
+  /**
+   * 목표 문장과 각 에이전프로필 간의 관련성을 스코어링합니다.
+   * TF-IDF 변형을 사용하여 희귀 키워드 매칭에 가중치를 부여하고, 구문 매칭과 스킬명 오버랩을 추가 점수로 반영합니다.
+   * @param goalPrompt - 사용자 목표 문장
+   * @param agents - 스코어링할 에이전트 프로필 배열
+   * @returns 에이전트별 스코어 결과 배열
+   */
   private _scoreAgentProfiles(goalPrompt: string, agents: Array<Record<string, unknown>>): Array<{ agent: Record<string, unknown>; score: number }> {
     const goalWords = goalPrompt.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
     const expandedGoalWords = new Set(goalWords);
@@ -659,6 +920,12 @@ export class WorkflowEngine {
     });
   }
 
+  /**
+   * 에이전트의 검색 가능한 텍스트를 구성합니다.
+   * 이름, 스킬명, 부서, 역할, 설명을 공백으로 연결합니다.
+   * @param agent - 에이전트 설정 객체
+   * @returns 검색용 텍스트 문자열
+   */
   private _buildSearchableText(agent: Record<string, unknown>): string {
     return [
       agent.name, agent.skillName, agent.department,
@@ -666,12 +933,23 @@ export class WorkflowEngine {
     ].filter(Boolean).join(' ');
   }
 
+  /**
+   * 스코어에 따라 에이전트 추천 이유를 한글 문장으로 반환합니다.
+   * @param score - 계산된 관련성 스코어
+   * @returns 추천 이유 한글 문장
+   */
   private _buildReason(score: number): string {
     if (score >= 20) return '목표와 에이전트 스킬 설명의 관련도가 매우 높습니다.';
     if (score >= 10) return '목표 문장과 에이전트 역할/스킬 설명의 관련도가 높습니다.';
     return '목표 문장과 에이전트 설명을 기준으로 선택했습니다.';
   }
 
+  /**
+   * ConfigReader로부터 스킬, 에이전트, 라우터 설정을 읽어 통합 인벤토리를 구성합니다.
+   * 각 에이전트의 상태(healthy/broken/passive)와 사유를 함께 판단합니다.
+   * @param engine - 설정을 읽어올 엔진
+   * @returns 스킬 목록, 에이전트 목록(상태 포함), 라우트 목록
+   */
   private _buildInventory(engine?: string) {
     const skills = this.configReader.readSkills(engine);
     const agentsRaw = this.configReader.readAgents(engine);
@@ -709,6 +987,12 @@ export class WorkflowEngine {
     return { skills, agents, routes };
   }
 
+  /**
+   * 라우터 설정에서 에이전트 라우팅 정보를 추출합니다.
+   * routes 배열과 routing_hints 객체를 모두 수집하여 통합 라우트 목록을 반환합니다.
+   * @param routerConfig - 라우터 설정 객체
+   * @returns 키워드-에이전트 라우트 배열
+   */
   private _extractRoutes(routerConfig: Record<string, unknown>): Array<{ keyword: string; agentName: string }> {
     const routes: Array<{ keyword: string; agentName: string }> = [];
     const rawRoutes = routerConfig.routes;
@@ -728,6 +1012,13 @@ export class WorkflowEngine {
     return routes;
   }
 
+  /**
+   * 워크플로우 이벤트를 WorkflowStore에 저장하고 EventBroker를 통해 구독자에게 전파합니다.
+   * @param workflowRunId - 관련 워크플로우 실행 ID
+   * @param eventType - 이벤트 타입 (예: workflow:started, step:completed)
+   * @param message - 이벤트 메시지
+   * @param stepIndex - 관련 단계 인덱스 (선택)
+   */
   private _pushWorkflowEvent(workflowRunId: string, eventType: string, message: string, stepIndex?: number | null): void {
     const event = this.workflowStore.addWorkflowEvent(workflowRunId, eventType, message, stepIndex);
     this.eventBroker.pushWorkflowEvent({
@@ -740,6 +1031,12 @@ export class WorkflowEngine {
     });
   }
 
+  /**
+   * 워크플로우 실행 상태 변경을 EventBroker를 통해 구독자에게 전파합니다.
+   * @param workflowRunId - 관련 워크플로우 실행 ID
+   * @param status - 변경된 상태 (running / completed / failed / cancelled)
+   * @param currentStepIndex - 현재 단계 인덱스
+   */
   private _pushWorkflowRunStatus(workflowRunId: string, status: string, currentStepIndex: number): void {
     this.eventBroker.pushWorkflowRunStatus(workflowRunId, status, currentStepIndex);
   }

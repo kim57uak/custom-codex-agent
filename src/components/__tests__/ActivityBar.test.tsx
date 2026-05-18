@@ -1,3 +1,16 @@
+/**
+ * ActivityBar 테마 선택기 테스트
+ *
+ * 테스트 대상: src/components/layout/ActivityBar.tsx
+ * 테스트 방식: 유닛 테스트 (소스 코드 정적 분석)
+ * 주요 검증 시나리오:
+ * - useUIStore를 통한 테마 상태 임포트 여부
+ * - 10개 테마 옵션(Aurora, Cyber Fusion 등)이 모두 렌더링되는지 여부
+ * - 테마 버튼이 푸터에 존재하는지 여부
+ * - setTheme 호출 후 드롭다운이 닫히는지 여부
+ * - 현재 활성화된 테마의 하이라이트 처리
+ * - 외부 클릭 시 드롭다운 닫힘 처리
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';

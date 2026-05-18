@@ -23,12 +23,14 @@ interface RunRecord {
   engine?: string;
 }
 
+/** 밀리초를 사람이 읽기 쉬운 형식(ms/s/m)으로 변환 */
 function fmtMs(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
 }
 
+/** 값을 0-100 비율로 변환 (미니 차트 바 높이 계산) */
 function toBars(values: number[]): number[] {
   const max = Math.max(...values, 1);
   return values.map(v => Math.round((v / max) * 100));
@@ -42,6 +44,7 @@ interface DailyStat {
   avgDur: number;
 }
 
+/** 실행 기록을 일별 통계로 변환 */
 function computeDailyStats(runs: RunRecord[], days = 7): DailyStat[] {
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
@@ -67,6 +70,10 @@ function computeDailyStats(runs: RunRecord[], days = 7): DailyStat[] {
 }
 
 /** MetricCard - 메트릭 카드 + 실제 데이터 차트 */
+/**
+ * MetricCard — 메트릭 카드 + 미니 차트 컴포넌트.
+ * @returns 메트릭 카드 JSX 요소
+ */
 const MetricCard: React.FC<{
   label: string;
   value: string | number;
@@ -98,12 +105,18 @@ const MetricCard: React.FC<{
 };
 
 /** DashboardView - 메인 영역용 대시보드 */
+/**
+ * DashboardView — 메인 영역용 대시보드.
+ * 실행 통계, 성공률, 엔진 분포, 에이전트 워크로드 등 메트릭 차트 제공.
+ * @returns 대시보드 뷰 JSX 요소
+ */
 export const DashboardView: React.FC = () => {
   const [runs, setRuns] = useState<RunRecord[]>([]);
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
   const [inventory, setInventory] = useState<InventoryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  /** 대시보드 데이터 로드 (실행 기록, 개요, 인벤토리) */
   const loadData = useCallback(async () => {
     setIsLoading(true);
     const [runResult, overviewResult, invResult] = await Promise.all([
@@ -322,6 +335,11 @@ interface ActivityResult {
   activities: ActivityItem[];
 }
 
+/**
+ * DashboardSidebar — 사이드바용 대시보드 컴포넌트.
+ * 통계 요약 및 최근 활동 표시.
+ * @returns 대시보드 사이드바 JSX 요소
+ */
 export const DashboardSidebar: React.FC = () => {
   const [stats, setStats] = useState<{ totalRuns: number; activeAgents: number; avgDuration: string; successRate?: number }>({
     totalRuns: 0, activeAgents: 0, avgDuration: '0ms', successRate: 0,
@@ -334,6 +352,7 @@ export const DashboardSidebar: React.FC = () => {
     loadRecentActivity();
   }, []);
 
+  /** 통계 데이터 로드 */
   const loadStats = async () => {
     const result = await ipcInvoke<{ totalRuns: number; totalAgents: number; uptime: number; successRate?: number }>('dashboard:stats');
     if (result) {
@@ -346,6 +365,7 @@ export const DashboardSidebar: React.FC = () => {
     }
   };
 
+  /** 최근 활동 로드 */
   const loadRecentActivity = async () => {
     setActivityLoading(true);
     const result = await ipcInvoke<ActivityResult>('dashboard:recent-activity');
@@ -353,6 +373,7 @@ export const DashboardSidebar: React.FC = () => {
     setActivityLoading(false);
   };
 
+  /** 타임스탬프를 상대 시간(방금/X분 전/X시간 전)으로 변환 */
   const formatTime = (ts: string) => {
     const diff = Date.now() - new Date(ts).getTime();
     const mins = Math.floor(diff / 60000);

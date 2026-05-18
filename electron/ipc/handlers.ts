@@ -1,3 +1,20 @@
+/**
+ * IPC 핸들러 — Electron 메인 프로세스 IPC 채널 등록.
+ *
+ * @what
+ * - renderer 프로세스의 모든 invoke/on 요청을 처리하는 핸들러를 ipcMain에 등록합니다.
+ * - run, workflow, agents, inspector, config, dashboard, chat, cli, mcp, backup,
+ *   dialog, watcher, settings 등 전 도메인을 포괄합니다.
+ *
+ * @design
+ * - 입력 데이터를 Zod 스키마로 검증(safeValidate)한 후 서비스 레이어로 위임합니다.
+ * - HandlerDeps를 통해 의존성(LogBuffer, ConfigReader, EventBroker)을 주입받습니다.
+ * - 각 핸들러는 채널명을 IPC_CHANNELS 상수와 대조하여 유효성을 검사합니다.
+ *
+ * @usage
+ *   registerIpcHandlers({ logBuffer, configReader, eventBroker });
+ *   // renderer → ipcRenderer.invoke('run:start', options)
+ */
 import { ipcMain, dialog, app } from 'electron';
 import path from 'path';
 import os from 'os';
@@ -21,12 +38,21 @@ import { FileWatcher } from '../services/FileWatcher';
 import { McpManager } from '../mcp/McpClient';
 import { SETTINGS } from '../settings/AppSettings';
 
+/** IPC 핸들러 의존성 — 서비스 인스턴스를 주입받음 */
 interface HandlerDeps {
+  /** 로그 버퍼 서비스 */
   logBuffer: LogBuffer;
+  /** 설정 파일 리더 서비스 */
   configReader: ConfigReader;
+  /** 이벤트 브로커 서비스 */
   eventBroker: EventBroker;
 }
 
+/**
+ * IPC 채널 유효성 검사
+ * @param channel 검증할 채널명
+ * @throws 채널이 유효하지 않으면 Error
+ */
 function validateChannel(channel: string): void {
   const validChannels: string[] = [
     ...Object.values(IPC_CHANNELS.invoke),
@@ -37,6 +63,14 @@ function validateChannel(channel: string): void {
   }
 }
 
+/**
+ * Zod 스키마로 데이터를 안전하게 검증
+ * 검증 실패 시 상세 오류 메시지를 포함한 Error throw
+ * @template T Zod 스키마 추론 타입
+ * @param schema 검증할 Zod 스키마
+ * @param data 검증할 데이터
+ * @returns 검증된 데이터
+ */
 function safeValidate<T>(schema: z.ZodType<T>, data: unknown): T {
   try {
     return schema.parse(data);

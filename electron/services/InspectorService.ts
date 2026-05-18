@@ -1,53 +1,116 @@
+/**
+ * InspectorService — 에이전트 디렉토리/파일 검사 서비스.
+ *
+ * @what
+ * - 특정 에이전트의 설정(config.json / agent.toml), 스킬 마크다운, 참조 파일, 스크립트,
+ *   에셋을 조회하고 내용을 읽어 InspectorResponse로 반환합니다.
+ * - 디렉토리 목록 조회, 파일 저장, 경로 보안 검증 기능을 제공합니다.
+ *
+ * @design
+ * - ConfigReader를 통해 에이전트 메타데이터를 읽고, 파일 경로를 동적으로 탐색합니다.
+ * - _isWithinRoot()로 허용된 홈 디렉토리 범위를 벗어난 접근을 차단합니다.
+ * - 파일 내용은 SETTINGS.safeReadTextMaxChars로 잘라서 반환합니다.
+ *
+ * @usage
+ *   const inspector = new InspectorService();
+ *   const info = inspector.loadAgentInspector('my-agent', 'gemini');
+ *   const entries = inspector.listDirectory('/path/to/agents');
+ */
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { SETTINGS } from '../settings/AppSettings';
 import { ConfigReader } from './ConfigReader';
 
+/** 검사기에서 반환되는 파일 모델. 파일 메타데이터와 내용을 함께 포함합니다. */
 export interface InspectorFileModel {
+  /** 파일명 */
   name: string;
+  /** 파일 절대 경로 */
   path: string;
+  /** 파일 종류 (skill-md, agent-toml, agent-json, reference, script, asset 등) */
   kind: string;
+  /** 파일 크기 (바이트) */
   sizeBytes: number;
+  /** 최종 수정 시간 (ISO-8601) */
   modifiedAt: string | null;
+  /** 파일 내용 텍스트 (최대 safeReadTextMaxChars) */
   content: string;
+  /** 내용이 잘렸는지 여부 */
   truncated: boolean;
 }
 
+/** 디렉토리 목록의 단일 엔트리를 나타냅니다. */
 export interface FileEntry {
+  /** 파일/디렉토리 이름 */
   name: string;
+  /** 파일/디렉토리 절대 경로 */
   path: string;
+  /** 파일 또는 디렉토리 구분 */
   kind: 'file' | 'directory';
+  /** 파일 크기 (디렉토리는 0) */
   sizeBytes: number;
+  /** 최종 수정 시간 (ISO-8601) */
   modifiedAt: string | null;
 }
 
+/**
+ * 에이전트 검사기 응답. 에이전트 메타정보와 연관된 모든 파일을 포함합니다.
+ */
 export interface InspectorResponse {
+  /** 에이전트 이름 */
   agentName: string;
+  /** 역할 라벨 (한글) */
   roleLabelKo: string;
+  /** 부서 라벨 (한글) */
   departmentLabelKo: string;
+  /** 에이전트 설명 */
   description: string;
+  /** 짧은 설명 (80자 제한) */
   shortDescription: string | null;
+  /** 원클릭 프롬프트 */
   oneClickPrompt: string | null;
+  /** 연결된 스킬 이름 */
   skillName: string | null;
+  /** 연결된 스킬 파일 경로 */
   skillPath: string | null;
+  /** agent.toml 파일 경로 */
   agentTomlPath: string | null;
+  /** config.json 파일 경로 */
   agentJsonPath: string | null;
+  /** 스킬 마크다운 파일 모델 */
   skillMarkdown: InspectorFileModel | null;
+  /** agent.toml 파일 모델 */
   agentToml: InspectorFileModel | null;
+  /** config.json 파일 모델 */
   agentJson: InspectorFileModel | null;
+  /** 참조 파일 목록 */
   references: InspectorFileModel[];
+  /** 스크립트 파일 목록 */
   scripts: InspectorFileModel[];
+  /** 에셋 파일 목록 */
   assets: InspectorFileModel[];
 }
 
 export class InspectorService {
+  /** 파일 및 에이전트 메타데이터 읽기를 위한 ConfigReader */
   private configReader: ConfigReader;
 
+  /**
+   * InspectorService 인스턴스를 생성합니다.
+   * 내부적으로 ConfigReader를 초기화합니다.
+   */
   constructor() {
     this.configReader = new ConfigReader();
   }
 
+  /**
+   * 지정된 에이전트의 전체 검사 정보를 로드합니다.
+   * config.json / agent.toml, 스킬 파일, 참조/스크립트/에셋을 모두 수집합니다.
+   * @param agentName - 검사할 에이전트 이름
+   * @param engine - 엔진 이름 (선택)
+   * @returns 검사 응답, 에이전트를 찾을 수 없으면 null
+   */
   loadAgentInspector(agentName: string, engine?: string): InspectorResponse | null {
     try {
       let agentsRaw = this.configReader.readAgents(engine);
@@ -123,6 +186,12 @@ export class InspectorService {
     }
   }
 
+  /**
+   * 지정된 디렉토리의 파일/폴더 목록을 반환합니다. 심볼릭 링크 순회를 방지합니다.
+   * @param dirPath - 조회할 디렉토리 경로
+   * @param engine - 엔진 이름 (선택, 경로 검증용)
+   * @returns FileEntry 배열 (이름순 정렬)
+   */
   listDirectory(dirPath: string, engine?: string): FileEntry[] {
     try {
       const resolved = path.resolve(dirPath);
@@ -159,6 +228,13 @@ export class InspectorService {
     }
   }
 
+  /**
+   * 에이전트에 연결된 스킬 파일 경로를 조회합니다.
+   * 기본 SKILL.md와 동일 디렉토리의 SKILL.md/AGENT.md 파일을 모두 포함합니다.
+   * @param agentName - 에이전트 이름
+   * @param engine - 엔진 이름 (선택)
+   * @returns 스킬 파일 경로 배열 (중복 제거, 정렬)
+   */
   resolveSkills(agentName: string, engine?: string): string[] {
     try {
       const agentsRaw = this.configReader.readAgents(engine);
@@ -186,6 +262,14 @@ export class InspectorService {
     }
   }
 
+  /**
+   * 지정된 경로의 파일 내용을 저장(덮어쓰기)합니다.
+   * JSON 파일일 경우 내용 유효성을 먼저 검증합니다.
+   * @param filePathStr - 저장할 파일 경로
+   * @param content - 저장할 내용
+   * @param engine - 엔진 이름 (선택, 경로 검증용)
+   * @returns 업데이트된 파일 모델, 실패 시 null
+   */
   saveFile(filePathStr: string, content: string, engine?: string): InspectorFileModel | null {
     try {
       const resolved = path.resolve(filePathStr);
@@ -201,6 +285,13 @@ export class InspectorService {
     }
   }
 
+  /**
+   * 에이전트 디렉토리와 스킬 참조 경로를 탐색하여 검사 대상 파일 경로 맵을 구성합니다.
+   * @param agentName - 에이전트 이름
+   * @param skillPathValue - 스킬 파일 경로 (null 가능)
+   * @param engine - 엔진 이름 (선택, 경로 검증용)
+   * @returns 파일 경로를 키로, 종류를 값으로 하는 맵
+   */
   private _getInspectorPaths(agentName: string, skillPathValue: string | null, engine?: string): Record<string, string> {
     const paths: Record<string, string> = {};
     const agentsRoot = SETTINGS.getAgentsRoot(engine);
@@ -244,6 +335,13 @@ export class InspectorService {
     return paths;
   }
 
+  /**
+   * 파일 경로에서 메타데이터와 내용을 읽어 InspectorFileModel을 생성합니다.
+   * 내용은 safeReadTextMaxChars를 초과하면 잘립니다.
+   * @param filePath - 읽을 파일 경로
+   * @param kind - 파일 종류
+   * @returns 구성된 파일 모델
+   */
   private _buildFileModel(filePath: string, kind: string): InspectorFileModel {
     const content = this._safeReadText(filePath);
     const truncated = content.length > SETTINGS.safeReadTextMaxChars;
@@ -272,6 +370,11 @@ export class InspectorService {
     }
   }
 
+  /**
+   * 파일을 UTF-8 텍스트로 안전하게 읽습니다. 실패 시 빈 문자열을 반환합니다.
+   * @param filePath - 읽을 파일 경로
+   * @returns 파일 내용 문자열
+   */
   private _safeReadText(filePath: string): string {
     try {
       return fs.readFileSync(filePath, { encoding: 'utf-8' });
@@ -280,6 +383,13 @@ export class InspectorService {
     }
   }
 
+  /**
+   * 대상 경로가 허용된 루트 범위 내에 있는지 확인합니다.
+   * 엔진 홈 디렉토리, 사용자 홈 디렉토리, ~/.claude를 허용합니다.
+   * @param targetPath - 검증할 대상 경로
+   * @param engine - 엔진 이름 (선택)
+   * @returns 허용된 경로이면 true
+   */
   private _isWithinRoot(targetPath: string, engine?: string): boolean {
     const resolved = path.resolve(targetPath);
     const home = SETTINGS.getHome(engine);

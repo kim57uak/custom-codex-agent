@@ -25,8 +25,11 @@ import { OpenCodeEngine } from './OpenCodeEngine';
 import { ClaudeCodeEngine } from './ClaudeCodeEngine';
 
 export interface BuildCliArgsOptions {
+  /** 샌드박스 모드 (read-only / workspace-write / danger-full-access) */
   sandboxMode?: string | null;
+  /** 승인 정책 (never / on-request / always) */
   approvalPolicy?: string | null;
+  /** CLI 실행 시 포함할 디렉토리 목록 */
   includeDirs?: string[];
 }
 
@@ -78,6 +81,11 @@ export interface EngineAdapter {
  *
  * @param engine 엔진 타입
  * @returns EngineAdapter 인스턴스
+ */
+/**
+ * 엔진 타입별 어댑터 클래스 매핑
+ * - key: EngineType
+ * - value: 해당 엔진의 EngineAdapter 생성자
  */
 const ENGINE_ADAPTERS: Record<EngineType, new () => EngineAdapter> = {
   codex: CodexEngine,

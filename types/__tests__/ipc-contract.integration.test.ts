@@ -1,3 +1,20 @@
+/**
+ * Zod 스키마 통합 검증 테스트
+ *
+ * 테스트 대상: types/ipc-contract.ts의 모든 Zod 스키마
+ * 테스트 방식: 유닛 테스트 (Zod 파싱/검증)
+ * 주요 검증 시나리오:
+ * - RunOptionsSchema: 유효한 옵션, 전체 필드, 100KB 초과 프롬프트 거부, 누락된 agentId 거부
+ * - AgentConfigSchema: 최소 설정, 전체 선택 필드, 유효하지 않은 engine 타입 거부, 누락된 name 거부
+ * - WorkflowSchema: 유효한 워크플로우, 유효하지 않은 노드 타입 거부, 누락된 edges 거부
+ * - EngineTypeSchema: 4개 엔진 허용, 유효하지 않은 엔진 거부
+ * - RunStatusSchema: 5개 상태 허용
+ * - RunEventSchema: 유효한 이벤트 허용
+ * - WorkflowNodeSchema: 6개 노드 타입 허용
+ * - WorkflowEdgeSchema: 필수/선택 필드 허용
+ * - IpcVersionCheckSchema: 유효한 버전 체크 허용
+ * - FileChangeSchema: 유효한 파일 변경 허용, 유효하지 않은 이벤트 타입 거부
+ */
 import { describe, it, expect } from 'vitest';
 import {
   RunOptionsSchema,

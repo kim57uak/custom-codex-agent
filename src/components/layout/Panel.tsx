@@ -1,3 +1,19 @@
+/**
+ * Panel — 앱 하단 로그/이벤트 패널 컴포넌트 (VS Code 스타일).
+ *
+ * 기능:
+ * - 4개 탭: Terminal(로그), Output(INFO/ERROR 필터), Events(시스템 이벤트), Problems(에러/경고)
+ * - Electron API의 log:entry, run:event, run:started, run:ended 이벤트 구독
+ * - 로그는 최대 500개, 문제/이벤트는 최대 100개까지 유지
+ * - 패널 높이 리사이즈 (useResizeHandle 훅) 및 확대/축소 토글
+ * - 내용 전체 clear 버튼
+ *
+ * Props: 없음 (Zustand store에서 panelHeight/panelExpanded 읽음)
+ *
+ * 앱 내 배치:
+ * - 전체 앱 레이아웃의 최하단, StatusBar 바로 위
+ * - App.tsx의 Layout 컴포넌트 내부에 위치
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '../../stores/uiStore';
 import { useResizeHandle } from '../../hooks/useResizeHandle';
@@ -20,6 +36,11 @@ interface LogEntry {
 
 interface PanelProps {}
 
+/**
+ * Panel — 앱 하단 로그/이벤트 패널.
+ * Terminal(로그), Output(INFO/ERROR 필터), Events(시스템 이벤트), Problems(에러/경고) 탭 제공.
+ * @returns 패널 JSX 요소
+ */
 export const Panel: React.FC<PanelProps> = () => {
   const [activeTab, setActiveTab] = useState<PanelTabId>('terminal');
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
@@ -86,12 +107,14 @@ export const Panel: React.FC<PanelProps> = () => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logEntries, events]);
 
+  /** 패널 내용 전체 초기화 */
   const handleClear = () => {
     setLogEntries([]);
     setEvents([]);
     setProblems([]);
   };
 
+  /** 활성 탭에 따른 패널 내용 렌더링 */
   const renderTabContent = () => {
     switch (activeTab) {
       case 'terminal':

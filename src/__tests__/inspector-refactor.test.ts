@@ -1,3 +1,22 @@
+/**
+ * Inspector 리팩터 전면 검증 테스트
+ *
+ * 테스트 대상:
+ * - InspectorService (파일 스캔/저장/에셋 검증)
+ * - IPC 핸들러 (inspector:load-agent / inspector:save-file)
+ * - IPC Contract (AgentInspectorResponseSchema, AgentInspectorFileSchema)
+ * - InspectorView React 컴포넌트 (소스 코드 분석)
+ * - inspectorStore (Zustand 상태 관리)
+ * - CSS 레이아웃 (inspector-main, inspector-view 등)
+ * 테스트 방식: 유닛 테스트 + 소스 코드 정적 분석
+ * 주요 검증 시나리오:
+ * - InspectorService의 파일 저장/검증 로직
+ * - IPC 핸들러 등록 및 파라미터 검증
+ * - Zod 스키마의 필드 존재 여부 및 파싱
+ * - 컴포넌트의 UI 상태(loading/error/fileMap 등) 처리
+ * - 스토어의 상태 초기화 및 변경
+ * - CSS flexbox/grid 레이아웃 규칙
+ */
 import { describe, it, expect, beforeEach, vi, afterAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';

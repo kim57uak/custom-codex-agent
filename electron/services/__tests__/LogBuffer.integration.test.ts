@@ -1,3 +1,15 @@
+/**
+ * LogBuffer 통합 테스트
+ *
+ * 테스트 대상: electron/services/LogBuffer.ts
+ * 테스트 방식: 통합 테스트 (실제 LogBuffer 인스턴스 생성 및 조작)
+ * 주요 검증 시나리오:
+ * - push 및 수동 flush 동작 (콜백 수신 확인)
+ * - maxLines 초과 시 자동 flush (auto-flush)
+ * - maxSize 초과 시 overflow 이벤트 트리거
+ * - clear() 버퍼 초기화
+ * - pause()/resume() 동작 (일시 중지 중 로그 무시)
+ */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 
 describe('LogBuffer Integration', () => {

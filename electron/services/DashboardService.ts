@@ -1,3 +1,21 @@
+/**
+ * DashboardService — 대시보드 데이터 집계 서비스.
+ *
+ * @what
+ * - 실행 통계(stats), 최근 활동(recentActivity), 인벤토리(inventory), 개요(overview),
+ *   라우터 그래프(routerGraph), 조직도(orgChart) 등 대시보드 화면에 필요한 데이터를
+ *   ConfigReader로부터 읽어 가공합니다.
+ *
+ * @design
+ * - 모든 응답은 Zod 스키마(ipc-contract)로 검증되어 타입 안전성을 보장합니다.
+ * - 에이전트 상태(healthy/broken/passive)와 스킬 매핑 상태를 실시간으로 분석합니다.
+ * - 데이터 변환 책임을 ConfigReader(읽기)와 분리하여 단일 책임 원칙을 따릅니다.
+ *
+ * @usage
+ *   const svc = new DashboardService(configReader);
+ *   const stats = svc.getStats(runList);
+ *   const overview = svc.getOverview('gemini');
+ */
 import { z } from 'zod';
 import {
   InventoryResponseSchema, OverviewResponseSchema,
@@ -6,10 +24,26 @@ import {
 import { ConfigReader } from './ConfigReader';
 import { SETTINGS } from '../settings/AppSettings';
 
+/** 대시보드 최근 활동 목록의 단일 항목을 나타냅니다. */
 export interface DashboardActivity {
-  id: string; agentId: string; status: string; message: string; timestamp: string;
+  /** 활동 ID */
+  id: string;
+  /** 에이전트 ID */
+  agentId: string;
+  /** 활동 상태 (completed, failed, running 등) */
+  status: string;
+  /** 활동 설명 메시지 */
+  message: string;
+  /** 활동 발생 타임스탬프 */
+  timestamp: string;
 }
 
+/**
+ * 라우터 설정에서 키워드-에이전트 매핑 라우트 목록을 추출합니다.
+ * routes 배열과 routing_hints 객체를 모두 처리합니다.
+ * @param routerConfig - 라우터 설정 객체
+ * @returns 키워드와 에이전트 이름 쌍 배열
+ */
 function _extractRoutes(routerConfig: Record<string, unknown>): Array<{ keyword: string; agentName: string }> {
   const routes: Array<{ keyword: string; agentName: string }> = [];
   const rawRoutes = routerConfig.routes;
@@ -29,6 +63,11 @@ function _extractRoutes(routerConfig: Record<string, unknown>): Array<{ keyword:
   return routes;
 }
 
+/**
+ * 에이전트 레코드의 스킬 매핑 정보를 기반으로 상태를 판별합니다.
+ * @param agent - 에이전트 설정 객체
+ * @returns 'healthy' 또는 'broken' 상태 문자열
+ */
 function _resolveStatusSimple(agent: Record<string, unknown>): string {
   const skillName = agent.skill_name ? String(agent.skill_name) : null;
   const skillPath = agent.skill_path ? String(agent.skill_path) : null;
@@ -38,12 +77,22 @@ function _resolveStatusSimple(agent: Record<string, unknown>): string {
 }
 
 export class DashboardService {
+  /** 설정 데이터 읽기를 위임받은 ConfigReader 인스턴스 */
   private configReader: ConfigReader;
 
+  /**
+   * DashboardService 인스턴스를 생성합니다.
+   * @param configReader - 데이터 읽기에 사용할 ConfigReader
+   */
   constructor(configReader: ConfigReader) {
     this.configReader = configReader;
   }
 
+  /**
+   * 실행 목록에서 통계를 집계합니다.
+   * @param runList - 실행 레코드 배열
+   * @returns 총 실행 수, 에이전트 수, 업타임, 성공률, 완료/실패 수
+   */
   getStats(runList: Array<{ status: string }>): { totalRuns: number; totalAgents: number; uptime: number; successRate: number; completedRuns: number; failedRuns: number } {
     const configStats = this.configReader.getStats();
     const completedRuns = runList.filter(r => r.status === 'completed').length;
@@ -52,6 +101,11 @@ export class DashboardService {
     return { totalRuns, totalAgents: configStats.totalAgents, uptime: configStats.uptime, successRate, completedRuns, failedRuns: runList.filter(r => r.status === 'failed').length };
   }
 
+  /**
+   * 최근 실행 목록에서 대시보드 표시용 활동 항목을 생성합니다.
+   * @param runs - 실행 레코드 배열
+   * @returns 최대 10개의 DashboardActivity 항목
+   */
   getRecentActivity(runs: Array<Record<string, unknown>>): DashboardActivity[] {
     return runs.slice(0, 10).map(run => ({
       id: run.id as string, agentId: run.agentId as string, status: run.status as string,
@@ -60,6 +114,12 @@ export class DashboardService {
     }));
   }
 
+  /**
+   * 지정된 엔진의 스킬, 에이전트, 라우트 정보를 통합한 인벤토리 데이터를 반환합니다.
+   * 에이전트-스킬 매핑 상태(healthy/broken/passive)도 함께 분석합니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns Zod 스키마로 검증된 인벤토리 응답
+   */
   getInventory(engine?: string): Record<string, unknown> {
     const targetEngine = typeof engine === 'string' ? engine : undefined;
     const skills = this.configReader.readSkills(targetEngine).map(s => ({ name: s.name, path: s.path, installed: true, enabled: true }));
@@ -122,6 +182,12 @@ export class DashboardService {
     return safeValidate(InventoryResponseSchema, result);
   }
 
+  /**
+   * 지정된 엔진의 개요(overview) 데이터를 집계합니다.
+   * 스킬/에이전트 수, 라우팅 현황, 활성 스레드, 손상된 매핑 등을 포함합니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns Zod 스키마로 검증된 개요 응답
+   */
   getOverview(engine?: string): Record<string, unknown> {
     const targetEngine = typeof engine === 'string' ? engine : undefined;
     const skills = this.configReader.readSkills(targetEngine);
@@ -146,6 +212,11 @@ export class DashboardService {
     return safeValidate(OverviewResponseSchema, result);
   }
 
+  /**
+   * 라우터-에이전트 간 연결 관계를 그래프(노드/엣지) 형태로 반환합니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns 노드와 엣지 배열 (Zod 검증됨)
+   */
   getRouterGraph(engine?: string): { nodes: Array<Record<string, unknown>>; edges: Array<Record<string, unknown>> } {
     const targetEngine = typeof engine === 'string' ? engine : undefined;
     const routerConfig = this.configReader.readRouterConfig(targetEngine);
@@ -172,6 +243,11 @@ export class DashboardService {
     return safeValidate(RouterGraphResponseSchema, result);
   }
 
+  /**
+   * 창업자-부서-에이전트 계층 구조의 조직도를 그래프 형태로 반환합니다.
+   * @param engine - 엔진 이름 (선택)
+   * @returns 노드와 엣지 배열 (Zod 검증됨)
+   */
   getOrgChart(engine?: string): { nodes: Array<Record<string, unknown>>; edges: Array<Record<string, unknown>> } {
     const targetEngine = typeof engine === 'string' ? engine : undefined;
     const agentsRaw = this.configReader.readAgents(targetEngine);
@@ -199,6 +275,12 @@ export class DashboardService {
   }
 }
 
+/**
+ * Zod 스키마로 데이터를 검증하고 실패 시 상세한 검증 오류를 throw합니다.
+ * @param schema - 검증에 사용할 Zod 스키마
+ * @param data - 검증할 데이터
+ * @returns 검증된 타입 안전 데이터
+ */
 function safeValidate<T>(schema: z.ZodType<T>, data: unknown): T {
   try {
     return schema.parse(data);

@@ -1,3 +1,21 @@
+/**
+ * InspectorView — 에이전트 인스펙터 메인 뷰 컴포넌트.
+ *
+ * 기능:
+ * - 선택된 에이전트/스킬의 상세 정보를 로드하여 표시
+ * - Agent/Skill 파일 목록을 파일 브라우저로 보여주고 Monaco 에디터로 편집
+ * - InspectorSidebar, InspectorFileBrowser, FileEditor, AgentEditor, SkillEditor 로 구성
+ *
+ * Props/State:
+ * - selectedAgent/selectedSkill (Zustand): 현재 선택된 에이전트/스킬
+ * - response (Zustand): 인스펙터 응답 데이터 (AgentInspectorResponse)
+ * - selectedFilePath: 현재 편집 중인 파일 경로
+ * - editContent/originalContent: 파일 편집 내용 및 변경 감지
+ *
+ * 앱 내 배치:
+ * - ActivityBar의 'inspector' 뷰 ID와 연결된 메인 콘텐츠 영역
+ * - WorkflowView 와 같은 레벨에서 라우팅되어 표시됨
+ */
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import type { AgentConfig, SkillModel, AgentInspectorFileModel, AgentInspectorResponse } from '../../../types/ipc-contract';
 import { useInspectorStore } from '../../stores/inspectorStore';
@@ -22,6 +40,7 @@ self.MonacoEnvironment = {
   },
 };
 
+/** Monaco 에디터 커스텀 테마(app-theme)를 CSS 변수 기반으로 정의 */
 function ensureMonacoTheme() {
   try {
     const style = typeof document !== 'undefined' ? getComputedStyle(document.documentElement) : null;
@@ -61,6 +80,11 @@ import { SkillEditor } from './inspector/SkillEditor';
 
 export { InspectorSidebar };
 
+/**
+ * InspectorView — 에이전트 인스펙터 메인 뷰 컴포넌트.
+ * 에이전트/스킬 선택 시 파일 브라우저와 Monaco 에디터로 편집 환경 제공.
+ * @returns 인스펙터 뷰 JSX 요소
+ */
 const InspectorView: React.FC = () => {
   const selectedAgent = useInspectorStore(s => s.selectedAgent);
   const selectedSkill = useInspectorStore(s => s.selectedSkill);
@@ -84,6 +108,7 @@ const InspectorView: React.FC = () => {
   const effectiveAgent = selectedAgent ?? (response ? { id: response.agentName, name: response.agentName, engine: 'codex' as const } : null);
   const effectiveMeta = effectiveAgent ? getEngineMeta(effectiveAgent.engine) : undefined;
 
+  /** 에이전트 목록 및 스킬 인벤토리 로드 */
   const loadData = async () => {
     const [agentList, inventory] = await Promise.all([
       ipcInvoke<AgentConfig[]>('agents:list'),
@@ -108,6 +133,7 @@ const InspectorView: React.FC = () => {
     return !!(response.skillMarkdown || response.agentToml || response.agentJson || response.references.length || response.scripts.length || response.assets.length);
   }, [response]);
 
+  /** 파일 선택 — Monaco 에디터에 내용 로드 */
   const handleSelectFile = useCallback((filePath: string) => {
     const file = fileMap.get(filePath);
     if (!file) return;
@@ -118,9 +144,11 @@ const InspectorView: React.FC = () => {
     setSaveSuccess(null);
   }, [fileMap]);
 
+  /** 에디터 내용 변경 핸들러 */
   const handleContentChange = useCallback((content: string) => { setEditContent(content); }, []);
   const hasChanges = editContent !== originalContent;
 
+  /** 편집 내용 저장 */
   const handleSave = useCallback(async () => {
     if (!selectedFilePath) return;
     setSaving(true);
@@ -132,6 +160,7 @@ const InspectorView: React.FC = () => {
     setSaving(false);
   }, [selectedFilePath, editContent]);
 
+  /** 변경 사항 되돌리기 (원본 내용으로 복원) */
   const handleRevert = useCallback(() => { setEditContent(originalContent); }, [originalContent]);
 
   return (

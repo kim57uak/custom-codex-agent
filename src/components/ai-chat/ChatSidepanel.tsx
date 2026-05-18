@@ -1,3 +1,26 @@
+/**
+ * ChatSidepanel — AI 어시스턴트 채팅 사이드패널 컴포넌트.
+ *
+ * 기능:
+ * - 사용자 메시지를 받아 AI 응답 생성 (chat:send IPC)
+ * - 병렬로 워크플로 추천 (workflow:recommend-and-create)
+ * - 2명 이상의 에이전트가 추천되면 워크플로 실행 제안 UI 표시
+ * - ReactMarkdown + Mermaid 다이어그램 렌더링 지원
+ * - 접힘/펼침 모드, 가로 리사이즈 지원
+ *
+ * Props:
+ * - collapsed: 패널 접힘 상태
+ * - onToggle: 접힘/펼침 토글 콜백
+ *
+ * State:
+ * - messages (ChatMessage[]): 채팅 메시지 목록 (user/assistant/system)
+ * - wfRecommendations: 추천 워크플로 상태 (goalPrompt, agents 목록)
+ * - isLoading: 전송 중 로딩 표시
+ *
+ * 앱 내 배치:
+ * - 전체 앱 레이아웃의 최우측 사이드패널
+ * - App.tsx에서 Layout 컴포넌트 내부, 메인 콘텐츠 영역 우측에 위치
+ */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -35,12 +58,17 @@ const STEP_ICONS: Record<string, string> = {
   bot: '\u{1F916}',
 };
 
+/** 아이콘 키에 해당하는 이모지 반환 */
 function getIcon(iconKey: string | null | undefined): string {
   return STEP_ICONS[iconKey || 'bot']!;
 }
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
 
+/**
+ * MermaidBlock — Mermaid 다이어그램 렌더링 블록 컴포넌트.
+ * @returns Mermaid SVG 또는 fallback 코드 블록 JSX
+ */
 function MermaidBlock({ code }: { code: string }) {
   const elRef = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -64,6 +92,10 @@ function MermaidBlock({ code }: { code: string }) {
   return <div ref={elRef} className="chat-msg-mermaid" />;
 }
 
+/**
+ * ChatMessageItem — 개별 채팅 메시지 렌더링 컴포넌트.
+ * @returns 메시지 버블 JSX 요소
+ */
 const ChatMessageItem: React.FC<{ message: ChatMessage }> = ({ message }) => {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
@@ -129,6 +161,12 @@ Answer questions about the application, help debug issues, suggest improvements,
 When asked about the system, use the available IPC tools to fetch real data.
 Be concise, technical, and helpful. Focus on being an agentic AI assistant.`;
 
+/**
+ * ChatSidepanel — AI 어시스턴트 채팅 사이드패널.
+ * 메시지 송수신, 워크플로 추천, Mermaid 다이어그램 렌더링 지원.
+ * @param props - 컴포넌트 Props
+ * @returns 채팅 사이드패널 JSX 요소
+ */
 export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false, onToggle }) => {
   const selectedEngine = useUIStore((s) => s.selectedEngine);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -149,6 +187,7 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
     },
   });
 
+  /** 새 채팅 메시지 추가 */
   const addMessage = useCallback((role: MessageRole, content: string) => {
     const newMessage: ChatMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -159,6 +198,7 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
     setMessages(prev => [...prev, newMessage]);
   }, []);
 
+  /** 채팅 메시지 전송 — AI 응답 및 워크플로 추천 병렬 요청 */
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
 
@@ -200,6 +240,7 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
     }
   };
 
+  /** 추천 워크플로 실행 */
   const handleRunWorkflow = useCallback(async () => {
     if (!wfRecommendations?.workflowRunId) return;
     await ipcInvoke('workflow:run', wfRecommendations.workflowRunId);
@@ -207,10 +248,12 @@ export const ChatSidepanel: React.FC<ChatSidepanelProps> = ({ collapsed = false,
     setWfRecommendations(null);
   }, [wfRecommendations, addMessage]);
 
+  /** 워크플로 추천 UI 닫기 */
   const handleDismissWorkflow = useCallback(() => {
     setWfRecommendations(null);
   }, []);
 
+  /** 입력 필드 키보드 이벤트 — Enter 전송, Shift+Enter 줄바꿈 */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();

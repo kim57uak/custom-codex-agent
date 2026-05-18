@@ -90,6 +90,12 @@ interface EngineSettingsPanelProps {
  * EngineSettingsPanel - 엔진별 설정 패널
  * CLI 경로, 모델, 타임아웃, 프록시 설정
  */
+/**
+ * EngineSettingsPanel — 엔진별 설정 패널.
+ * CLI 경로, 모델, 타임아웃, 프록시 설정 및 연결 검증 제공.
+ * @param props - 컴포넌트 Props
+ * @returns 엔진 설정 패널 JSX 요소
+ */
 export const EngineSettingsPanel: React.FC<EngineSettingsPanelProps> = ({ initialEngine = 'codex' }) => {
   const [selectedEngine, setSelectedEngine] = useState<EngineType>(initialEngine);
   const [settings, setSettings] = useState<Record<string, EngineSettings>>({ ...DEFAULT_SETTINGS });

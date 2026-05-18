@@ -1,3 +1,14 @@
+/**
+ * Inspector panel utility functions: language detection from file extension,
+ * locale-aware time formatting, byte-size display, engine metadata/labels,
+ * department color mappings, file-type icons, and file-kind labels.
+ */
+
+/**
+ * 파일 확장자로 프로그래밍 언어 감지
+ * @param filePath 파일 경로
+ * @returns 감지된 언어 식별자 (기본값: 'plaintext')
+ */
 export function detectLanguage(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
   const map: Record<string, string> = {
@@ -9,17 +20,31 @@ export function detectLanguage(filePath: string): string {
   return map[ext] ?? 'plaintext';
 }
 
+/**
+ * ISO 날짜 문자열을 한국어 로캘 형식으로 변환
+ * @param iso ISO 8601 날짜 문자열 또는 null
+ * @returns 포맷된 시간 문자열
+ */
 export function formatTime(iso: string | null): string {
   if (!iso) return '-';
   return new Date(iso).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+/**
+ * 바이트 수를 사람이 읽기 쉬운 형식으로 변환 (B/KB/MB)
+ * @param bytes 바이트 숫자
+ * @returns 포맷된 크기 문자열
+ */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+/**
+ * 엔진별 메타 정보 (라벨, 색상, 배지 문자)
+ * - codex / gemini / opencode / claudecode / all
+ */
 export const ENGINE_META: Record<string, { label: string; color: string; badge: string }> = {
   codex: { label: 'Codex CLI', color: 'var(--accent-primary)', badge: 'C' },
   gemini: { label: 'Gemini CLI', color: 'var(--status-success)', badge: 'G' },
@@ -28,10 +53,19 @@ export const ENGINE_META: Record<string, { label: string; color: string; badge: 
   all: { label: 'All Engines', color: 'var(--text-tertiary)', badge: '*' },
 };
 
+/**
+ * 엔진 식별자로 메타 정보 조회
+ * @param engine 엔진 식별자
+ * @returns 엔진 메타 정보 (label, color, badge) 또는 기본값
+ */
 export function getEngineMeta(engine: string | undefined): { label: string; color: string; badge: string } {
   return ENGINE_META[engine ?? ''] ?? { label: engine ?? 'Unknown', color: 'var(--text-tertiary)', badge: '?' };
 }
 
+/**
+ * 부서별 색상 매핑
+ * - dev/engineering / strategy / platform / quality / content / ops / executive / marketing
+ */
 export const DEPT_COLORS: Record<string, string> = {
   'dev': 'var(--accent-primary)',
   'engineering': 'var(--accent-primary)',
@@ -44,6 +78,11 @@ export const DEPT_COLORS: Record<string, string> = {
   'marketing': '#ec4899',
 };
 
+/**
+ * 부서명으로 색상 조회 (부분 문자열 매칭)
+ * @param dept 부서명
+ * @returns CSS 색상 변수값
+ */
 export function getDeptColor(dept: string | undefined): string {
   if (!dept) return 'var(--text-tertiary)';
   const key = dept.toLowerCase().replace(/[^a-z]/g, '');
@@ -53,6 +92,11 @@ export function getDeptColor(dept: string | undefined): string {
   return 'var(--text-tertiary)';
 }
 
+/**
+ * 파일 확장자에 해당하는 아이콘 반환
+ * @param filePath 파일 경로
+ * @returns 유니코드 아이콘 문자
+ */
 export function getFileIcon(filePath: string): string {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
   const iconMap: Record<string, string> = {
@@ -64,6 +108,10 @@ export function getFileIcon(filePath: string): string {
   return iconMap[ext] ?? '\u{1F4C4}';
 }
 
+/**
+ * 파일 종류별 라벨 매핑
+ * - agent-toml / agent-json / skill-md / reference / script / asset
+ */
 export const FILE_KIND_LABELS: Record<string, string> = {
   'agent-toml': 'Agent Config (TOML)',
   'agent-json': 'Agent Config (JSON)',
@@ -73,6 +121,11 @@ export const FILE_KIND_LABELS: Record<string, string> = {
   'asset': 'Asset',
 };
 
+/**
+ * 파일 종류에 해당하는 아이콘 반환
+ * @param kind 파일 종류 식별자
+ * @returns 유니코드 아이콘 문자
+ */
 export function getKindIcon(kind: string): string {
   const map: Record<string, string> = {
     'agent-toml': '\u2699',
