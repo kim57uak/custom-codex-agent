@@ -80,12 +80,10 @@ export const MainArea: React.FC<MainAreaProps> = ({ activeView }) => {
   };
 
   const selectedEngine = useUIStore((s) => s.selectedEngine);
-  const engineLabel = selectedEngine === 'codex' ? 'Codex CLI' :
-    selectedEngine === 'gemini' ? 'Gemini CLI' :
+  const engineLabel = selectedEngine === 'gemini' ? 'Gemini CLI' :
     selectedEngine === 'opencode' ? 'OpenCode CLI' :
     selectedEngine === 'claudecode' ? 'ClaudeCode CLI' : selectedEngine;
   const engineColors: Record<string, string> = {
-    codex: 'var(--accent-primary)',
     gemini: 'var(--status-success)',
     opencode: 'var(--status-info)',
     claudecode: 'var(--status-warning)',

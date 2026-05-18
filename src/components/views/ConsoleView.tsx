@@ -93,8 +93,7 @@ export const ConsoleSidebar: React.FC = () => {
     await ipcInvoke('run:start', { agentId, workspace, prompt, engine: selectedEngine });
   };
 
-  const engineLabel = selectedEngine === 'codex' ? 'Codex CLI' :
-    selectedEngine === 'gemini' ? 'Gemini CLI' :
+  const engineLabel = selectedEngine === 'gemini' ? 'Gemini CLI' :
     selectedEngine === 'opencode' ? 'OpenCode CLI' :
     selectedEngine === 'claudecode' ? 'ClaudeCode CLI' : selectedEngine;
 
@@ -302,7 +301,7 @@ export const ConsoleView: React.FC<ConsoleViewProps> = () => {
     <div className="console-view">
       <div className="main-toolbar">
         <h1 className="title">Console</h1>
-        <span className="subtitle">codex-agent</span>
+        <span className="subtitle">agent-orchestrator</span>
       </div>
       <div className="main-content">
         <div className="run-config">

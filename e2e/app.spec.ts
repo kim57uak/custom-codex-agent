@@ -62,7 +62,7 @@ test('should switch panel tabs', async () => {
 
 test('should show status bar with version info', async () => {
   await expect(page.locator('.status-bar__item').first()).toBeVisible();
-  await expect(page.locator('.status-bar')).toContainText('Codex');
+  await expect(page.locator('.status-bar')).toContainText('Gemini');
 });
 
 // ======== View Navigation ========
@@ -192,7 +192,7 @@ test('should call agents:list IPC without throwing', async () => {
 test('should call cli:validate IPC without throwing', async () => {
   const result = await page.evaluate(async () => {
     try {
-      return await (window as any).electronAPI.invoke('cli:validate', '/usr/local/bin/codex');
+      return await (window as any).electronAPI.invoke('cli:validate', '/usr/local/bin/gemini');
     } catch (e: any) {
       return `ERROR: ${e.message}`;
     }

@@ -68,7 +68,7 @@ describe('Zod Schema Validation (integration)', () => {
       const result = AgentConfigSchema.parse({
         id: 'agent-1',
         name: 'My Agent',
-        engine: 'codex',
+        engine: 'gemini',
       });
       expect(result.name).toBe('My Agent');
     });
@@ -98,7 +98,7 @@ describe('Zod Schema Validation (integration)', () => {
     it('should reject missing name', () => {
       expect(() => AgentConfigSchema.parse({
         id: 'agent-4',
-        engine: 'codex',
+        engine: 'gemini',
       })).toThrow();
     });
   });
@@ -141,7 +141,7 @@ describe('Zod Schema Validation (integration)', () => {
 
   describe('EngineTypeSchema', () => {
     it('should accept all valid engines', () => {
-      expect(EngineTypeSchema.parse('codex')).toBe('codex');
+      expect(EngineTypeSchema.parse('gemini')).toBe('gemini');
       expect(EngineTypeSchema.parse('gemini')).toBe('gemini');
       expect(EngineTypeSchema.parse('opencode')).toBe('opencode');
       expect(EngineTypeSchema.parse('claudecode')).toBe('claudecode');

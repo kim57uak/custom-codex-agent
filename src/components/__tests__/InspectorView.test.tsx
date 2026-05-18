@@ -59,7 +59,7 @@ describe('InspectorView AgentEditor integration', () => {
   const mockAgent: AgentConfig = {
     id: 'test-agent-1',
     name: 'test-agent',
-    engine: 'codex',
+    engine: 'gemini',
     description: 'A test agent',
     department: '개발',
   };

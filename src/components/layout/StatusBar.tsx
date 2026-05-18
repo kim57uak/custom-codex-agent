@@ -20,14 +20,12 @@ import { ipcInvoke } from '../../utils/ipc';
 interface StatusBarProps {}
 
 const ENGINES = [
-  { id: 'codex', label: 'Codex', defaultPath: '/usr/local/bin/codex' },
   { id: 'gemini', label: 'Gemini', defaultPath: '/usr/local/bin/gemini' },
   { id: 'opencode', label: 'OpenCode', defaultPath: '/usr/local/bin/opencode' },
   { id: 'claudecode', label: 'ClaudeCode', defaultPath: '/usr/local/bin/claude' },
 ];
 
 const ENGINE_COLORS: Record<string, string> = {
-  codex: 'var(--accent-primary)',
   gemini: 'var(--status-success)',
   opencode: 'var(--status-info)',
   claudecode: 'var(--status-warning)',

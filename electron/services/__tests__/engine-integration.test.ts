@@ -7,7 +7,7 @@
  * - EventBroker (이벤트 브로커)
  * 테스트 방식: 통합 테스트 (실제 CLI 바이너리 호출, 실제 파일 시스템 접근)
  * 주요 검증 시나리오:
- * - 4개 엔진(codex, gemini, opencode, claudecode)의 CLI 경로 유효성 및 --version 실행
+ * - 3개 엔진(gemini, opencode, claudecode)의 CLI 경로 유효성 및 --version 실행
  * - Engine Agent Config 저장 및 조회
  * - Skills 디렉토리 접근 및 SKILL.md 파일 읽기
  * - 엔진 경로 Resolution 로직 (startRun 시나리오)
@@ -28,7 +28,6 @@ describe('Engine Integration Tests', () => {
   let eventBroker: EventBroker;
 
   const ENGINE_PATHS: Record<string, string> = {
-    codex: '/opt/homebrew/bin/codex',
     gemini: '/opt/homebrew/bin/gemini',
     opencode: '/Users/dolpaks/.opencode/bin/opencode',
     claudecode: '/Users/dolpaks/.local/bin/claude',
@@ -44,7 +43,7 @@ describe('Engine Integration Tests', () => {
       configReader.saveAgent({
         id: `engine-${engine}`,
         name: `${engine} CLI`,
-        engine: engine as 'codex' | 'gemini' | 'opencode' | 'claudecode',
+        engine: engine as 'gemini' | 'opencode' | 'claudecode',
         cliPath,
       });
     }
@@ -57,7 +56,7 @@ describe('Engine Integration Tests', () => {
   });
 
   describe('CLI Path Validation', () => {
-    it.each(['codex', 'gemini', 'opencode', 'claudecode'] as const)('should validate %s CLI path', async (engine) => {
+    it.each(['gemini', 'opencode', 'claudecode'] as const)('should validate %s CLI path', async (engine) => {
       const result = await configReader.validateCliPath(ENGINE_PATHS[engine]!);
       expect(result.valid).toBe(true);
       expect(result.version).toBeTruthy();
@@ -93,7 +92,6 @@ describe('Engine Integration Tests', () => {
         expect(result.valid, `${engine} --version failed: ${result.error}`).toBe(true);
         expect(result.version).toBeTruthy();
         // Check specific version patterns
-        if (engine === 'codex') expect(result.version).toContain('codex-cli');
         if (engine === 'claudecode') expect(result.version).toContain('Claude Code');
         if (engine === 'opencode') expect(result.version).toMatch(/^\d+\.\d+\.\d+/);
       }
@@ -138,7 +136,7 @@ describe('Engine Integration Tests', () => {
       const agents = configReader.listAgents();
       // Simulate startRun engine resolution logic
       const testCases = [
-        { agentId: 'nonexistent', engine: 'codex', expected: 'codex' },
+        { agentId: 'nonexistent', engine: 'gemini', expected: 'gemini' },
         { agentId: 'nonexistent', engine: 'gemini', expected: 'gemini' },
         { agentId: 'nonexistent', engine: 'opencode', expected: 'opencode' },
         { agentId: 'nonexistent', engine: 'claudecode', expected: 'claudecode' },
@@ -146,20 +144,20 @@ describe('Engine Integration Tests', () => {
 
       for (const tc of testCases) {
         const agent = agents.find(a => a.id === tc.agentId);
-        const resolvedEngine = tc.engine ?? agent?.engine ?? 'codex';
+        const resolvedEngine = tc.engine ?? agent?.engine ?? 'gemini';
         expect(resolvedEngine).toBe(tc.expected);
       }
     });
 
     it('should resolve engine from agent when options.engine is undefined', () => {
       const agents = configReader.listAgents();
-      const codexAgent = agents.find(a => a.id === 'engine-codex');
-      expect(codexAgent).toBeDefined();
-      expect(codexAgent!.engine).toBe('codex');
+      const geminiAgent = agents.find(a => a.id === 'engine-gemini');
+      expect(geminiAgent).toBeDefined();
+      expect(geminiAgent!.engine).toBe('gemini');
 
       // When options.engine is undefined, fall back to agent.engine
-      const resolvedEngine = codexAgent?.engine ?? 'codex';
-      expect(resolvedEngine).toBe('codex');
+      const resolvedEngine = geminiAgent?.engine ?? 'gemini';
+      expect(resolvedEngine).toBe('gemini');
     });
   });
 

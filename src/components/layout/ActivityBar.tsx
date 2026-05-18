@@ -146,7 +146,6 @@ const THEMES: Array<{ id: string; label: string }> = [
 
 /** 사용 가능한 AI 엔진 목록 */
 const ENGINES = [
-  { id: 'codex', label: 'Codex CLI', icon: 'C' },
   { id: 'gemini', label: 'Gemini CLI', icon: 'G' },
   { id: 'opencode', label: 'OpenCode CLI', icon: 'O' },
   { id: 'claudecode', label: 'ClaudeCode CLI', icon: 'CC' },

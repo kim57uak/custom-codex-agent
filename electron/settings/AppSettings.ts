@@ -2,7 +2,7 @@
  * AppSettings — 애플리케이션 전역 설정 싱글톤.
  *
  * @what
- * - 엔진별(codex, gemini, opencode, claudecode) 홈 디렉토리, 실행 제한, CLI 경로,
+ * - 엔진별(gemini, opencode, claudecode) 홈 디렉토리, 실행 제한, CLI 경로,
  *   작업 공간, 백업 경로 등 모든 전역 설정을 보유합니다.
  * - 환경 변수(CODEX_AGENT_*)로 설정을 오버라이드할 수 있습니다.
  *
@@ -19,15 +19,12 @@
  */
 import path from 'path';
 import os from 'os';
-import fs from 'fs';
 
 
 /** 지원하는 AI 엔진 타입 */
-export type EngineType = 'codex' | 'gemini' | 'opencode' | 'claudecode';
+export type EngineType = 'gemini' | 'opencode' | 'claudecode';
 
 export class AppSettings {
-  /** Codex 엔진 홈 디렉토리 (기본: ~/.codex) */
-  readonly codexHome: string;
   /** Gemini 엔진 홈 디렉토리 (기본: ~/.gemini/antigravity) */
   readonly geminiHome: string;
   /** OpenCode 엔진 홈 디렉토리 (기본: ~/.opencode) */
@@ -50,8 +47,6 @@ export class AppSettings {
   readonly runPromptMaxLength: number;
   /** 백업 아카이브 이름 접미사 */
   readonly backupArchiveNameSuffix: string;
-  /** codex CLI 실행 파일명 */
-  readonly codexCliExecutable: string;
   /** gemini CLI 실행 파일명 */
   readonly geminiCliExecutable: string;
   /** opencode CLI 실행 파일명 */
@@ -72,7 +67,7 @@ export class AppSettings {
   get defaultEngine(): EngineType {
     if (this._defaultEngineOverride) return this._defaultEngineOverride;
     const env = process.env.CODEX_AGENT_DEFAULT_ENGINE;
-    const valid: EngineType[] = ['codex', 'gemini', 'opencode', 'claudecode'];
+    const valid: EngineType[] = ['gemini', 'opencode', 'claudecode'];
     return valid.includes(env as EngineType) ? (env as EngineType) : 'gemini';
   }
 
@@ -114,14 +109,12 @@ export class AppSettings {
   readonly directoryListLimit = 500;
 
   constructor() {
-    this.codexHome = this._envPath('CODEX_AGENT_CODEX_HOME') || path.join(os.homedir(), '.codex');
     this.geminiHome = this._envPath('CODEX_AGENT_GEMINI_HOME') || path.join(os.homedir(), '.gemini', 'antigravity');
     this.opencodeHome = this._envPath('CODEX_AGENT_OPENCODE_HOME') || path.join(os.homedir(), '.opencode');
     this.claudecodeHome = this._envPath('CODEX_AGENT_CLAUDE_HOME') || path.join(os.homedir(), '.claude');
     this.runMaxConcurrency = this._envInt('CODEX_AGENT_RUN_MAX_CONCURRENCY', 2, 1, 16);
     this.runTimeoutSeconds = this._envInt('CODEX_AGENT_RUN_TIMEOUT_SECONDS', 1800, 30, 86400);
     this.runPromptMaxLength = this._envInt('CODEX_AGENT_RUN_PROMPT_MAX_LENGTH', 12000, 100, 100000);
-    this.codexCliExecutable = process.env.CODEX_AGENT_CODEX_CLI || 'codex';
     this.geminiCliExecutable = process.env.CODEX_AGENT_GEMINI_CLI || 'gemini';
     this.opencodeCliExecutable = process.env.CODEX_AGENT_OPENCODE_CLI || 'opencode';
     this.claudecodeCliExecutable = process.env.CODEX_AGENT_CLAUDE_CLI || 'claude';
@@ -129,13 +122,9 @@ export class AppSettings {
     this.workspaceRoot = this._envPath('CODEX_AGENT_WORKSPACE_ROOT') || path.resolve('.');
     this.workflowRecommendationMaxAgents = this._envInt('CODEX_AGENT_WORKFLOW_RECOMMENDATION_MAX_AGENTS', 6, 1, 12);
     this.backupArchiveNameSuffix = process.env.CODEX_AGENT_BACKUP_ARCHIVE_SUFFIX || '-skills-agents-backup-';
-    this.backupsRoot = this._envPath('CODEX_AGENT_BACKUPS_ROOT') || path.join(this.codexHome, 'backups');
+    this.backupsRoot = this._envPath('CODEX_AGENT_BACKUPS_ROOT') || path.join(this.geminiHome, 'backups');
   }
 
-  /** codex 엔진의 skills 디렉토리 경로 */
-  get skillsRoot(): string { return path.join(this.codexHome, 'skills'); }
-  /** codex 엔진의 agents 디렉토리 경로 */
-  get agentsRoot(): string { return path.join(this.codexHome, 'agents'); }
   /** gemini 엔진의 skills 디렉토리 경로 */
   get geminiSkillsRoot(): string { return path.join(this.geminiHome, 'skills'); }
   /** gemini 엔진의 agents 디렉토리 경로 */
@@ -148,11 +137,8 @@ export class AppSettings {
   get claudecodeSkillsRoot(): string { return path.join(this.claudecodeHome, 'skills'); }
   /** claudecode 엔진의 agents 디렉토리 경로 */
   get claudecodeAgentsRoot(): string { return path.join(this.claudecodeHome, 'agents'); }
-  /** codex config.toml 파일 경로 */
-  get configTomlPath(): string { return path.join(this.codexHome, 'config.toml'); }
-  /** codex 히스토리 파일 경로 */
-  get historyFilePath(): string { return path.join(this.codexHome, this.historyFileName); }
-
+  /** 설정 파일(config.toml) 경로 (gemini 엔진 기준) */
+  get configTomlPath(): string { return path.join(this.geminiHome, 'config.toml'); }
   /**
    * 지정된 엔진의 홈 디렉토리를 반환합니다.
    * @param engine - 엔진 이름 (기본값: defaultEngine)
@@ -164,7 +150,7 @@ export class AppSettings {
       case 'gemini': return this.geminiHome;
       case 'opencode': return this.opencodeHome;
       case 'claudecode': return this.claudecodeHome;
-      default: return this.codexHome;
+      default: return this.geminiHome;
     }
   }
 
@@ -179,7 +165,7 @@ export class AppSettings {
       case 'gemini': return this.geminiSkillsRoot;
       case 'opencode': return this.opencodeSkillsRoot;
       case 'claudecode': return this.claudecodeSkillsRoot;
-      default: return this.skillsRoot;
+      default: return this.geminiSkillsRoot;
     }
   }
 
@@ -194,7 +180,7 @@ export class AppSettings {
       case 'gemini': return this.geminiAgentsRoot;
       case 'opencode': return this.opencodeAgentsRoot;
       case 'claudecode': return this.claudecodeAgentsRoot;
-      default: return this.agentsRoot;
+      default: return this.geminiAgentsRoot;
     }
   }
 
@@ -209,7 +195,7 @@ export class AppSettings {
       case 'gemini': return path.join(this.geminiHome, this.historyFileName);
       case 'opencode': return path.join(this.opencodeHome, this.historyFileName);
       case 'claudecode': return path.join(this.claudecodeHome, this.historyFileName);
-      default: return path.join(this.codexHome, this.historyFileName);
+      default: return path.join(this.geminiHome, this.historyFileName);
     }
   }
 
@@ -224,7 +210,7 @@ export class AppSettings {
       case 'gemini': return path.join(this.geminiHome, this.stateDbName);
       case 'opencode': return path.join(this.opencodeHome, this.stateDbName);
       case 'claudecode': return path.join(this.claudecodeHome, this.stateDbName);
-      default: return path.join(this.codexHome, this.stateDbName);
+      default: return path.join(this.geminiHome, this.stateDbName);
     }
   }
 
@@ -239,7 +225,7 @@ export class AppSettings {
       case 'gemini': return path.join(this.geminiHome, this.logDbName);
       case 'opencode': return path.join(this.opencodeHome, this.logDbName);
       case 'claudecode': return path.join(this.claudecodeHome, this.logDbName);
-      default: return path.join(this.codexHome, this.logDbName);
+      default: return path.join(this.geminiHome, this.logDbName);
     }
   }
 

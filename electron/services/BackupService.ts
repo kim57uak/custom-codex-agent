@@ -175,19 +175,6 @@ export class BackupService {
       } catch {
         throw new Error('아카이브 복원에 실패했습니다.');
       }
-    } else {
-      const backupContentPath = archivePath;
-      if (fs.existsSync(backupContentPath)) {
-        const entries = fs.readdirSync(backupContentPath);
-        for (const entry of entries) {
-          const src = path.join(backupContentPath, entry);
-          const dst = path.join(os.homedir(), '.codex', entry);
-          if (fs.existsSync(src)) {
-            fs.cpSync(src, dst, { recursive: true, force: true });
-            restoredRoots.push(dst);
-          }
-        }
-      }
     }
 
     return { restoredRoots, restoredCount: restoredRoots.length };

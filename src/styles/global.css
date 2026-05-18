@@ -1510,10 +1510,6 @@ body {
   color: var(--text-secondary);
 }
 
-.org-tree__status--codex {
-  color: var(--accent-primary);
-}
-
 .org-tree__status--gemini {
   color: var(--accent-success);
 }

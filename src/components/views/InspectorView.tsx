@@ -105,7 +105,7 @@ const InspectorView: React.FC = () => {
   useEffect(() => { loadData(); }, [selectedEngine]);
   useEffect(() => { if (response) setSelectedFilePath(null); }, [response]);
 
-  const effectiveAgent = selectedAgent ?? (response ? { id: response.agentName, name: response.agentName, engine: 'codex' as const } : null);
+  const effectiveAgent = selectedAgent ?? (response ? { id: response.agentName, name: response.agentName, engine: 'gemini' as const } : null);
   const effectiveMeta = effectiveAgent ? getEngineMeta(effectiveAgent.engine) : undefined;
 
   /** 에이전트 목록 및 스킬 인벤토리 로드 */

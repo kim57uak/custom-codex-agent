@@ -279,10 +279,10 @@ describe('IPC Handlers', () => {
       // Act
       if (cliValidateHandler) {
         const handler = cliValidateHandler[1];
-        await handler({}, '/usr/local/bin/codex');
+        await handler({}, '/usr/local/bin/gemini');
 
         // Assert
-        expect(mockConfigReader.validateCliPath).toHaveBeenCalledWith('/usr/local/bin/codex');
+        expect(mockConfigReader.validateCliPath).toHaveBeenCalledWith('/usr/local/bin/gemini');
       }
     });
 

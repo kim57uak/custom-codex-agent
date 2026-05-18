@@ -46,8 +46,8 @@ describe('ConfigReader Integration', () => {
     const agent = {
       id: 'test-agent-1',
       name: 'Test Agent',
-      engine: 'codex' as const,
-      cliPath: '/usr/local/bin/codex',
+      engine: 'gemini' as const,
+      cliPath: '/usr/local/bin/gemini',
       model: 'gpt-4o',
     };
 
@@ -62,7 +62,7 @@ describe('ConfigReader Integration', () => {
     reader.saveAgent({
       id: 'test-agent-1',
       name: 'Updated Agent',
-      engine: 'codex' as const,
+      engine: 'gemini' as const,
     });
     const agents = reader.listAgents();
     const updated = agents.find(a => a.id === 'test-agent-1');
@@ -110,7 +110,7 @@ describe('ConfigReader Integration', () => {
   });
 
   it('should return stats', () => {
-    reader.saveAgent({ id: 'stats-test', name: 'Stats', engine: 'codex' as const });
+    reader.saveAgent({ id: 'stats-test', name: 'Stats', engine: 'gemini' as const });
     const stats = reader.getStats();
     expect(stats.totalAgents).toBeGreaterThanOrEqual(1);
   });

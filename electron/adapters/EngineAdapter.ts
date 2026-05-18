@@ -2,7 +2,7 @@
  * EngineAdapter - CLI 엔진 어댑터 인터페이스
  *
  * 설계 목표:
- * - CLI 엔진 (Codex, Gemini 등)의 공통 인터페이스 정의
+ * - CLI 엔진 (Gemini 등)의 공통 인터페이스 정의
  * - 각 엔진 어댑터는 이 인터페이스를 구현
  * - child_process.spawn은 Main Process에서만 수행 (Worker Thread 금지)
  *
@@ -19,7 +19,6 @@
  */
 
 import type { EngineType } from '../../types/ipc-contract';
-import { CodexEngine } from './CodexEngine';
 import { GeminiEngine } from './GeminiEngine';
 import { OpenCodeEngine } from './OpenCodeEngine';
 import { ClaudeCodeEngine } from './ClaudeCodeEngine';
@@ -38,10 +37,10 @@ export interface BuildCliArgsOptions {
  * 모든 엔진 어댑터가 구현해야 하는 메서드 정의
  */
 export interface EngineAdapter {
-  /** 엔진 타입 (codex/gemini/opencode/claudecode) */
+  /** 엔진 타입 (gemini/opencode/claudecode) */
   readonly engine: EngineType;
 
-  /** CLI 바이너리 파일명 (codex/gemini/opencode/claude) */
+  /** CLI 바이너리 파일명 (gemini/opencode/claude) */
   readonly binaryName: string;
 
   /**
@@ -88,7 +87,6 @@ export interface EngineAdapter {
  * - value: 해당 엔진의 EngineAdapter 생성자
  */
 const ENGINE_ADAPTERS: Record<EngineType, new () => EngineAdapter> = {
-  codex: CodexEngine,
   gemini: GeminiEngine,
   opencode: OpenCodeEngine,
   claudecode: ClaudeCodeEngine,

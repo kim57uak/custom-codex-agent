@@ -130,7 +130,7 @@ export class WorkflowEngine {
    * 우선 LLM 추천을 시도하고, 실패 시 키워드 스코어링 기반 폴백 추천을 반환합니다.
    * @param goalPrompt - 사용자 목표 문장
    * @param maxAgents - 최대 추천 에이전트 수 (기본값: SETTINGS.workflowRecommendationMaxAgents)
-   * @param engine - 사용할 엔진 (gemini, codex, opencode, claudecode)
+   * @param engine - 사용할 엔진 (gemini, opencode, claudecode)
    * @returns 추천 에이전트 배열
    */
   async recommendAgents(goalPrompt: string, maxAgents?: number, engine?: string): Promise<WorkflowRecommendedAgent[]> {

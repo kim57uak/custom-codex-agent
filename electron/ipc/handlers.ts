@@ -120,7 +120,7 @@ export function registerIpcHandlers(deps: HandlerDeps): void {
     const agentMap = new Map(agents.map(a => [a.id, a]));
     const enriched = runs.map(run => {
       const agent = agentMap.get(run.agentId as string);
-      return { ...run, engine: agent?.engine ?? run.engine ?? 'codex' };
+      return { ...run, engine: agent?.engine ?? run.engine ?? 'gemini' };
     });
     return { runs: enriched };
   });
@@ -576,9 +576,9 @@ export function registerIpcHandlers(deps: HandlerDeps): void {
   });
 
   ipcMain.handle('settings:set-default-engine', async (_event, engine: unknown) => {
-    const validEngines = ['codex', 'gemini', 'opencode', 'claudecode'] as const;
+    const validEngines = ['gemini', 'opencode', 'claudecode'] as const;
     if (!engine || typeof engine !== 'string' || !validEngines.includes(engine as any)) {
-      throw new Error('Invalid engine. Must be: codex, gemini, opencode, or claudecode');
+      throw new Error('Invalid engine. Must be: gemini, opencode, or claudecode');
     }
     SETTINGS.setDefaultEngine(engine as any);
     return { engine: SETTINGS.defaultEngine };

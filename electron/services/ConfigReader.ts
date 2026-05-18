@@ -4,7 +4,7 @@
  * @what
  * - JSON/Toml 설정 파일, 에이전트 디렉토리, 스킬 디렉토리, SQLite DB, JSONL 히스토리
  *   등을 읽고 쓰는 통합 파일 시스템 접근 계층입니다.
- * - 엔진별(gemini, codex, opencode, claudecode) 루트 경로를 기준으로 데이터를 탐색합니다.
+ * - 엔진별(gemini, opencode, claudecode) 루트 경로를 기준으로 데이터를 탐색합니다.
  *
  * @design
  * - fs 직접 호출 대신 모든 파일 접근을 이 클래스로 중앙화하여 보안(허용 경로 검사)과
@@ -264,14 +264,14 @@ export class ConfigReader {
 
   /**
    * 설정된 에이전트와 디스크에서 발견된 모든 에이전트를 병합하여 반환합니다.
-   * 여러 엔진(gemini, codex, opencode, claudecode)을 순회하며 스캔합니다.
+   * 여러 엔진(gemini, opencode, claudecode)을 순회하며 스캔합니다.
    * @returns 모든 에이전트 설정 배열
    */
   listAgents(): AgentConfig[] {
     const configured = this.data.agents ?? [];
     const configuredIds = new Set(configured.map(a => a.id));
     const discovered: AgentConfig[] = [];
-    const engines = ['gemini', 'codex', 'opencode', 'claudecode'] as const;
+    const engines = ['gemini', 'opencode', 'claudecode'] as const;
     for (const engine of engines) {
       const engineSeen = new Set(configuredIds);
       const agentsDir = SETTINGS.getAgentsRoot(engine);
@@ -309,7 +309,7 @@ export class ConfigReader {
         agents.push({
           id: `skill-${entry.name}`,
           name: entry.name,
-          engine: engine as 'gemini' | 'codex' | 'opencode' | 'claudecode',
+          engine: engine as 'gemini' | 'opencode' | 'claudecode',
           description: `Auto-generated from ${engine} skill`,
           department: engine,
         });
@@ -360,7 +360,7 @@ export class ConfigReader {
         agents.push({
           id: entry.name,
           name,
-          engine: agentEngine as 'gemini' | 'codex' | 'opencode' | 'claudecode',
+          engine: agentEngine as 'gemini' | 'opencode' | 'claudecode',
           description: description || undefined,
           department: department || undefined,
         });
@@ -526,12 +526,12 @@ export class ConfigReader {
   /**
    * 엔진 이름에 해당하는 CLI 실행 파일의 절대 경로를 검색하여 반환합니다.
    * 여러 표준 경로(/opt/homebrew/bin, /usr/local/bin 등)와 PATH를 순회합니다.
-   * @param engine - 엔진 이름 (codex, gemini, opencode, claudecode)
+   * @param engine - 엔진 이름 (gemini, opencode, claudecode)
    * @returns CLI 실행 파일의 절대 경로, 없으면 null
    */
   getEnginePath(engine: string): string | null {
     const binaryMap: Record<string, string> = {
-      codex: 'codex', gemini: 'gemini', opencode: 'opencode', claudecode: 'claude',
+      gemini: 'gemini', opencode: 'opencode', claudecode: 'claude',
     };
     const binary = binaryMap[engine] ?? engine;
     const searchDirs = [

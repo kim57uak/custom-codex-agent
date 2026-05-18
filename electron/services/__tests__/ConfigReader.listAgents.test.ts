@@ -5,7 +5,7 @@
  * 테스트 방식: 유닛 테스트 (소스 코드 정적 분석)
  * 주요 검증 시나리오:
  * - 하드코딩된 경로 대신 SETTINGS.getAgentsRoot(engine) 사용 여부
- * - 4개 엔진(gemini, codex, opencode, claudecode)의 agent root 스캔 여부
+ * - 3개 엔진(gemini, opencode, claudecode)의 agent root 스캔 여부
  * - 단일 discovered.push() 호출로 모든 엔진 처리 여부
  */
 import { describe, it, expect } from 'vitest';
@@ -36,10 +36,9 @@ describe('ConfigReader.listAgents() path fix', () => {
     expect(body).toContain('SETTINGS.getAgentsRoot(engine)');
   });
 
-  it('should scan all four engine agent roots (gemini, codex, opencode, claudecode)', () => {
+  it('should scan all three engine agent roots (gemini, opencode, claudecode)', () => {
     const source = fs.readFileSync(CONFIG_READER_FILE, 'utf-8');
     expect(source).toContain("'gemini'");
-    expect(source).toContain("'codex'");
     expect(source).toContain("'opencode'");
     expect(source).toContain("'claudecode'");
 

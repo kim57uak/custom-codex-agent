@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Orchestrator Desktop - Architecture & Specs</title>
+    <style>
+        :root {
+            /* Aurora Theme Colors */
+            --bg-base: #0f111a;
+            --bg-surface: #1e2132;
+            --bg-surface-hover: #2b2e42;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent-primary: #8b5cf6; /* Purple */
+            --accent-secondary: #06b6d4; /* Cyan */
+            --accent-tertiary: #10b981; /* Emerald */
+            --border-color: #334155;
+            
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+
+        @media (max-width: 900px) {
+            .grid-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background-color: var(--bg-surface);
+            border-radius: 16px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent-primary);
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card h2::before {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+        }
+
+        .tech-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .tech-tag {
+            background-color: var(--bg-base);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: var(--accent-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .feature-list {
+            padding-left: 20px;
+            color: var(--text-muted);
+        }
+
+        .feature-list li {
+            margin-bottom: 8px;
+        }
+
+        .diagram-section {
+            background-color: var(--bg-surface);
+            border-radius: 16px;
+            padding: 40px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .diagram-title {
+            font-size: 2rem;
+            margin-bottom: 30px;
+            color: var(--text-main);
+        }
+
+        /* SVG Styles */
+        .arch-svg {
+            width: 100%;
+            max-width: 1000px;
+            height: auto;
+            overflow: visible;
+        }
+
+        .svg-box {
+            fill: var(--bg-surface-hover);
+            stroke: var(--border-color);
+            stroke-width: 2;
+            rx: 8;
+        }
+
+        .svg-box-accent {
+            fill: rgba(139, 92, 246, 0.1);
+            stroke: var(--accent-primary);
+            stroke-width: 2;
+            rx: 8;
+        }
+        
+        .svg-box-secondary {
+            fill: rgba(6, 182, 212, 0.1);
+            stroke: var(--accent-secondary);
+            stroke-width: 2;
+            rx: 8;
+        }
+
+        .svg-text-title {
+            fill: var(--text-main);
+            font-family: var(--font-family);
+            font-size: 16px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+
+        .svg-text {
+            fill: var(--text-muted);
+            font-family: var(--font-family);
+            font-size: 14px;
+            text-anchor: middle;
+        }
+
+        .svg-line {
+            stroke: var(--text-muted);
+            stroke-width: 2;
+            stroke-dasharray: 5, 5;
+            marker-end: url(#arrowhead);
+        }
+        
+        .svg-line-solid {
+            stroke: var(--accent-secondary);
+            stroke-width: 2;
+            marker-end: url(#arrowhead-solid);
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Agent Orchestrator Desktop</h1>
+        <div class="subtitle">Multi-Agent Orchestration & Visualization Desktop App</div>
+    </header>
+
+    <div class="grid-container">
+        <!-- Tech Stack Card -->
+        <div class="card">
+            <h2>기술 스택 (Tech Stack)</h2>
+            <div style="margin-bottom: 15px;">
+                <p style="color: var(--text-muted); margin-bottom: 10px;">Frontend / Renderer</p>
+                <ul class="tech-list">
+                    <li class="tech-tag">React 18</li>
+                    <li class="tech-tag">TypeScript</li>
+                    <li class="tech-tag">Vite</li>
+                    <li class="tech-tag">Zustand</li>
+                </ul>
+            </div>
+            <div>
+                <p style="color: var(--text-muted); margin-bottom: 10px;">Backend / Main Process</p>
+                <ul class="tech-list">
+                    <li class="tech-tag">Electron</li>
+                    <li class="tech-tag">Node.js</li>
+                    <li class="tech-tag">SQLite</li>
+                    <li class="tech-tag">Codex / Gemini CLI</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Implementation Specs Card -->
+        <div class="card">
+            <h2>주요 구현 기능 (Key Features)</h2>
+            <ul class="feature-list">
+                <li><strong>Multi-Agent Orchestration:</strong> 에이전트 계층구조 시각화, 실시간 상태 모니터링, 워크플로우 엔진 기반의 순차/병렬 에이전트 실행 기능.</li>
+                <li><strong>Desktop Native:</strong> 시스템 트레이 백그라운드 구동, 네이티브 알림, 자동 업데이트 (electron-updater), 오프라인 모드 지원.</li>
+                <li><strong>IDE-style Layout:</strong> Activity Bar, Sidebar, Main Area, Terminal Panel로 구성된 VS Code / Cursor 스타일의 전문적인 UI/UX 적용.</li>
+                <li><strong>Skill & Agent Inspector:</strong> Monaco Editor가 통합된 설정 파일(SKILL.md, config.json) 브라우징 및 실시간 파일 감시 기능 탑재.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Architecture Diagram Section -->
+    <div class="diagram-section">
+        <h2 class="diagram-title">System Architecture Diagram</h2>
+        
+        <svg class="arch-svg" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                </marker>
+                <marker id="arrowhead-solid" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#06b6d4" />
+                </marker>
+            </defs>
+
+            <!-- Renderer Process Context -->
+            <rect x="50" y="50" width="900" height="200" class="svg-box-accent" />
+            <text x="500" y="80" class="svg-text-title" fill="#8b5cf6">Renderer Process (React + Vite + Zustand)</text>
+            
+            <!-- UI Components -->
+            <rect x="100" y="110" width="160" height="100" class="svg-box" />
+            <text x="180" y="155" class="svg-text-title">Activity Bar</text>
+            <text x="180" y="180" class="svg-text">Global Nav</text>
+
+            <rect x="300" y="110" width="160" height="100" class="svg-box" />
+            <text x="380" y="155" class="svg-text-title">Sidebar</text>
+            <text x="380" y="180" class="svg-text">Agent Tree</text>
+
+            <rect x="500" y="110" width="200" height="100" class="svg-box" />
+            <text x="600" y="155" class="svg-text-title">Main Area</text>
+            <text x="600" y="180" class="svg-text">Inspector & Visualizer</text>
+
+            <rect x="740" y="110" width="160" height="100" class="svg-box" />
+            <text x="820" y="155" class="svg-text-title">Panel / Console</text>
+            <text x="820" y="180" class="svg-text">xterm.js</text>
+
+            <!-- IPC Bridge -->
+            <rect x="350" y="280" width="300" height="40" rx="20" class="svg-box" fill="#2b2e42" />
+            <text x="500" y="305" class="svg-text-title" fill="#e2e8f0">IPC Bridge (contextBridge)</text>
+
+            <line x1="500" y1="250" x2="500" y2="280" class="svg-line" />
+            <line x1="500" y1="320" x2="500" y2="350" class="svg-line" />
+
+            <!-- Main Process Context -->
+            <rect x="50" y="350" width="900" height="200" class="svg-box-secondary" />
+            <text x="500" y="380" class="svg-text-title" fill="#06b6d4">Main Process (Node.js + Electron)</text>
+
+            <rect x="100" y="410" width="240" height="100" class="svg-box" />
+            <text x="220" y="455" class="svg-text-title">Agent Orchestrator</text>
+            <text x="220" y="480" class="svg-text">& Workflow Engine</text>
+
+            <rect x="380" y="410" width="240" height="100" class="svg-box" />
+            <text x="500" y="450" class="svg-text-title">Core Services</text>
+            <text x="500" y="475" class="svg-text">ConfigReader / EventBroker</text>
+            <text x="500" y="495" class="svg-text">SQLite State Store</text>
+
+            <rect x="660" y="410" width="240" height="100" class="svg-box" />
+            <text x="780" y="455" class="svg-text-title">CLI Adapters</text>
+            <text x="780" y="480" class="svg-text">Codex / Gemini via spawn</text>
+
+            <!-- Connections inside Main Process -->
+            <line x1="340" y1="460" x2="380" y2="460" class="svg-line-solid" />
+            <line x1="620" y1="460" x2="660" y2="460" class="svg-line-solid" />
+        </svg>
+    </div>
+</div>
+
+</body>
+</html>

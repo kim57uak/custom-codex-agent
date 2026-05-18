@@ -46,7 +46,6 @@ export function formatBytes(bytes: number): string {
  * - codex / gemini / opencode / claudecode / all
  */
 export const ENGINE_META: Record<string, { label: string; color: string; badge: string }> = {
-  codex: { label: 'Codex CLI', color: 'var(--accent-primary)', badge: 'C' },
   gemini: { label: 'Gemini CLI', color: 'var(--status-success)', badge: 'G' },
   opencode: { label: 'OpenCode CLI', color: 'var(--status-info)', badge: 'O' },
   claudecode: { label: 'ClaudeCode CLI', color: 'var(--status-warning)', badge: 'CC' },

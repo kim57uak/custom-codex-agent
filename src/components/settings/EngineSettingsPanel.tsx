@@ -25,13 +25,6 @@ interface EngineSettings {
 
 /** 엔진별 기본 설정 */
 const DEFAULT_SETTINGS: Record<string, EngineSettings> = {
-  codex: {
-    cliPath: '/usr/local/bin/codex',
-    model: 'gpt-4o',
-    timeout: 30000,
-    proxy: '',
-    extraEnv: {},
-  },
   gemini: {
     cliPath: '/usr/local/bin/gemini',
     model: 'gemini-2.0-flash',
@@ -57,11 +50,6 @@ const DEFAULT_SETTINGS: Record<string, EngineSettings> = {
 
 /** 엔진별 설명 */
 const ENGINE_DESCRIPTIONS: Record<string, { name: string; description: string; icon: string }> = {
-  codex: {
-    name: 'OpenAI Codex',
-    description: 'OpenAI Codex CLI - GPT-4o 기반 코딩 어시스턴트',
-    icon: 'device-terminal',
-  },
   gemini: {
     name: 'Google Gemini',
     description: 'Google Gemini CLI - Gemini 2.0 Flash 기반 어시스턴트',
@@ -80,7 +68,7 @@ const ENGINE_DESCRIPTIONS: Record<string, { name: string; description: string; i
 };
 
 /** 엔진 타입 */
-type EngineType = 'codex' | 'gemini' | 'opencode' | 'claudecode';
+type EngineType = 'gemini' | 'opencode' | 'claudecode';
 
 interface EngineSettingsPanelProps {
   initialEngine?: EngineType;
@@ -96,7 +84,7 @@ interface EngineSettingsPanelProps {
  * @param props - 컴포넌트 Props
  * @returns 엔진 설정 패널 JSX 요소
  */
-export const EngineSettingsPanel: React.FC<EngineSettingsPanelProps> = ({ initialEngine = 'codex' }) => {
+export const EngineSettingsPanel: React.FC<EngineSettingsPanelProps> = ({ initialEngine = 'gemini' }) => {
   const [selectedEngine, setSelectedEngine] = useState<EngineType>(initialEngine);
   const [settings, setSettings] = useState<Record<string, EngineSettings>>({ ...DEFAULT_SETTINGS });
   const [validationStatus, setValidationStatus] = useState<Record<string, { valid: boolean; version?: string; error?: string } | null>>({});
@@ -189,7 +177,7 @@ setSettings(prev => {
             type="text"
             value={currentSettings.cliPath}
             onChange={(e) => updateSetting(selectedEngine, 'cliPath', e.target.value)}
-            placeholder="/usr/local/bin/codex"
+            placeholder="/usr/local/bin/gemini"
           />
           <button
             className="engine-settings-panel__validate"

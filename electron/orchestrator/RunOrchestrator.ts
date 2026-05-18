@@ -2,7 +2,7 @@
  * RunOrchestrator — AI 에이전트 실행 오케스트레이터.
  *
  * @what
- * - AI 에이전트 CLI(gemini, codex, opencode, claudecode)를 자식 프로세스로 실행하고 생명주기를 관리합니다.
+ * - AI 에이전트 CLI(gemini, opencode, claudecode)를 자식 프로세스로 실행하고 생명주기를 관리합니다.
  * - 동시 실행 제한(semaphore), 실행 취소, HITL(Human-In-The-Loop) 감지 및 응답, 실행 타임아웃을 처리합니다.
  *
  * @design
@@ -306,7 +306,6 @@ export class RunOrchestrator {
       sanitizedEnv.PATH = [...extraPaths, currentPath].filter(Boolean).join(':');
 
       if (SETTINGS.geminiHome) sanitizedEnv.GEMINI_HOME = SETTINGS.geminiHome;
-      if (SETTINGS.codexHome) sanitizedEnv.CODEX_HOME = SETTINGS.codexHome;
 
       for (const key of ['GOOGLE_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY']) {
         if (process.env[key]) sanitizedEnv[key] = process.env[key];
@@ -331,14 +330,7 @@ export class RunOrchestrator {
 
       this.pidRegistry.set(proc.pid!, { pid: proc.pid!, runId, engine: engine as EngineType, proc });
       this.activeProcesses.set(runId, proc);
-      // pipe prompt via stdin when engine uses '-' convention (codex exec -)
-      const lastArg = args[args.length - 1];
-      if (engine === 'codex' && lastArg === '-') {
-        proc.stdin?.write(effectivePrompt);
-        proc.stdin?.end();
-      } else {
-        proc.stdin?.end();
-      }
+      proc.stdin?.end();
       // opencode/gemini/claudecode: prompt in args, stdin reserved for HITL responses
       // cancel during buffering (race) → kill immediately
       if (this.cancelledRunIds.has(runId)) {
@@ -847,7 +839,7 @@ export class RunOrchestrator {
    * @returns AI 응답 문자열
    */
   async chat(message: string, systemPrompt?: string, engine?: string): Promise<string> {
-    const valid: EngineType[] = ['codex', 'gemini', 'opencode', 'claudecode'];
+    const valid: EngineType[] = ['gemini', 'opencode', 'claudecode'];
     const targetEngine = valid.includes(engine as EngineType) ? (engine as EngineType) : SETTINGS.defaultEngine;
     const fullPrompt = systemPrompt ? `${systemPrompt}\n\n${message}` : message;
 
@@ -867,7 +859,6 @@ export class RunOrchestrator {
 
     const cliArgs: Record<string, string[]> = {
       gemini: ['-p', fullPrompt],
-      codex: ['exec', '-'],
       claudecode: ['-p', fullPrompt],
     };
 
