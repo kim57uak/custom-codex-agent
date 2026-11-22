@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="corp-token" content="<!--CORP_TOKEN-->">
+<title>Genius Corp — 3D 사무실</title>
+<link rel="stylesheet" href="/static/css/panels.css">
+<link rel="stylesheet" href="/legacy-static/css/office3d.css">
+</head>
+<body>
+<!-- 3D 사무실 단일 셸: office-view가 기본 착지면 -->
+<section id="office-view" class="view active-view office-view" aria-label="3D 사무실">
+  <div id="office-canvas-wrap"><canvas id="office-canvas"></canvas></div>
+  <div class="office-hud-top">
+    <span class="brand">GENIUS CORP</span><span class="sep">|</span>
+    <span id="hud-agents">-</span><span class="sep">·</span><span>직원</span>
+    <span class="sep">|</span><span id="hud-events">대기중</span>
+    <span class="grow"></span>
+    <button id="btn-jobs" class="hud-btn" type="button">업무판</button>
+    <button id="btn-inbox" class="hud-btn" type="button">인박스</button>
+    <button id="btn-budget" class="hud-btn" type="button">예산</button>
+    <span id="hud-clock">--:--:--</span>
+  </div>
+  <aside class="office-roster" aria-label="직원 명부">
+    <h2>직원 명부</h2>
+    <input id="roster-filter" maxlength="40" placeholder="직원 검색" aria-label="직원 검색">
+    <ul id="office-roster-list"></ul>
+  </aside>
+  <div class="office-legend" aria-hidden="true">
+    <span><i class="lg-run"></i>실행중</span><span><i class="lg-queue"></i>대기</span>
+    <span><i class="lg-fail"></i>실패</span><span><i class="lg-idle"></i>유휴</span>
+    <span>· 드래그=궤도, 클릭=직원 선택</span>
+  </div>
+  <div id="office-agent-card" class="office-card hidden" aria-live="polite">
+    <h3 id="oc-name"></h3>
+    <div class="oc-row"><span>상태</span><span id="oc-status"></span></div>
+    <div class="oc-id" id="oc-id"></div>
+  </div>
+  <div id="office-fallback" class="office-fallback hidden"></div>
+  <!-- 하단 도크: 칸반·인박스·승인 패널 -->
+  <div id="dock" class="dock hidden" aria-live="polite">
+    <div class="dock-tabs">
+      <button data-panel="jobs" class="dock-tab active" type="button">업무판</button>
+      <button data-panel="inbox" class="dock-tab" type="button">인박스</button>
+      <button data-panel="run" class="dock-tab" type="button">실행창</button>
+      <button data-panel="budget" class="dock-tab" type="button">예산</button>
+      <button id="dock-close" type="button" title="닫기">×</button>
+    </div>
+    <div id="panel-jobs" class="dock-panel">
+      <div class="token-bar">
+        <input id="token-input" maxlength="64" placeholder="쓰기 토큰 (data/corp/.write_token)" autocomplete="off">
+        <button id="token-save" type="button">저장</button>
+        <span class="token-hint">한 번 저장하면 브라우저가 기억 (비우고 저장이 곧 잊기)</span>
+      </div>
+      <div id="dock-status" class="dock-status hidden" aria-live="polite"></div>
+      <form id="job-form">
+        <input id="job-title" maxlength="200" placeholder="업무 제목" required>
+        <input id="job-body" maxlength="500" placeholder="지시 (선택)">
+        <select id="job-duty">
+          <option value="coder">코더</option><option value="researcher">조사</option>
+          <option value="checker">검증</option><option value="writer">문서</option>
+        </select>
+        <input id="job-skill" maxlength="80" placeholder="직원 (비우면 자동배정)" list="skill-list">
+        <datalist id="skill-list"></datalist>
+        <input id="job-model" maxlength="80" placeholder="모델 (비우면 기본)" list="model-list">
+        <datalist id="model-list"></datalist>
+        <button type="submit">접수</button>
+      </form>
+      <div id="job-columns" class="kanban"></div>
+    </div>
+    <div id="panel-inbox" class="dock-panel hidden">
+      <p class="dock-hint">검토 대기(review) 업무 — 승인해야 완료가 됩니다.</p>
+      <div id="inbox-list"></div>
+    </div>
+    <div id="panel-run" class="dock-panel hidden">
+      <p class="dock-hint">실행 실시간 보기 — 칸반 카드의 <b>보기</b>를 누르면 열린다. 2초마다 갱신.</p>
+      <div id="run-view"><p class="dock-hint">선택된 실행이 없다.</p></div>
+    </div>
+    <div id="panel-budget" class="dock-panel hidden">
+      <div id="budget-view"></div>
+    </div>
+  </div>
+  <!-- 실행 결과 전용 뷰어 모달 -->
+  <div id="result-modal" class="modal-backdrop hidden" aria-modal="true" role="dialog" aria-label="실행 결과 상세">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <span id="rm-status-badge" class="badge">완료</span>
+          <h2 id="rm-title">실행 결과 상세</h2>
+        </div>
+        <div class="modal-meta" id="rm-meta"></div>
+        <button id="rm-close" class="modal-close-btn" type="button" title="닫기 (ESC)">×</button>
+      </div>
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="output" type="button">📄 결과 내용 (최종 출력)</button>
+        <button class="modal-tab" data-tab="files" type="button">📁 산출물 파일 (<span id="rm-file-count">0</span>)</button>
+        <button class="modal-tab" data-tab="events" type="button">⏱️ 실행 로그 (이벤트)</button>
+      </div>
+      <div class="modal-body">
+        <div id="tab-output" class="tab-pane active">
+          <div class="pane-toolbar">
+            <span class="pane-hint">에이전트가 실행 완료 후 작성한 응답 및 산출 내용</span>
+            <button id="btn-copy-output" class="btn-sm" type="button">결과 복사</button>
+          </div>
+          <pre id="rm-output" class="result-pre">(출력 대기중...)</pre>
+        </div>
+        <div id="tab-files" class="tab-pane hidden">
+          <div class="pane-toolbar">
+            <span class="pane-hint">실행 결과 디렉터리에 저장된 산출물 파일 목록</span>
+          </div>
+          <div id="rm-file-list" class="file-grid">
+            <p class="empty-hint">생성된 파일이 없습니다.</p>
+          </div>
+        </div>
+        <div id="tab-events" class="tab-pane hidden">
+          <div class="pane-toolbar">
+            <span class="pane-hint">실행 이벤트 타임라인 로그</span>
+          </div>
+          <pre id="rm-events" class="events-pre">(로그 없음)</pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div id="rm-actions" class="modal-actions"></div>
+        <button id="rm-close-bottom" class="btn-secondary" type="button">닫기</button>
+      </div>
+    </div>
+  </div>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/"}}
+  </script>
+  <script type="module" src="/legacy-static/js/office3d.js"></script>
+  <script type="module" src="/static/js/panels.js"></script>
+</section>
+</body>
+</html>

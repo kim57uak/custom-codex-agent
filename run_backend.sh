@@ -20,5 +20,7 @@ fi
 : "${CUSTOM_CODEX_AGENT_CODEX_CLI_SUBCOMMAND:=exec,--sandbox,danger-full-access}"
 export CUSTOM_CODEX_AGENT_CODEX_CLI_SUBCOMMAND
 
+TARGET_APP="${1:-corp.main:app}"
+
 cd "$BACKEND_DIR"
-"$PYTHON_BIN" -m uvicorn app.main:app --reload --host 127.0.0.1 --port "$BACKEND_PORT"
+"$PYTHON_BIN" -m uvicorn "$TARGET_APP" --reload --host 127.0.0.1 --port "$BACKEND_PORT"

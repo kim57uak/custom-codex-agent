@@ -17,7 +17,8 @@
     <aside class="rail-nav">
       <div class="brand-logo">C</div>
       <nav class="rail-tabs" aria-label="Primary Navigation">
-        <button id="tab-org" class="rail-tab active" type="button"><span>◎</span></button>
+        <button id="tab-office" class="rail-tab active" type="button" title="3D 사무실"><span>⌂</span></button>
+<button id="tab-org" class="rail-tab" type="button"><span>◎</span></button>
         <button id="tab-dashboard" class="rail-tab" type="button"><span>▦</span></button>
         <button id="tab-console" class="rail-tab" type="button"><span>></span></button>
         <button id="tab-workflow" class="rail-tab" type="button"><span>◇</span></button>
@@ -74,7 +75,37 @@
 
       <section id="error-banner" class="error-banner hidden"></section>
 
-      <section id="org-view" class="view active-view">
+      <section id="office-view" class="view active-view office-view" aria-label="3D 사무실">
+  <div id="office-canvas-wrap"><canvas id="office-canvas"></canvas></div>
+  <div class="office-hud-top">
+    <span class="brand">GENIUS CORP</span><span class="sep">|</span>
+    <span id="hud-agents">-</span><span class="sep">·</span>
+    <span>직원</span><span class="sep">|</span>
+    <span id="hud-events">대기중</span>
+    <span class="grow"></span>
+    <span id="hud-clock">--:--:--</span>
+  </div>
+  <aside class="office-roster" aria-label="직원 명부">
+    <h2>직원 명부</h2>
+    <ul id="office-roster-list"></ul>
+  </aside>
+  <div class="office-legend" aria-hidden="true">
+    <span><i class="lg-run"></i>실행중</span><span><i class="lg-queue"></i>대기</span>
+    <span><i class="lg-fail"></i>실패</span><span><i class="lg-idle"></i>유휴</span>
+    <span>· 드래그=궤도, 클릭=직원 선택</span>
+  </div>
+  <div id="office-agent-card" class="office-card hidden" aria-live="polite">
+    <h3 id="oc-name"></h3>
+    <div class="oc-row"><span>상태</span><span id="oc-status"></span></div>
+    <div class="oc-id" id="oc-id"></div>
+  </div>
+  <div id="office-fallback" class="office-fallback hidden"></div>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+  </script>
+  <script type="module" src="/static/js/office3d.js"></script>
+</section>
+<section id="org-view" class="view">
         <div class="view-canvas org-canvas-shell">
           <div class="org-hud-shell">
             <div class="org-hud-head">

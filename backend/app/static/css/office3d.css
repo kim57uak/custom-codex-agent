@@ -1,0 +1,104 @@
+/* office3d.css — 3D 사무실 뷰 (Genius Corp) */
+
+#office-view.office-view {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: radial-gradient(1200px 700px at 70% -10%, #16203a 0%, #0d1322 60%);
+  overflow: hidden;
+}
+#office-view.hidden { display: none; }
+
+#office-canvas-wrap { position: absolute; inset: 0; }
+#office-canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+#office-canvas:active { cursor: grabbing; }
+
+/* ---- 상단 HUD ---- */
+.office-hud-top {
+  position: absolute; top: 12px; left: 16px; right: 16px;
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 16px; border-radius: 14px;
+  background: rgba(13, 19, 34, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(8px);
+  color: #e2e8f0; font-size: 13px; pointer-events: none;
+}
+.office-hud-top .brand { font-weight: 800; letter-spacing: 0.04em; color: #93c5fd; }
+.office-hud-top .sep { opacity: 0.35; }
+.office-hud-top .grow { flex: 1; }
+#hud-events { pointer-events: auto; transition: color 0.2s ease; }
+#hud-events:hover { text-decoration: underline; }
+#hud-clock { font-variant-numeric: tabular-nums; color: #cbd5e1; }
+
+/* ---- 우측 직원 명부 ---- */
+.office-roster {
+  position: absolute; top: 64px; right: 16px; bottom: 16px;
+  width: 232px; display: flex; flex-direction: column;
+  padding: 12px; border-radius: 14px;
+  background: rgba(13, 19, 34, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(8px);
+  color: #e2e8f0;
+}
+.office-roster h2 {
+  margin: 0 0 8px; font-size: 12px; letter-spacing: 0.12em;
+  color: #94a3b8; text-transform: uppercase;
+}
+#office-roster-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+.roster-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 9px; margin-bottom: 4px; border-radius: 9px;
+  cursor: pointer; font-size: 13px;
+  border: 1px solid transparent;
+}
+.roster-item:hover { background: rgba(59, 130, 246, 0.12); }
+.roster-item.selected { background: rgba(59, 130, 246, 0.2); border-color: rgba(59, 130, 246, 0.5); }
+.roster-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.roster-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster-status { font-size: 11px; color: #94a3b8; }
+
+/* ---- 범례 ---- */
+.office-legend {
+  position: absolute; left: 16px; bottom: 16px;
+  display: flex; gap: 12px; align-items: center;
+  padding: 8px 12px; border-radius: 12px;
+  background: rgba(13, 19, 34, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #cbd5e1; font-size: 12px; pointer-events: none;
+}
+.office-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; }
+.lg-run { background: #22c55e; } .lg-queue { background: #38bdf8; }
+.lg-fail { background: #ef4444; } .lg-idle { background: #64748b; }
+
+/* ---- 선택 카드 ---- */
+.office-card {
+  position: absolute; left: 16px; top: 64px; width: 240px;
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(13, 19, 34, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-left-width: 4px;
+  color: #e2e8f0; font-size: 13px;
+  backdrop-filter: blur(8px);
+}
+.office-card h3 { margin: 0 0 4px; font-size: 15px; }
+.office-card .oc-row { display: flex; justify-content: space-between; margin-top: 6px; color: #94a3b8; font-size: 12px; }
+.office-card .oc-id { word-break: break-all; color: #64748b; font-size: 11px; margin-top: 8px; }
+.hidden { display: none !important; }
+
+/* ---- 2D 폴백 ---- */
+.office-fallback { position: absolute; inset: 0; padding: 72px 20px 20px; overflow-y: auto; }
+.fallback-note { color: #fbbf24; font-size: 13px; margin: 0 0 14px; }
+.fallback-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.fallback-card {
+  padding: 14px; border-radius: 12px;
+  background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(148, 163, 184, 0.2);
+  color: #e2e8f0; display: flex; flex-direction: column; gap: 6px;
+}
+.fallback-card small { color: #94a3b8; }
+
+@media (max-width: 900px) {
+  .office-roster { display: none; }
+  .office-card { width: 190px; }
+}
